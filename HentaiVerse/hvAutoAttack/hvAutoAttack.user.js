@@ -629,7 +629,7 @@ try {
       '#hvAABox2{position:absolute;left:1075px}',
       '.hvAALog{font-size:20px;}',
       '.hvAAPauseUI{top:30px;left:1246px;position:absolute;z-index:9999}',
-      '.hvAAButton{top:4px;left:1200px;position:absolute;z-index:9999;cursor:pointer;width:24px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
+      '.hvAAButton{top:4px;left:1250px;position:absolute;z-index:9999;cursor:pointer;width:24px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
       '#hvAABox{left:calc(50% - 350px);top:50px;font-size:16px!important;z-index:4;width:700px;height:538px;position:absolute;text-align:left;background-color:#E3E0D1;border:1px solid #000;border-radius:10px;font-family:"Microsoft Yahei";}',
       '.hvAATablist{position:relative;left:14px;}',
       '.hvAATabmenu{position:absolute;left:-9px;}',
@@ -663,7 +663,7 @@ try {
       '.hvAAcheckItems>input.hvAANumber{width:32px}',
       '.hvAAConfig{width:100%;height:16px;}',
       '.hvAAButtonBox{position:relative;top:468px;}',
-      '.encounterUI{font-weight:bold;font-size:large;position:absolute;top:82px;left:1248px;text-decoration:none;writing-mode: vertical-lr;}',
+      '.encounterUI{font-weight:bold;font-size:large;position:absolute;top:52px;left:1248px;text-decoration:none;}',
       '.quickSiteBar{position:absolute;top:0px;left:1290px;font-size:18px;text-align:left;width:165px;height:calc(100% - 10px);display:flex;flex-direction:column;flex-wrap:wrap;}',
       '.quickSiteBar>span{display:block;max-height:24px;overflow:hidden;text-overflow:ellipsis;}',
       '.quickSiteBar>span>a{text-decoration:none;}',
@@ -1873,7 +1873,7 @@ try {
         let result;
         for (let key of paramList) {
           if (!result) {
-            result = g(key) ?? getValue(key);
+            result = g(key) ?? getValue(key) ?? g('battle')[key];
             continue;
           }
           result = result[key]
@@ -2280,7 +2280,7 @@ try {
       onEncounter();
       return true;
     }
-    let interval = cd > _1h ? _1m : cd > _1m ? _1s : 10;
+    let interval = cd > _1h ? _1m : cd > _1m ? _1s : 100;
     interval = (interval - cd % interval) / 4; // 让倒计时显示更平滑
     setTimeout(() => updateEncounter(engage), interval);
 
@@ -2337,7 +2337,7 @@ try {
 
   async function updateArena(forceUpdateToken = false) {
     let arena = getValue('arena', true) ?? {};
-    if (!forceUpdateToken && arena && time(2, arena.date) === time(2)) {
+    if (!forceUpdateToken && arena.data && time(2, arena.date) === time(2)) {
       return arena;
     }
     arena.token = {};
@@ -2691,7 +2691,7 @@ try {
     msTemp.sort(objArrSort('order'));
     let unreachableWeight = g('option').unreachableWeight;
     // TODO 未命中的权重优化
-    let minRank;
+    let minRank = 1000;
     for (let i = order - range; i <= order + range; i++) {
       if (i < 0 || i >= msTemp.length || msTemp[i].isDead) {
         continue; // 无法选中
@@ -2708,7 +2708,7 @@ try {
         }
         rank += mon.finWeight + cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
       }
-      if (rank < minRank) {
+      if (rank < minRank && !isWeaponAttack) {
         newOrder = i;
       }
     }
@@ -2798,6 +2798,7 @@ try {
         obj.log = battleLog;
         recordUsage(obj);
       }
+      let isDisabled = getValue('disabled');
       if (gE('#btcp')) {
         if (g('option').dropMonitor) {
           dropMonitor(battleLog);
@@ -2808,7 +2809,10 @@ try {
         if (g('monsterAlive') > 0) { // Defeat
           setAlarm('Defeat');
           delValue(1);
-        } else if (g('battle').roundNow !== g('battle').roundAll) { // Next Round
+        if (!isDisabled) setTimeout(() => {
+          window.location.href = getValue('lastHref');
+        }, _1m);
+      } else if (!isDisabled && g('battle').roundNow !== g('battle').roundAll) { // Next Round
           gE('#pane_completion').removeChild(gE('#btcp'));
           $ajax.fetch(window.location.href).then((html) => {
             const doc = $doc(html)
@@ -2829,6 +2833,7 @@ try {
             // }
             unsafeWindow.battle = new unsafeWindow.Battle();
             unsafeWindow.battle.clear_infopane();
+            document.dispatchEvent(new Event('DOMContentLoaded'));
             Debug.log('______________newRound', true);
             newRound(true);
             onBattle();
@@ -2837,9 +2842,9 @@ try {
         } else if (g('battle').roundNow === g('battle').roundAll) { // Victory
           setAlarm('Victory');
           delValue(1);
-          setTimeout(() => {
+          if (!isDisabled) setTimeout(() => {
             window.location.href = getValue('lastHref');
-          }, 3 * _1s);
+          }, _1m);
         }
       } else {
         onBattle();
@@ -3499,7 +3504,7 @@ try {
   }
 
   function autoFocus() {
-    if (g('option').focus && checkCondition(g('option').focusCondition)) {
+    if (g('option').focus && !gE(`#pane_effects>img[src*="focus"]`) && checkCondition(g('option').focusCondition) && !checkEtherTap()) {
       gE('#ckey_focus').click();
       return true;
     }
@@ -3520,8 +3525,20 @@ try {
        * 优先释放先天和武器技能
        */
   function autoSkill() {
+    const monsterStatus = g('battle').monsterStatus;
     if (!g('option').skillSwitch) {
       return false;
+    }
+    if (g('option').mercifulBlow && isOn('2203') && g('bossAlive') > 0) {
+      // Merciful Blow
+      for (let j = 0; j < monsterStatus.length; j++) {
+        if (monsterStatus[j].hpNow / monsterStatus[j].hp < 0.25 && gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`) && gE(`#mkey_${getMonsterID(monsterStatus[j])} div.btm2[style^="background"]`)) {
+          g('skillOTOS')['T3']++;
+          gE('2203').click();
+          gE(`#mkey_${getRangeCenterID(monsterStatus[j])}`).click();
+          return true;
+        }
+      }
     }
     if (!gE('#ckey_spirit[src*="spirit_a"]')) {
       return false;
@@ -3555,10 +3572,13 @@ try {
       2403: 2,
       1111: 4,
     }
-    const monsterStatus = g('battle').monsterStatus;
+
     for (let i in skillOrder) {
       let skill = skillOrder[i];
       let range = 0;
+      if (!g('option').skill[skill]) {
+        continue;
+      }
       if (!checkCondition(g('option')[`skill${skill}Condition`])) {
         continue;
       }
@@ -3576,52 +3596,29 @@ try {
       if (skillLib[skill].id in rangeSkills) {
         range = rangeSkills[skillLib[skill].id];
       }
-      if (!g('option').mercifulBlow || g('option').fightingStyle !== '2' || skill !== 'T3') {
-        continue;
-      }
-      // Merciful Blow
-      for (let j = 0; j < monsterStatus.length; j++) {
-        if (monsterStatus[j].hpNow / monsterStatus[j].hp < 0.25 && gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`)) {
-          gE(`#mkey_${getRangeCenterID(monsterStatus[j])}`).click();
-          return true;
-        }
-      }
+
+      gE(`#mkey_${getRangeCenterID(monsterStatus[0])}`).click();
+      return true;
     }
-    gE(`#mkey_${getRangeCenterID(monsterStatus[0])}`).click();
-    return true;
   }
 
   function useDeSkill() { // 自动施法DEBUFF技能
     if (!g('option').debuffSkillSwitch) { // 总开关是否开启
       return false;
     }
-    // 先处理特殊的 “先给全体上buff”
-    let skillPack = ['We', 'Im'];
-    for (let i = 0; i < skillPack.length; i++) {
-      if (g('option')[`debuffSkill${skillPack[i]}All`]) { // 是否启用
-        continue;
-      }
-      if (!checkCondition(g('option')[`debuffSkill${skillPack[i]}AllCondition`])) { // 检查条件
-        continue;
-      }
-      skillPack.splice(i, 1);
-      i--;
+    if (!g('option').debuffSkill) { // 是否有启用的buff(不算两个特殊的)
+      return false;
     }
-    skillPack.sort((x, y) => g('option').debuffSkillOrderValue.indexOf(x) - g('option').debuffSkillOrderValue.indexOf(y))
-    let toAllCount = skillPack.length;
-    if (g('option').debuffSkill) { // 是否有启用的buff(不算两个特殊的)
-      skillPack = skillPack.concat(g('option').debuffSkillOrderValue.split(','));
-    }
+    let skillPack = g('option').debuffSkillOrderValue.split(',');
     for (let i in skillPack) {
       let buff = skillPack[i];
-      if (i >= toAllCount && !skillPack[i]) { // 检查buff是否启用
+    if (!g('option').debuffSkill[buff]) { // 检查buff是否启用
         continue;
       }
       if (!checkCondition(g('option')[`debuffSkill${buff}Condition`])) { // 检查条件
         continue;
       }
-      let succeed = useDebuffSkill(skillPack[i], i < toAllCount);
-      // 前 toAllCount 个都是先给全体上的
+      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${skillPack[i]}All`] && checkCondition(g('option')[`debuffSkill${skillPack[i]}AllCondition`]));
       if (succeed) {
         return true;
       }
@@ -3630,6 +3627,7 @@ try {
   }
 
   function useDebuffSkill(buff, isAll = false) {
+    if (buff === 'Dr') isAll = true;
     const skillLib = {
       Sle: {
         name: 'Sleep',
@@ -3684,15 +3682,20 @@ try {
       return false;
     }
     const monsterStatus = g('battle').monsterStatus;
+    const attackStatus = g('attackStatus');
     let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
+    let holdDrain = (target) => attackStatus === 5 && !gE(`img[src*="soulfire"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || attackStatus === 6 && !gE(`img[src*="ripesoul"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
     let primaryTarget;
     let max = isAll ? monsterStatus.length : 1;
     for (let i = 0; i < max; i++) {
       let target = buff === 'Dr' ? monsterStatus[max - i - 1] : monsterStatus[i];
-      if (monsterStatus[i].isDead) {
+      if (target.isDead) {
         continue;
       }
       if (isDebuffed(target)) { // 检查是否已有该buff
+        continue;
+      }
+      if (buff === 'Dr' && holdDrain(target)) {
         continue;
       }
       primaryTarget = target;
@@ -3705,7 +3708,7 @@ try {
     let range = 0;
     let ab;
     for (ab in skillLib[buff].range) {
-      const ranges = skillLib[buff].range[ab][skillLib[buff].skill * 1];
+      const ranges = skillLib[buff].range[ab];
       if (!ranges) {
         continue;
       }
@@ -3718,6 +3721,8 @@ try {
       gE(skillLib[buff].id).click();
       gE(`#mkey_${id}`).click();
       return true;
+    } else {
+      return false;
     }
 
     // 已有buff小于6个
@@ -3777,14 +3782,13 @@ try {
         range = 1;
       }
     } else {
-      if (g('option').etherTap && gE(`#mkey_${getMonsterID(monsterStatus[0])}>div.btm6>img[src*="coalescemana"]`) && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || gE('#pane_effects>img[src*="wpn_et"][id*="effect_expire"]')) && checkCondition(g('option').etherTapCondition)) {
+      if (checkEtherTap()) {
         `pass`
       }
       else {
         const skill = 1 * (() => {
           let lv = 3;
           let id = `1${attackStatus}${lv--}`;
-          return 111
           if (checkCondition(g('option').highSkillCondition) && isOn(id)) {
             return id;
           }
@@ -3808,8 +3812,25 @@ try {
         }
       }
     }
-    gE(`#mkey_${getRangeCenterID(monsterStatus[0], range, !attackStatus)}`).click();
+    let monster = monsterStatus[0]
+    if (attackStatus !== 0) {
+      monster = getLastMonster(monsterStatus);
+    }
+    gE(`#mkey_${getRangeCenterID(monster, range, !attackStatus)}`).click();
     return true;
+  }
+
+  function checkEtherTap() {
+    const monsterStatus = g('battle').monsterStatus;
+    return g('option').etherTap && gE(`#mkey_${getMonsterID(getLastMonster(monsterStatus))}>div.btm6>img[src*="coalescemana"]`) && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || gE('#pane_effects>img[src*="wpn_et"][id*="effect_expire"]')) && checkCondition(g('option').etherTapCondition);
+  }
+
+  function getLastMonster(monsterStatus) {
+    for (let i = monsterStatus.length - 1; i >= 0; i--) {
+      if (!monsterStatus[i].isDead) {
+        return monsterStatus[i];
+      }
+    }
   }
 
   function getHPFromMonsterDB(mdb, name, lv) {
