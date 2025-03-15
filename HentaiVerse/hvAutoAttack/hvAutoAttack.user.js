@@ -1822,14 +1822,14 @@ try {
         },
       },
     ][g('lang')][e];
-    if (typeof GM_notification !== 'undefined') {
-      GM_notification({
-        text: notification.text,
-        image: `${window.location.origin}/y/hentaiverse.png`,
-        highlight: true,
-        timeout: 1000 * notification.time,
-      });
-    }
+    // if (typeof GM_notification !== 'undefined') {
+    //   GM_notification({
+    //     text: notification.text,
+    //     image: `${window.location.origin}/y/hentaiverse.png`,
+    //     highlight: true,
+    //     timeout: 1000 * notification.time,
+    //   });
+    // }
     if (window.Notification && window.Notification.permission !== 'denied') {
       window.Notification.requestPermission((status) => {
         if (status === 'granted') {
