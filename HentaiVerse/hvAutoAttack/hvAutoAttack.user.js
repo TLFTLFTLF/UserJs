@@ -293,7 +293,7 @@ try {
       setValue('lastHref', window.location.href); // 缓存进入战斗前的页面地址
     } else {
       // 补充记录（因写入冲突、网络卡顿等）未被记录的encounter链接
-      const encounterURL = window.location.href?.href.split('/')[3];
+      const encounterURL = window.location.href?.split('/')[3];
       const encounter = getEncounter();
       if (!encounter.filter(e => e.href === encounterURL).length) {
         encounter.unshift({ href: encounterURL, time: time(0), encountered: time(0) });
@@ -2708,7 +2708,7 @@ try {
         }
         rank += mon.finWeight + cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
       }
-      if (rank < minRank && !isWeaponAttack) {
+      if (rank < minRank) {
         newOrder = i;
       }
     }
@@ -2739,6 +2739,8 @@ try {
       delValue(0);
       if (!gE('#navbar')) { // in battle
         onBattle();
+      } else {
+        document.title = 'The HentaiVerse';
       }
     } else {
       if (gE('.pauseChange')) {
@@ -3715,8 +3717,9 @@ try {
       range = ranges[getValue('ability', true)[ab].level];
       break;
     }
+    let originalId = getRangeCenterID(primaryTarget);
     let id = getRangeCenterID(primaryTarget, range, isDebuffed);
-    const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
+    const imgs = gE('img', 'all', gE(`#mkey_${originalId}>.btm6`));
     if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
       gE(skillLib[buff].id).click();
       gE(`#mkey_${id}`).click();
