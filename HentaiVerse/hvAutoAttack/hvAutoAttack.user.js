@@ -2141,7 +2141,7 @@ try {
         }
       });
     }));
-    setValue('ability', ability);
+    ability['1101'] && setValue('ability', ability);
     logSwitchAsyncTask(arguments);
   }
 
@@ -2811,7 +2811,7 @@ try {
         if (g('monsterAlive') > 0) { // Defeat
           setAlarm('Defeat');
           delValue(1);
-        if (!isDisabled) setTimeout(() => {
+        !isDisabled && setTimeout(() => {
           window.location.href = getValue('lastHref');
         }, _1m);
       } else if (!isDisabled && g('battle').roundNow !== g('battle').roundAll) { // Next Round
@@ -2844,7 +2844,7 @@ try {
         } else if (g('battle').roundNow === g('battle').roundAll) { // Victory
           setAlarm('Victory');
           delValue(1);
-          if (!isDisabled) setTimeout(() => {
+          !isDisabled && setTimeout(() => {
             window.location.href = getValue('lastHref');
           }, _1m);
         }
