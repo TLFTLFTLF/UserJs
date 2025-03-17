@@ -3154,7 +3154,7 @@ try {
           weight += g('option').weight[j];
         }
       }
-      monsterStatus[i].finWeight = weight;
+      monsterStatus[i].finWeight = g('attackStatus') === 0 ? weight : -weight;
     }
     monsterStatus.sort(objArrSort('finWeight'));
     battle.monsterStatus = monsterStatus;
@@ -3629,7 +3629,7 @@ try {
   }
 
   function useDebuffSkill(buff, isAll = false) {
-    if (buff === 'Dr') isAll = true;
+    buff === 'Dr' && (isAll = true);
     const skillLib = {
       Sle: {
         name: 'Sleep',
