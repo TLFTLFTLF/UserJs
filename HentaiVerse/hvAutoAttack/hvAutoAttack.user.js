@@ -3718,7 +3718,7 @@ try {
       break;
     }
     let originalId = getRangeCenterID(primaryTarget);
-    let id = getRangeCenterID(primaryTarget, range, isDebuffed);
+    let id = getRangeCenterID(primaryTarget, range, false, isDebuffed);
     const imgs = gE('img', 'all', gE(`#mkey_${originalId}>.btm6`));
     if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
       gE(skillLib[buff].id).click();
