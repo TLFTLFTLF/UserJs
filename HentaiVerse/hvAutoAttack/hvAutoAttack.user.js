@@ -580,8 +580,12 @@ try {
   //   xhr.send(parm);
   // }
 
-  function objArrSort(key) { // 对象数组排序函数，从小到大排序
+  function objArrSort(key, isReverse) { // 对象数组排序函数，从小到大排序
     return function (obj1, obj2) {
+      if (obj1.isDead && obj2.isDead) return 0;
+      if (obj1.isDead) return 1;
+      if (obj2.isDead) return -1;
+      if (isReverse) return (obj2[key] > obj1[key]) ? 1 : (obj2[key] < obj1[key]) ? -1 : 0;
       return (obj2[key] < obj1[key]) ? 1 : (obj2[key] > obj1[key]) ? -1 : 0;
     };
   }
@@ -3629,7 +3633,6 @@ try {
   }
 
   function useDebuffSkill(buff, isAll = false) {
-    buff === 'Dr' && (isAll = true);
     const skillLib = {
       Sle: {
         name: 'Sleep',
@@ -3683,14 +3686,16 @@ try {
     if (!isOn(skillLib[buff].id)) { // 技能不可用
       return false;
     }
-    const monsterStatus = g('battle').monsterStatus;
+    const monsterStatus = [ ...g('battle').monsterStatus ];
     const attackStatus = g('attackStatus');
     let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
     let holdDrain = (target) => attackStatus === 5 && !gE(`img[src*="soulfire"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || attackStatus === 6 && !gE(`img[src*="ripesoul"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
+    let reverseList = ['Dr', 'We'];
+    reverseList.includes(buff) && monsterStatus.sort(objArrSort('finWeight', true));
     let primaryTarget;
     let max = isAll ? monsterStatus.length : 1;
     for (let i = 0; i < max; i++) {
-      let target = buff === 'Dr' ? monsterStatus[max - i - 1] : monsterStatus[i];
+      let target = monsterStatus[i];
       if (target.isDead) {
         continue;
       }
