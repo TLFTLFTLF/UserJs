@@ -2679,20 +2679,26 @@ try {
        * @param {(target) => bool} excludeCondition target with id
        * @returns
        */
-  function getRangeCenterID(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined) {
+  function getRangeCenterID(target = undefined, range = undefined, isWeaponAttack = false, excludeCondition = undefined) {
     if (!range) {
       return getMonsterID(target);
     }
     const centralExtraWeight = -1 * Math.log10(1 + (isWeaponAttack ? (g('option').centralExtraRatio / 100) ?? 0 : 0));
-    let order = target.order;
+    let order = target?.order || 0;
     let newOrder = order;
     // sort by order to fix id
     let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
     msTemp.sort(objArrSort('order'));
     let unreachableWeight = g('option').unreachableWeight;
     // TODO 未命中的权重优化
-    let minRank = 1000;
-    for (let i = order - range; i <= order + range; i++) {
+    let minRank = 10000;
+    let rangeStart = range;
+    let rangeEnd = msTemp.length - 1 -range;
+    if (target) {
+      rangeStart = Math.max(order - range, range);
+      rangeEnd = Math.min(order + range, msTemp.length -1 -range);
+    }
+    for (let i = rangeStart; i <= rangeEnd; i++) {
       if (i < 0 || i >= msTemp.length || msTemp[i].isDead) {
         continue; // 无法选中
       }
@@ -3155,7 +3161,7 @@ try {
           weight += g('option').weight[j];
         }
       }
-      monsterStatus[i].finWeight = g('attackStatus') === 0 ? weight : -weight;
+      monsterStatus[i].finWeight = weight;
     }
     monsterStatus.sort(objArrSort('finWeight'));
     battle.monsterStatus = monsterStatus;
@@ -3635,6 +3641,8 @@ try {
         name: 'Sleep',
         id: '222',
         img: 'sleep',
+        range: { 4207: [0, 0, 0, 1] },
+        noPrimary: true,
       },
       Bl: {
         name: 'Blind',
@@ -3672,23 +3680,28 @@ try {
         id: '212',
         img: 'weaken',
         range: { 4202: [0, 0, 0, 1] },
+        noPrimary: true,
       },
       Co: {
         name: 'Confuse',
         id: '223',
         img: 'confuse',
+        range: { 4207: [0, 0, 0, 1] },
+        noPrimary: true,
       },
     };
 
     if (!isOn(skillLib[buff].id)) { // 技能不可用
       return false;
     }
-    const monsterStatus = [ ...g('battle').monsterStatus ];
+    const monsterStatus = g('battle').monsterStatus;
     const attackStatus = g('attackStatus');
     let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
+    // 睡眠和混乱算成相同debuff
+    if (buff === 'Sle' || buff === 'Co' || buff === 'We') {
+      isDebuffed = (target) => gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="confuse"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="weaken"]`)
+    }
     let holdDrain = (target) => attackStatus === 5 && !gE(`img[src*="soulfire"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || attackStatus === 6 && !gE(`img[src*="ripesoul"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
-    let reverseList = ['Dr', 'We'];
-    reverseList.includes(buff) && monsterStatus.sort(objArrSort('finWeight', true));
     let primaryTarget;
     let max = isAll ? monsterStatus.length : 1;
     for (let i = 0; i < max; i++) {
@@ -3719,10 +3732,12 @@ try {
       range = ranges[getValue('ability', true)[ab].level];
       break;
     }
-    let originalId = getRangeCenterID(primaryTarget);
-    let id = getRangeCenterID(primaryTarget, range, false, isDebuffed);
-    const imgs = gE('img', 'all', gE(`#mkey_${originalId}>.btm6`));
+    let id = getMonsterID(primaryTarget);
+    const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
     if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
+      if (range > 0) {
+        id = getRangeCenterID(skillLib[buff].noPrimary ? undefined : primaryTarget, range, false, isDebuffed);
+      }
       gE(skillLib[buff].id).click();
       gE(`#mkey_${id}`).click();
       return true;
@@ -3809,25 +3824,13 @@ try {
         }
       }
     }
-    let monster = monsterStatus[0]
-    if (attackStatus !== 0) {
-      monster = getLastMonster(monsterStatus);
-    }
-    gE(`#mkey_${getRangeCenterID(monster, range, !attackStatus)}`).click();
+    gE(`#mkey_${getRangeCenterID(monsterStatus[0], range, !attackStatus)}`).click();
     return true;
   }
 
   function checkEtherTap() {
     const monsterStatus = g('battle').monsterStatus;
-    return g('option').etherTap && gE(`#mkey_${getMonsterID(getLastMonster(monsterStatus))}>div.btm6>img[src*="coalescemana"]`) && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || gE('#pane_effects>img[src*="wpn_et"][id*="effect_expire"]')) && checkCondition(g('option').etherTapCondition);
-  }
-
-  function getLastMonster(monsterStatus) {
-    for (let i = monsterStatus.length - 1; i >= 0; i--) {
-      if (!monsterStatus[i].isDead) {
-        return monsterStatus[i];
-      }
-    }
+    return g('option').etherTap && gE(`#mkey_${getMonsterID(monsterStatus[0])}>div.btm6>img[src*="coalescemana"]`) && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || gE('#pane_effects>img[src*="wpn_et"][id*="effect_expire"]')) && checkCondition(g('option').etherTapCondition);
   }
 
   function getHPFromMonsterDB(mdb, name, lv) {
