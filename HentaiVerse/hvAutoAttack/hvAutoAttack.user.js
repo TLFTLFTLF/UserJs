@@ -2715,6 +2715,7 @@ try {
         rank += mon.finWeight + cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
       }
       if (rank < minRank) {
+        minRank = rank;
         newOrder = i;
       }
     }
