@@ -4010,6 +4010,7 @@ try {
         evade: 0,
         miss: 0,
         focus: 0,
+        spark: 0,
       },
       restore: { // 回复量
       },
@@ -4098,6 +4099,8 @@ try {
         stats.self.miss++;
       } else if (text.match(/You gain the effect Focusing/)) {
         stats.self.focus++;
+      } else if (text.match(/Your Spark of Life restores you/)) {
+        stats.self.spark++
       } else if (text.match(/^Recovered \d+ points of/) || text.match(/You are healed for \d+ Health Points/) || text.match(/You drain \d+ HP from/)) {
         magic = (parm.mode === 'defend') ? 'defend' : text.match(/You drain \d+ HP from/) ? 'drain' : parm.magic || parm.item;
         point = text.match(/\d+/)[0] * 1;
