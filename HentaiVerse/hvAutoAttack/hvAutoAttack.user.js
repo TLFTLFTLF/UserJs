@@ -2692,11 +2692,11 @@ try {
     let unreachableWeight = g('option').unreachableWeight;
     // TODO 未命中的权重优化
     let minRank = 10000;
-    let rangeStart = range;
-    let rangeEnd = msTemp.length - 1 -range;
+    let rangeStart = 0;
+    let rangeEnd = msTemp.length - 1;
     if (target) {
-      rangeStart = Math.max(order - range, range);
-      rangeEnd = Math.min(order + range, msTemp.length -1 -range);
+      rangeStart = Math.max(order - range, rangeStart);
+      rangeEnd = Math.min(order + range, rangeEnd);
     }
     for (let i = rangeStart; i <= rangeEnd; i++) {
       if (i < 0 || i >= msTemp.length || msTemp[i].isDead) {
@@ -3636,6 +3636,9 @@ try {
   }
 
   function useDebuffSkill(buff, isAll = false) {
+    if (buff === 'Sle' || buff === 'Co') {
+      isAll = true
+    }
     const skillLib = {
       Sle: {
         name: 'Sleep',
