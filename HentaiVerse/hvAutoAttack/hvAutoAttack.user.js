@@ -2781,7 +2781,8 @@ try {
   function SetExitBattleTimeout(alarm){
     setAlarm(alarm);
     if(alarm === 'SkipDefeated') return;
-    setTimeout(() => {
+    let isDisabled = getValue('disabled');
+    !isDisabled && setTimeout(() => {
       $ajax.open(getValue('lastHref'));
     }, g('option').ExitBattleWaitTime * _1s);
     delValue(1);
