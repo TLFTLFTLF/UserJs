@@ -2848,7 +2848,7 @@ try {
       if (g('option').recordUsage) {
         recordUsage2();
       }
-      if (g('battle').roundNow !== g('battle').roundAll) { // Next Round
+      if (g('battle').roundNow !== g('battle').roundAll && g('monsterAlive') === 0) { // Next Round
         async function onNewRound(){
           try {
             gE('#pane_completion').removeChild(gE('#btcp'));
@@ -3674,7 +3674,7 @@ try {
   }
 
   function useDebuffSkill(buff, isAll = false) {
-    if (buff === 'Sle' || buff === 'Co') {
+    if (buff === 'Sle' || buff === 'Co' || buff === 'Dr') {
       isAll = true
     }
     const skillLib = {
@@ -3746,7 +3746,7 @@ try {
     let primaryTarget;
     let max = isAll ? monsterStatus.length : 1;
     for (let i = 0; i < max; i++) {
-      let target = monsterStatus[i];
+      let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || buff === 'Dr') ? monsterStatus[max - 1 - i] : monsterStatus[i];
       if (target.isDead) {
         continue;
       }
@@ -3792,6 +3792,10 @@ try {
     _alert(0, '无法正常施放DEBUFF技能，请尝试手动打怪', '無法正常施放DEBUFF技能，請嘗試手動打怪', 'Can not cast de-skills normally, continue the script?\nPlease try attack manually.');
     pauseChange();
     return true;
+  }
+
+  function getLastMonster(monsterStatus) {
+
   }
 
   function attack() { // 自动打怪
