@@ -2835,10 +2835,6 @@ try {
   function SetExitBattleTimeout(alarm){
     setAlarm(alarm);
     if(alarm === 'SkipDefeated') return;
-    let isDisabled = getValue('disabled');
-    !isDisabled && setTimeout(() => {
-      $ajax.open(getValue('lastHref'));
-    }, g('option').ExitBattleWaitTime * _1s);
     delValue(1);
     if(g('option').ExitBattleWaitTime) {
       setTimeout(() => {
@@ -3722,13 +3718,14 @@ try {
     let skillPack = g('option').debuffSkillOrderValue.split(',');
     for (let i in skillPack) {
       let buff = skillPack[i];
-    if (!g('option').debuffSkill[buff]) { // 检查buff是否启用
+      if (!g('option').debuffSkill[buff]) { // 检查buff是否启用
         continue;
       }
       if (!checkCondition(g('option')[`debuffSkill${buff}Condition`])) { // 检查条件
         continue;
       }
-      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${skillPack[i]}All`] && checkCondition(g('option')[`debuffSkill${skillPack[i]}AllCondition`]));
+      if (buff === 'Sle' || buff === 'Co') buff = 'We'
+      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`]));
       if (succeed) {
         return true;
       }
@@ -3737,9 +3734,6 @@ try {
   }
 
   function useDebuffSkill(buff, isAll = false) {
-    if (buff === 'Sle' || buff === 'Co' || buff === 'Dr') {
-      isAll = true
-    }
     const skillLib = {
       Sle: {
         name: 'Sleep',
@@ -3784,7 +3778,6 @@ try {
         id: '212',
         img: 'weaken',
         range: { 4202: [0, 0, 0, 1] },
-        noPrimary: true,
       },
       Co: {
         name: 'Confuse',
@@ -3809,7 +3802,7 @@ try {
     let primaryTarget;
     let max = isAll ? monsterStatus.length : 1;
     for (let i = 0; i < max; i++) {
-      let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || buff === 'Dr') ? monsterStatus[max - 1 - i] : monsterStatus[i];
+      let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || buff === 'Dr') ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
       if (target.isDead) {
         continue;
       }
