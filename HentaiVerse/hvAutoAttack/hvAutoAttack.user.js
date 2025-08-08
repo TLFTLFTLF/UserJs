@@ -631,8 +631,14 @@ try {
     return window.hvAA[key];
   }
 
-  function objArrSort(key) { // 对象数组排序函数，从小到大排序
+  function objArrSort(key, isReverse) { // 对象数组排序函数，从小到大排序
     return function (obj1, obj2) {
+      if (key === 'finWeight') {
+        if (obj1.isDead && obj2.isDead) return 0;
+        if (obj1.isDead) return 1;
+        if (obj2.isDead) return -1;
+      }
+      if (isReverse) return (obj2[key] > obj1[key]) ? 1 : (obj2[key] < obj1[key]) ? -1 : 0;
       return (obj2[key] < obj1[key]) ? 1 : (obj2[key] > obj1[key]) ? -1 : 0;
     };
   }
@@ -672,8 +678,8 @@ try {
       'l0,l1,l01,l2{display:none;}', // l0: 简体 l1: 繁体 l01:简繁体共用 l2: 英文
       '#hvAABox2{position:absolute;left:1075px;padding-top: 6px;}',
       '.hvAALog{font-size:20px;}',
-      '.hvAAPauseUI{top:30px;left:1246px;position:absolute;z-index:9999}',
-      '.hvAAButton{top:5px;left:1255px;position:absolute;z-index:9999;cursor:pointer;width:24px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
+      '.hvAAPauseUI{top:6px;left:1280px;position:absolute;z-index:9999}',
+      '.hvAAButton{top:4px;left:1250px;position:absolute;z-index:9999;cursor:pointer;width:24px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
       '#hvAABox{left:calc(50% - 350px);top:50px;font-size:16px!important;z-index:4;width:700px;height:538px;position:absolute;text-align:left;background-color:#E3E0D1;border:1px solid #000;border-radius:10px;font-family:"Microsoft Yahei";}',
       '.hvAATablist{position:relative;left:14px;}',
       '.hvAATabmenu{position:absolute;left:-9px;}',
@@ -708,7 +714,7 @@ try {
       '.hvAAcheckItems>input.hvAANumber{width:32px}',
       '.hvAAConfig{width:100%;height:16px;}',
       '.hvAAButtonBox{position:relative;top:468px;}',
-      '.encounterUI{font-weight:bold;font-size:10pt;position:absolute;top:58px;left:1240px;text-decoration:none;}',
+      '.encounterUI{font-weight:bold;font-size:10pt;position:absolute;top:32px;left:1248px;text-decoration:none;}',
       '.quickSiteBar{position:absolute;top:0px;left:1290px;font-size:18px;text-align:left;width:165px;height:calc(100% - 10px);display:flex;flex-direction:column;flex-wrap:wrap;}',
       '.quickSiteBar>span{display:block;max-height:24px;overflow:hidden;text-overflow:ellipsis;}',
       '.quickSiteBar>span>a{text-decoration:none;}',
@@ -1939,14 +1945,14 @@ try {
         },
       },
     ][g('lang')][e];
-    if (typeof GM_notification !== 'undefined') {
-      GM_notification({
-        text: notification.text,
-        image: `${window.location.origin}/y/hentaiverse.png`,
-        highlight: true,
-        timeout: 1000 * notification.time,
-      });
-    }
+    // if (typeof GM_notification !== 'undefined') {
+    //   GM_notification({
+    //     text: notification.text,
+    //     image: `${window.location.origin}/y/hentaiverse.png`,
+    //     highlight: true,
+    //     timeout: 1000 * notification.time,
+    //   });
+    // }
     if (window.Notification && window.Notification.permission !== 'denied') {
       window.Notification.requestPermission((status) => {
         if (status === 'granted') {
@@ -2258,7 +2264,7 @@ try {
         }
       });
     } catch (e) {console.error(e)}}));
-    setValue('ability', ability);
+    ability['1101'] && setValue('ability', ability);
     logSwitchAsyncTask(arguments);
   } catch (e) {console.error(e)}}
 
@@ -2860,19 +2866,25 @@ try {
        * @param {(target) => bool} excludeCondition target with id
        * @returns
        */
-  function getRangeCenterID(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined) {
+  function getRangeCenterID(target = undefined, range = undefined, isWeaponAttack = false, excludeCondition = undefined) {
     if (!range) {
       return getMonsterID(target);
     }
     const centralExtraWeight = -1 * Math.log10(1 + (isWeaponAttack ? (g('option').centralExtraRatio / 100) ?? 0 : 0));
-    let order = target.order;
+    let order = target?.order || 0;
     let newOrder = order;
     // sort by order to fix id
     let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
     msTemp.sort(objArrSort('order'));
     let unreachableWeight = g('option').unreachableWeight;
-    let minRank;
-    for (let i = order - range; i <= order + range; i++) {
+    let minRank = 10000;
+    let rangeStart = 0;
+    let rangeEnd = msTemp.length - 1;
+    if (target) {
+      rangeStart = Math.max(order - range, rangeStart);
+      rangeEnd = Math.min(order + range, rangeEnd);
+    }
+    for (let i = rangeStart; i <= rangeEnd; i++) {
       if (i < 0 || i >= msTemp.length || msTemp[i].isDead) {
         continue; // 无法选中
       }
@@ -2889,6 +2901,7 @@ try {
         rank += mon.finWeight + cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
       }
       if (rank < minRank) {
+        minRank = rank;
         newOrder = i;
       }
     }
@@ -2920,6 +2933,8 @@ try {
       delValue(0);
       if (!gE('#navbar')) { // in battle
         onBattle();
+      } else {
+        document.title = 'The HentaiVerse';
       }
     } else {
       if (gE('.pauseChange')) {
@@ -3003,7 +3018,7 @@ try {
       if (g('option').recordUsage) {
         recordUsage2();
       }
-      if (g('battle').roundNow !== g('battle').roundAll) { // Next Round
+      if (g('battle').roundNow !== g('battle').roundAll && g('monsterAlive') === 0) { // Next Round
         if(g('option').NewRoundWaitTime){
           setTimeout(onNewRound, g('option').NewRoundWaitTime * _1s);
         } else {
@@ -3029,6 +3044,7 @@ try {
             ['#battle_right', '#battle_left'].forEach(selector=>{ gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); })
             unsafeWindow.battle = new unsafeWindow.Battle();
             unsafeWindow.battle.clear_infopane();
+            document.dispatchEvent(new Event('DOMContentLoaded'));
             Debug.log('______________newRound', true);
             newRound(true);
             onBattle();
@@ -3707,7 +3723,7 @@ try {
   }
 
   function autoFocus() {
-    if (g('option').focus && checkCondition(g('option').focusCondition)) {
+    if (g('option').focus && !gE(`#pane_effects>img[src*="focus"]`) && checkCondition(g('option').focusCondition) && !checkEtherTap()) {
       gE('#ckey_focus').click();
       return true;
     }
@@ -3728,8 +3744,20 @@ try {
        * 优先释放先天和武器技能
        */
   function autoSkill() {
+    const monsterStatus = g('battle').monsterStatus;
     if (!g('option').skillSwitch) {
       return false;
+    }
+    if (g('option').mercifulBlow && isOn('2203') && (g('battle').roundType === 'tw' || g('bossAlive') > 0)) {
+      // Merciful Blow
+      for (let j = 0; j < monsterStatus.length; j++) {
+        if (monsterStatus[j].hpNow / monsterStatus[j].hp < 0.25 && gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`) && gE(`#mkey_${getMonsterID(monsterStatus[j])} div.btm2[style^="background"]`)) {
+          g('skillOTOS')['T3']++;
+          gE('2203').click();
+          gE(`#mkey_${getRangeCenterID(monsterStatus[j])}`).click();
+          return true;
+        }
+      }
     }
     if (!gE('#ckey_spirit[src*="spirit_a"]')) {
       return false;
@@ -3763,10 +3791,13 @@ try {
       2403: 2,
       1111: 4,
     }
-    const monsterStatus = g('battle').monsterStatus;
+
     for (let i in skillOrder) {
       let skill = skillOrder[i];
       let range = 0;
+      if (!g('option').skill[skill]) {
+        continue;
+      }
       if (!checkCondition(g('option')[`skill${skill}Condition`])) {
         continue;
       }
@@ -3784,52 +3815,30 @@ try {
       if (skillLib[skill].id in rangeSkills) {
         range = rangeSkills[skillLib[skill].id];
       }
-      if (!g('option').mercifulBlow || g('option').fightingStyle !== '2' || skill !== 'T3') {
-        continue;
-      }
-      // Merciful Blow
-      for (let j = 0; j < monsterStatus.length; j++) {
-        if (monsterStatus[j].hpNow / monsterStatus[j].hp < 0.25 && gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`)) {
-          gE(`#mkey_${getRangeCenterID(monsterStatus[j])}`).click();
-          return true;
-        }
-      }
+
+      gE(`#mkey_${getRangeCenterID(monsterStatus[0])}`).click();
+      return true;
     }
-    gE(`#mkey_${getRangeCenterID(monsterStatus[0])}`).click();
-    return true;
   }
 
   function useDeSkill() { // 自动施法DEBUFF技能
     if (!g('option').debuffSkillSwitch) { // 总开关是否开启
       return false;
     }
-    // 先处理特殊的 “先给全体上buff”
-    let skillPack = ['We', 'Im'];
-    for (let i = 0; i < skillPack.length; i++) {
-      if (g('option')[`debuffSkill${skillPack[i]}All`]) { // 是否启用
-        continue;
-      }
-      if (!checkCondition(g('option')[`debuffSkill${skillPack[i]}AllCondition`])) { // 检查条件
-        continue;
-      }
-      skillPack.splice(i, 1);
-      i--;
+    if (!g('option').debuffSkill) { // 是否有启用的buff(不算两个特殊的)
+      return false;
     }
-    skillPack.sort((x, y) => g('option').debuffSkillOrderValue.indexOf(x) - g('option').debuffSkillOrderValue.indexOf(y))
-    let toAllCount = skillPack.length;
-    if (g('option').debuffSkill) { // 是否有启用的buff(不算两个特殊的)
-      skillPack = skillPack.concat(g('option').debuffSkillOrderValue.split(','));
-    }
+    let skillPack = g('option').debuffSkillOrderValue.split(',');
     for (let i in skillPack) {
       let buff = skillPack[i];
-      if (i >= toAllCount && !skillPack[i]) { // 检查buff是否启用
+      if (!g('option').debuffSkill[buff]) { // 检查buff是否启用
         continue;
       }
       if (!checkCondition(g('option')[`debuffSkill${buff}Condition`])) { // 检查条件
         continue;
       }
-      let succeed = useDebuffSkill(skillPack[i], i < toAllCount);
-      // 前 toAllCount 个都是先给全体上的
+      if (buff === 'Sle' || buff === 'Co') buff = 'We'
+      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`]));
       if (succeed) {
         return true;
       }
@@ -3843,6 +3852,8 @@ try {
         name: 'Sleep',
         id: '222',
         img: 'sleep',
+        range: { 4207: [0, 0, 0, 1] },
+        noPrimary: true,
       },
       Bl: {
         name: 'Blind',
@@ -3885,22 +3896,36 @@ try {
         name: 'Confuse',
         id: '223',
         img: 'confuse',
+        range: { 4207: [0, 0, 0, 1] },
+        noPrimary: true,
       },
     };
 
     if (!isOn(skillLib[buff].id)) { // 技能不可用
       return false;
     }
-    const monsterStatus = g('battle').monsterStatus;
-    let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
+    const monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
+    const attackStatus = g('attackStatus');
+    let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`);
+    // 睡眠和混乱算成相同debuff
+    if (buff === 'We') {
+      isDebuffed = (target) => gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="confuse"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="weaken"]`)
+    }
+    if (buff === 'Sle' || buff === 'Co') {
+      isDebuffed = (target) => gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="confuse"]`)
+    }
+    let holdDrain = (target) => attackStatus === 5 && !gE(`img[src*="soulfire"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || attackStatus === 6 && !gE(`img[src*="ripesoul"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
     let primaryTarget;
     let max = isAll ? monsterStatus.length : 1;
     for (let i = 0; i < max; i++) {
-      let target = buff === 'Dr' ? monsterStatus[max - i - 1] : monsterStatus[i];
-      if (monsterStatus[i].isDead) {
+      let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
+      if (target.isDead) {
         continue;
       }
       if (isDebuffed(target)) { // 检查是否已有该buff
+        continue;
+      }
+      if (buff === 'Dr' && holdDrain(target)) {
         continue;
       }
       primaryTarget = target;
@@ -3913,22 +3938,27 @@ try {
     let range = 0;
     let ab;
     for (ab in skillLib[buff].range) {
-      const ranges = skillLib[buff].range[ab][skillLib[buff].skill * 1];
+      const ranges = skillLib[buff].range[ab];
       if (!ranges) {
         continue;
       }
       range = ranges[getValue('ability', true)[ab].level];
       break;
     }
-    let id = getRangeCenterID(primaryTarget, range, isDebuffed);
+    let id = getMonsterID(primaryTarget);
     const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
     // 已有buff小于6个
     // 未开启debuff失败警告
     // buff剩余持续时间大于等于警报时间
     if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
+      if (range > 0) {
+        id = getRangeCenterID(skillLib[buff].noPrimary ? undefined : primaryTarget, range, false, isDebuffed);
+      }
       gE(skillLib[buff].id).click();
       gE(`#mkey_${id}`).click();
       return true;
+    } else {
+      return false;
     }
 
     _alert(0, '无法正常施放DEBUFF技能，请尝试手动打怪', '無法正常施放DEBUFF技能，請嘗試手動打怪', 'Can not cast de-skills normally, continue the script?\nPlease try attack manually.');
@@ -3985,7 +4015,7 @@ try {
         range = 1;
       }
     } else {
-      if (g('option').etherTap && gE(`#mkey_${getMonsterID(monsterStatus[0])}>div.btm6>img[src*="coalescemana"]`) && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || gE('#pane_effects>img[src*="wpn_et"][id*="effect_expire"]')) && checkCondition(g('option').etherTapCondition)) {
+      if (checkEtherTap()) {
         `pass`
       }
       else {
@@ -4009,6 +4039,11 @@ try {
     }
     gE(`#mkey_${getRangeCenterID(monsterStatus[0], range, !attackStatus)}`).click();
     return true;
+  }
+
+  function checkEtherTap() {
+    const monsterStatus = g('battle').monsterStatus;
+    return g('option').etherTap && gE(`#mkey_${getMonsterID(monsterStatus[0])}>div.btm6>img[src*="coalescemana"]`) && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || gE('#pane_effects>img[src*="wpn_et"][id*="effect_expire"]')) && checkCondition(g('option').etherTapCondition);
   }
 
   function getHPFromMonsterDB(mdb, name, lv) {
@@ -4187,6 +4222,7 @@ try {
         evade: 0,
         miss: 0,
         focus: 0,
+        spark: 0,
       },
       restore: { // 回复量
       },
@@ -4274,6 +4310,8 @@ try {
         stats.self.miss++;
       } else if (text.match(/You gain the effect Focusing/)) {
         stats.self.focus++;
+      } else if (text.match(/Your Spark of Life restores you/)) {
+        stats.self.spark++
       } else if (text.match(/^Recovered \d+ points of/) || text.match(/You are healed for \d+ Health Points/) || text.match(/You drain \d+ HP from/)) {
         magic = (parm.mode === 'defend') ? 'defend' : text.match(/You drain \d+ HP from/) ? 'drain' : parm.magic || parm.item;
         point = text.match(/\d+/)[0] * 1;
