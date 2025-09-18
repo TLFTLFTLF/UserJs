@@ -3906,13 +3906,9 @@ try {
     }
     const monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
     const attackStatus = g('attackStatus');
-    let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`);
-    // 睡眠和混乱算成相同debuff
-    if (buff === 'We') {
-      isDebuffed = (target) => gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="confuse"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="weaken"]`)
-    }
-    if (buff === 'Sle' || buff === 'Co') {
-      isDebuffed = (target) => gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="confuse"]`)
+    let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="confuse"]`);
+    if (buff === 'Im') {
+      isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`))
     }
     let holdDrain = (target) => attackStatus === 5 && !gE(`img[src*="soulfire"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || attackStatus === 6 && !gE(`img[src*="ripesoul"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
     let primaryTarget;
@@ -3942,7 +3938,7 @@ try {
       if (!ranges) {
         continue;
       }
-      range = ranges[getValue('ability', true)[ab].level];
+      range = ranges[getValue('ability', true)[ab]?.level];
       break;
     }
     let id = getMonsterID(primaryTarget);
@@ -4043,7 +4039,7 @@ try {
 
   function checkEtherTap() {
     const monsterStatus = g('battle').monsterStatus;
-    return g('option').etherTap && gE(`#mkey_${getMonsterID(monsterStatus[0])}>div.btm6>img[src*="coalescemana"]`) && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || gE('#pane_effects>img[src*="wpn_et"][id*="effect_expire"]')) && checkCondition(g('option').etherTapCondition);
+    return g('option').etherTap && checkCondition(g('option').etherTapCondition) && gE(`#mkey_${getMonsterID(monsterStatus[0])}>div.btm6>img[src*="coalescemana"]`);
   }
 
   function getHPFromMonsterDB(mdb, name, lv) {
