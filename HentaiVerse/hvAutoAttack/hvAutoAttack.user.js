@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.22.11
+// @version      2.90.22.19
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -61,9 +61,9 @@ try {
   }
   try {
     if(window.location.href.startsWith('https://')) {
-      MAIN_URL = MAIN_URL.replace(/^http:/, /^https:/);
+      MAIN_URL = MAIN_URL.replace(/^http:/, 'https:');
     } else {
-      MAIN_URL = MAIN_URL.replace(/^https:/, /^http:/);
+      MAIN_URL = MAIN_URL.replace(/^https:/, 'http:');
     }
   } catch (e) {}
   const Debug = {
@@ -290,12 +290,27 @@ try {
       return;
     }
 
+    if (window.location.href.indexOf(`?s=Battle&ss=ba`) !== -1) {
+      // 补充记录（因写入冲突、网络卡顿等）未被记录的encounter链接
+      const encounterURL = window.location.href?.split('/')[3];
+      const encounter = getEncounter();
+      if (!encounter.filter(e => e.href === encounterURL).length) {
+        encounter.unshift({ href: encounterURL, time: time(0), encountered: time(0) });
+      }
+      setEncounter(encounter);
+    }
     if (!gE('#navbar')) { // 战斗中
       const box2 = gE('#battle_main').appendChild(cE('div'));
       box2.id = 'hvAABox2';
       setPauseUI(box2);
       reloader();
       g('attackStatus', g('option').attackStatus);
+      for (let fightingStyle = 1; fightingStyle < 6; fightingStyle++) {
+        if(gE(`2${fightingStyle}01`)){
+          g('fightingStyle', fightingStyle.toString());
+        }
+      }
+
       g('timeNow', time(0));
       g('runSpeed', 1);
       Debug.log('______________newRound', false);
@@ -316,14 +331,6 @@ try {
     if (window.location.href.indexOf(`?s=Battle&ss=ba`) === -1) { // 不缓存encounter
       setValue('lastHref', window.top.location.href); // 缓存进入战斗前的页面地址
       setArenaDisplay();
-    } else {
-      // 补充记录（因写入冲突、网络卡顿等）未被记录的encounter链接
-      const encounterURL = window.location.href?.split('/')[3];
-      const encounter = getEncounter();
-      if (!encounter.filter(e => e.href === encounterURL).length) {
-        encounter.unshift({ href: encounterURL, time: time(0), encountered: time(0) });
-      }
-      setEncounter(encounter);
     }
     delValue(1);
     if (g('option').showQuickSite && g('option').quickSite) {
@@ -519,7 +526,7 @@ try {
     if (id * 1 > 10000) { // 使用物品
       return gE(`.bti3>div[onmouseover*="${id}"]`);
     } // 施放技能
-    return (gE(id) && gE(id).style.opacity !== '0.5') ? gE(id) : false;
+    return gE(id) && (gE(id).style.opacity * 1 !== 0.5);
   }
 
   function setLocal(item, value) {
@@ -1039,7 +1046,6 @@ try {
       '  <input id="skillOrder_OFC" type="checkbox"><label for="skillOrder_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label><input id="skillOrder_FRD" type="checkbox"><label for="skillOrder_FRD"><l0>龙吼</l0><l1>龍吼</l1><l2>FRD</l2></label><input id="skillOrder_T3" type="checkbox"><label for="skillOrder_T3">T3</label><input id="skillOrder_T2" type="checkbox"><label for="skillOrder_T2">T2</label><input id="skillOrder_T1" type="checkbox"><label for="skillOrder_T1">T1</label></div>',
       '  <div><input id="skill_OFC" type="checkbox"><label for="skill_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label>: <input id="skillOTOS_OFC" type="checkbox"><label for="skillOTOS_OFC"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillOFCCondition}}</div>',
       '  <div><input id="skill_FRD" type="checkbox"><label for="skill_FRD"><l0>龙吼</l0><l1>龍吼</l1><l2>FRD</l2></label>: <input id="skillOTOS_FRD" type="checkbox"><label for="skillOTOS_FRD"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillFRDCondition}}</div>',
-      '  <div><l0>战斗风格</l0><l1>戰鬥風格</l1><l2>Fighting style</l2>: <select name="fightingStyle"><option value="1">二天一流 / Niten Ichiryu</option><option value="2">单手 / One-Handed</option><option value="3">双手 / 2-Handed Weapon</option><option value="4">双持 / Dual Wielding</option><option value="5">法杖 / Staff</option></select></div>',
       '  <div><input id="skill_T3" type="checkbox"><label for="skill_T3"><l0>3阶（如果有）</l0><l1>3階（如果有）</l1><l2>T3(if exist)</l2></label>: <input id="skillOTOS_T3" type="checkbox"><label for="skillOTOS_T3"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label><br><input id="mercifulBlow" type="checkbox"><label for="mercifulBlow"><l0>最后的慈悲(MB)：优先攻击满足条件的敌人 (25% HP, 流血)</l0><l1>最後的慈悲(MB)：優先攻擊滿足條件的敵人 (25% HP, 流血)</l1><l2>Merciful Blow: Attack the enemy which has 25% HP and is bleeding first</l2></label>{{skillT3Condition}}</div>',
       '  <div><input id="skill_T2" type="checkbox"><label for="skill_T2"><l0>2阶（如果有）</l0><l1>2階（如果有）</l1><l2>T2(if exist)</l2></label>: <input id="skillOTOS_T2" type="checkbox"><label for="skillOTOS_T2"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillT2Condition}}</div>',
       '  <div><input id="skill_T1" type="checkbox"><label for="skill_T1"><l0>1阶</l0><l1>1階</l1><l2>T1</l2></label>: <input id="skillOTOS_T1" type="checkbox"><label for="skillOTOS_T1"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillT1Condition}}</div></div>',
@@ -1752,8 +1758,10 @@ try {
       '<option value="roundAll">roundAll</option>',
       '<option value="roundLeft">roundLeft</option>',
       '<option value="roundType">roundType</option>',
-      '<option value="attackStatus">attackStatus</option>',
       '<option value="turn">turn</option>',
+      '<option value="">- - - -</option>',
+      '<option value="attackStatus">attackStatus</option>',
+      '<option value="fightingStyle">fightingStyle</option>',
       '<option value="">- - - -</option>',
       '<option value="_isCd_">isCd</option>',
       '<option value="_buffTurn_">buffTurn</option>',
@@ -1984,7 +1992,6 @@ try {
     }
     let i; let j; let
     k;
-    const result = [];
     const returnValue = function (str) {
       if (str.match(/^_/)) {
         const arr = str.split('_');
@@ -1996,18 +2003,18 @@ try {
         let result;
         for (let key of paramList) {
           if (!result) {
-            result = g(key) ?? getValue(key) ?? (g('battle') ?? getValue('battle', true))[key];
+            result = (g('battle') ?? getValue('battle', true))[key] ?? g(key) ?? getValue(key) ?? g('option')?.[key];
             continue;
           }
           result = result[key]
         }
-        return result;
+        return isNaN(result * 1) ? result : (result * 1);
       }
       return str * 1;
     };
     var func = {
-      isCd(id) {
-        return isOn(id) ? 0 : 1;
+      isCd(id) { // is cool down done
+        return isOn(id) ? 1 : 0;
       },
       buffTurn(img) {
         let buff = gE(`#pane_effects>img[src*="${img}"]`);
@@ -2020,7 +2027,9 @@ try {
     };
 
     for (i in parms) {
+      let parmResult = true;
       for (j = 0; j < parms[i].length; j++) {
+        let result = true;
         if (!Array.isArray(parms[i])) {
           continue;
         }
@@ -2038,29 +2047,30 @@ try {
 
         switch (k[1]) {
           case '1':
-            result[i] = k[0] > k[2];
+            result = k[0] > k[2];
             break;
           case '2':
-            result[i] = k[0] < k[2];
+            result = k[0] < k[2];
             break;
           case '3':
-            result[i] = k[0] >= k[2];
+            result = k[0] >= k[2];
             break;
           case '4':
-            result[i] = k[0] <= k[2];
+            result = k[0] <= k[2];
             break;
           case '5':
-            result[i] = k[0] === k[2];
+            result = k[0] === k[2];
             break;
           case '6':
-            result[i] = k[0] !== k[2];
+            result = k[0] !== k[2];
             break;
         }
-        if (result[i] === false) {
-          j = parms[i].length;
+        if (!result) {
+          parmResult = false;
+          break;
         }
       }
-      if (result[i] === true) {
+      if (parmResult) {
         return true;
       }
     }
@@ -2144,13 +2154,16 @@ try {
     }
     setValue('lastEH', time(0));
     const isEngage = window.location.href === 'https://e-hentai.org/news.php?encounter';
-    const encounter = getEncounter();
+    let encounter = getEncounter();
     let href = getValue('url') ?? (document.referrer.match('hentaiverse.org') ? new URL(document.referrer).origin : 'https://hentaiverse.org');
     const eventpane = gE('#eventpane');
     const now = time(0);
     let url;
     if (eventpane) { // 新一天或遭遇战
       url = gE('#eventpane>div>a')?.href.split('/')[3];
+      if(url === undefined){ // 新一天
+        encounter = [];
+      }
       encounter.unshift({ href: url, time: now });
       setEncounter(encounter);
     } else {
@@ -2252,6 +2265,16 @@ try {
     await Promise.all(Array.from(gE('#ability_treelist>div>img', 'all', doc)).map(async img => { try {
       const _ = img.getAttribute('onclick')?.match(/(\?s=(.*)tree=(.*))'/);
       const [href, type] = _ ? [_[1], _[3]] : ['?s=Character&ss=ab&tree=general', 'general'];
+      switch(type){
+        case 'deprecating1':
+        case 'deprecating2':
+        case 'elemental':
+        case 'forbidden':
+        case 'divine':
+          break;
+        default:
+          return;
+      }
       const html = await $ajax.fetch(href);
       const doc = $doc(html);
       const slots = Array.from(gE('.ability_slotbox>div>div', 'all', doc)).forEach(slot => {
@@ -2350,6 +2373,7 @@ try {
     }
     if (needs.length) {
       console.log(`Needs supply:${needs}`);
+      document.title = `[C!]` + document.title;
     }
     logSwitchAsyncTask(arguments);
     return !needs.length;
@@ -2376,6 +2400,7 @@ try {
     } catch (e) {console.error(e)}}))).filter(e => e);
     if (eqps.length) {
       console.log('eqps need repair: ', eqps);
+      document.title = `[R!]` + document.title;
     }
     logSwitchAsyncTask(arguments);
     return !eqps.length;
@@ -2472,12 +2497,10 @@ try {
 
   async function startUpdateArena(idleStart, startIdleArena=true) { try {
     const now = time(0);
-    console.log('startUpdateArena now', now, idleStart);
     if (!idleStart) {
       await updateArena();
     }
     let timeout = g('option').idleArenaTime * _1s;
-    console.log('startUpdateArena timeout', timeout);
     if (idleStart) {
       timeout -= time(0) - idleStart;
     }
@@ -2521,7 +2544,7 @@ try {
       arena.arrayDone = [];
     }
     if (!isToday || !arena.isOptionUpdated) {
-      arena.array = g('option').idleArenaValue.split(',') ?? [];
+      arena.array = g('option').idleArenaValue?.split(',') ?? [];
       arena.array.reverse();
     }
     return setValue('arena', arena);
@@ -2538,10 +2561,15 @@ try {
     }
     const staminaChecked = checkStamina(condition.staminaLow, condition.staminaCost);
     console.log("staminaChecked", condition.staminaLow, condition.staminaCost, staminaChecked);
-    if (staminaChecked) { // 1: succeed, -1: failed with nature recover
-      return staminaChecked === 1;
+    if(staminaChecked === 1){ // succeed
+        return true;
     }
-    setTimeout(method, Math.floor(time(0) / _1h + 1) * _1h - time(0));
+    if(staminaChecked === 0){ // failed until today ends
+      setTimeout(method, Math.floor(time(0) / _1h + 1) * _1h - time(0));
+      document.title = `[S!!]` + document.title;
+    } else { // case -1: // failed with nature recover
+      document.title = `[S!]` + document.title;
+    }
   }
 
   async function idleArena() { try { // 闲置竞技场
@@ -3251,9 +3279,9 @@ try {
     if(roundPrev !== battle.roundNow) {
       battle.turn = 0;
     }
+    battle.roundLeft = battle.roundAll - battle.roundNow;
     setValue('battle', battle);
 
-    g('roundLeft', battle.roundAll - battle.roundNow);
     g('skillOTOS', {
       OFC: 0,
       FRD: 0,
@@ -3388,8 +3416,9 @@ try {
     const name = g('option').itemOrderName.split(',');
     const order = g('option').itemOrderValue.split(',');
     for (let i = 0; i < name.length; i++) {
-      if (g('option').item[name[i]] && checkCondition(g('option')[`item${name[i]}Condition`]) && isOn(order[i])) {
-        isOn(order[i]).click();
+      let id = order[i];
+      if (g('option').item[name[i]] && checkCondition(g('option')[`item${name[i]}Condition`]) && isOn(id)) {
+        (gE(`.bti3>div[onmouseover*="${id}"]`) ?? gE(id)).click();
         return true;
       }
     }
@@ -3764,28 +3793,22 @@ try {
     }
 
     const skillOrder = (g('option').skillOrderValue || 'OFC,FRD,T3,T2,T1').split(',');
+    const fightStyle = g('fightingStyle');
     const skillLib = {
-      OFC: {
-        id: '1111',
-        oc: 8,
-      },
-      FRD: {
-        id: '1101',
-        oc: 4,
-      },
-      T3: {
-        id: `2${g('option').fightingStyle}03`,
-        oc: 2,
-      },
-      T2: {
-        id: `2${g('option').fightingStyle}02`,
-        oc: 2,
-      },
-      T1: {
-        id: `2${g('option').fightingStyle}01`,
-        oc: 2,
-      },
+      OFC: '1111',
+      FRD: '1101',
+      T3: `2${fightStyle}03`,
+      T2: `2${fightStyle}02`,
+      T1: `2${fightStyle}01`
     };
+    const skillOC = { // default as 2
+      '1101': 4,
+      '1111': 8,
+      '2101': 4,
+      '2201': 1,
+      '2203': 4,
+      '2403': 3
+    }
     const rangeSkills = {
       2101: 2,
       2403: 2,
@@ -3794,29 +3817,40 @@ try {
 
     for (let i in skillOrder) {
       let skill = skillOrder[i];
-      let range = 0;
       if (!g('option').skill[skill]) {
         continue;
       }
       if (!checkCondition(g('option')[`skill${skill}Condition`])) {
         continue;
       }
-      if (!isOn(skillLib[skill].id)) {
+      let id = skillLib[skill];
+      if (!isOn(id)) {
         continue;
       }
-      if (g('oc') < skillLib[skill].oc) {
+      if (g('oc') < (id in skillOC ? skillOC[id] : 2)) {
         continue;
       }
       if (g('option').skillOTOS && g('option').skillOTOS[skill] && g('skillOTOS')[skill] >= 1) {
         continue;
       }
       g('skillOTOS')[skill]++;
-      gE(skillLib[skill].id).click();
-      if (skillLib[skill].id in rangeSkills) {
-        range = rangeSkills[skillLib[skill].id];
+      gE(id).click();
+      // Merciful Blow
+      let target = 0;
+      if (g('option').mercifulBlow && fightStyle === '2' && skill === 'T3') {
+        for (let j = 0; j < monsterStatus.length; j++) {
+          if (monsterStatus[j].hpNow / monsterStatus[j].hp >= 0.25) {
+            continue;
+          }
+          if (!gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`)) {
+            continue;
+          }
+          target = j;
+          break;
+        }
       }
-
-      gE(`#mkey_${getRangeCenterID(monsterStatus[0])}`).click();
+      const range = id in rangeSkills ? rangeSkills[id] : 0;
+      gE(`#mkey_${getRangeCenterID(monsterStatus[target], range)}`).click();
       return true;
     }
   }
@@ -4007,7 +4041,7 @@ try {
     const attackStatus = g('attackStatus');
     const monsterStatus = g('battle').monsterStatus;
     if (attackStatus === 0) {
-      if (g('option').fightingStyle === '1') { // 二天一流
+      if (g('fightingStyle') === '1') { // 二天一流
         range = 1;
       }
     } else {
