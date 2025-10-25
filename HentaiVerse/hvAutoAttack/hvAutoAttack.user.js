@@ -2301,7 +2301,7 @@ try {
         }
       });
     } catch (e) {console.error(e)}}));
-    ability['1101'] && setValue('ability', ability);
+    setValue('ability', ability);
     logSwitchAsyncTask(arguments);
   } catch (e) {console.error(e)}}
 
@@ -2917,7 +2917,7 @@ try {
       return getMonsterID(target);
     }
     const centralExtraWeight = -1 * Math.log10(1 + (isWeaponAttack ? (g('option').centralExtraRatio / 100) ?? 0 : 0));
-    let order = target?.order || 0;
+    let order = target.order;
     let newOrder = order;
     // sort by order to fix id
     let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
