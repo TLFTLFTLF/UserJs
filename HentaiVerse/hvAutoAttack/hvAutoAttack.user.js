@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.22.19
+// @version      2.90.22.26
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -856,7 +856,7 @@ try {
       '  </div>',
 
       '<div class="hvAATab" id="hvAATab-BattleStarter">',
-      ' <div><input id="encounter" type="checkbox"><label for="encounter"><b><l0>自动遭遇战</l0><l1>自動遭遇戰</l1><l2>Auto Encounter</l2></b></label><input id="encounterQuickCheck" type="checkbox"><label for="encounterQuickCheck"><l0>精准倒计时(影响性能)</l0><l1>精準(影響性能)</l1><l2>Precise encounter cd(might reduced performsance)</l2></label></div>',
+      ' <div><input id="encounter" type="checkbox"><label for="encounter"><b><l0>自动遭遇战</l0><l1>自動遭遇戰</l1><l2>Auto Encounter</l2></b></label><input id="encounterQuickCheck" type="checkbox"><label for="encounterQuickCheck"><l0>精准倒计时(影响性能)</l0><l1>精準(影響性能)</l1><l2>Precise encounter cd(might reduced performsance)</l2></label><input id="encounterDisplay" type="checkbox"><label for="encounterDisplay"><l0>不自动遭遇时显示倒计时</l0><l1>不自動遭遇時顯示倒計時</l1><l2>Display CountDown While Not Auto Encounter</l2></label></div>',
       '  <div><input id="idleArena" type="checkbox"><label for="idleArena"><b><l0>闲置竞技场</l0><l1>閒置競技場</l1><l2>Idle Arena</l2>: </b>',
       '    <l0>在任意页面停留</l0><l1>在任意頁面停留</l1><l2>Idle in any page for </l2><input class="hvAANumber" name="idleArenaTime" type="text"><l0>秒后，开始竞技场</l0><l1>秒後，開始競技場</l1><l2>s, start Arena</l2></label> <button class="idleArenaReset"><l01>重置</l01><l2>Reset</l2></button>;<br>',
       '    <l0>进行的竞技场相对应等级</l0><l1>進行的競技場相對應等級</l1><l2>The levels of the Arena you want to complete</l2>:  ',
@@ -872,6 +872,7 @@ try {
       '      <div><l0>含本日自然恢复的阈值<l1>含本日自然恢復的閾值</l1><l2><b></b>Stamina threshold with naturally recovers today.</l2>: <input class="hvAANumber" name="staminaLowWithReNat" placeholder="0" type="text">; </div>',
       '      <div><input id="restoreStamina" type="checkbox"><label for="restoreStamina"><l0>战前恢复</l0><l1>戰前恢復</l1><l2>Restore stamina</l2>; </div>',
       '      <div><l0>进入遭遇战的最低精力<l1>進入遭遇戰的最低精力</l1><l2><b></b>Minimum stamina to engage encounter</l2>: <input class="hvAANumber" name="staminaEncounter" placeholder="60" type="text"></div>',
+      '      <div><l0>进入压榨届的最低精力<l1>進入壓榨屆的最低精力</l1><l2><b></b>Minimum stamina to auto start GrindFest</l2>: <input class="hvAANumber" name="staminaGrindFest" placeholder="100" type="text"></div>',
       '  </div>',
       '  <div><input id="repair" type="checkbox"><label for="repair"><b><l0>修复装备</l0><l1>修復裝備</l1><l2>Repair Equipment</l2></b></label>: ',
       '    <l0>耐久度</l0><l1>耐久度</l1><l2>Durability</l2> ≤ <input class="hvAANumber" name="repairValue" type="text">%</div>',
@@ -1020,8 +1021,8 @@ try {
       '    <input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
       '    <input id="debuffSkillOrder_We" type="checkbox"><label for="debuffSkillOrder_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
       '    <input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
-      '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给所有敌人上虚弱(We)</l0><l1>先給所有敵人上虛弱(We)</l1><l2>Weakened all enemies first.</l2></label></div>{{debuffSkillWeAllCondition}}',
-      '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给所有敌人上陷危(Im)</l0><l1>先給所有敵人上陷危(Im)</l1><l2>Imperiled all enemies first.</l2></label></div>{{debuffSkillImAllCondition}}',
+      '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给所有敌人上虚弱(We)</l0><l1>先給所有敵人上虛弱(We)</l1><l2>Weakened all enemies first.</l2></label><input id="debuffSkillWeAllByIndex" type="checkbox"><label for="debuffSkillWeAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead weight</l2></label></div>{{debuffSkillWeAllCondition}}',
+      '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给所有敌人上陷危(Im)</l0><l1>先給所有敵人上陷危(Im)</l1><l2>Imperiled all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead weight</l2></label></div>{{debuffSkillImAllCondition}}',
       '    <div><input id="debuffSkill_Sle" type="checkbox"><label for="debuffSkill_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label>{{debuffSkillSleCondition}}</div>',
       '    <div><input id="debuffSkill_Bl" type="checkbox"><label for="debuffSkill_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label>{{debuffSkillBlCondition}}</div>',
       '    <div><input id="debuffSkill_Slo" type="checkbox"><label for="debuffSkill_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>{{debuffSkillSloCondition}}</div>',
@@ -2212,6 +2213,19 @@ try {
     for (let e of current) {
       dict[e.href ?? `newDawn`] = e;
     }
+    try {
+      // if is latest version data
+      for (let e of encounter) {}
+    } catch {
+      // if old versions
+      const last = encounter.lastTime;
+      const times = encounter.time;
+      encounter = [];
+      for (let i = 0; i <= times; i++) {
+        encounter.unshift({ href: i===0 ? undefined : i, time: last, encountered: i===0 ? undefined : time(0) });
+      }
+      setEncounter(encounter);
+    }
     for (let e of encounter) {
       const key = e.href ?? `newDawn`;
       dict[key] ??= e;
@@ -2431,6 +2445,10 @@ try {
   }
 
   async function updateEncounter(engage, isInBattle) { try {
+    if(!g('option').encounter && !g('option').encounterDisplay){
+      console.log("skip encounter check");
+      return;
+    }
     if(getValue('disabled')){
       await pauseAsync(_1s);
       return await updateEncounter(engage, isInBattle);
@@ -2620,7 +2638,7 @@ try {
 
     let href, cost;
     let token = arena.token[id];
-    const key = id;
+    let key = id;
     if (key === 'gr') {
       if (arena.gr <= 0) {
         setValue('arena', arena);
@@ -2640,7 +2658,7 @@ try {
       href = 'ar';
     }
     cost ??= staminaCost[key];
-    if (!checkBattleReady(idleArena, { staminaCost: cost, checkEncounter: true })) {
+    if (!checkBattleReady(idleArena, { staminaCost: cost, checkEncounter: true, staminaLow: href === 'gr' ? g('option').staminaGrindFest : undefined})) {
       logSwitchAsyncTask(arguments);
       return;
     }
@@ -2888,7 +2906,7 @@ try {
        * @param {(target) => bool} excludeCondition target with id
        * @returns
        */
-  function getRangeCenterID(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined) {
+  function getRangeCenterID(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined, forceUseIndex = undefined) {
     if (!range) {
       return getMonsterID(target);
     }
@@ -2914,7 +2932,10 @@ try {
           rank += unreachableWeight - cew;
           continue;
         }
-        rank += mon.finWeight + cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
+        // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
+        rank += cew;
+        // 强制使用顺序而非权重时，全部使用统一的权重而非怪物状态
+        rank += forceUseIndex ? -1 : mon.finWeight;
       }
       if (rank < minRank) {
         newOrder = i;
@@ -3039,30 +3060,35 @@ try {
         }
         return;
 
-        async function onNewRound(){
-          try {
-            const html = await $ajax.fetch(window.location.href);
-
-            gE('#pane_completion').removeChild(gE('#btcp'));
-            clearBattleUnresponsive();
-            const doc = $doc(html)
-            if (gE('#riddlecounter', doc)) {
-              if (g('option').riddlePopup && !window.opener) {
-                window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
-                return;
-              }
-              goto();
+        async function onNewRound(){ try {
+          if(getValue('disabled')){
+            await pauseAsync(_1s);
+            return await onNewRound();
+          }
+          if(gE('#btcp').innerHTML.containes("finishbattle.png")){
+            goto();
+            return;
+          }
+          const html = await $ajax.fetch(window.location.href);
+          gE('#pane_completion').removeChild(gE('#btcp'));
+          clearBattleUnresponsive();
+          const doc = $doc(html)
+          if (gE('#riddlecounter', doc)) {
+            if (g('option').riddlePopup && !window.opener) {
+              window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
               return;
             }
-            ['#battle_right', '#battle_left'].forEach(selector=>{ gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); })
-            unsafeWindow.battle = new unsafeWindow.Battle();
-            unsafeWindow.battle.clear_infopane();
-            Debug.log('______________newRound', true);
-            newRound(true);
-            onBattle();
-          } catch(e) { e=>console.error(e) }
-        }
-      }
+            goto();
+            return;
+          }
+          ['#battle_right', '#battle_left'].forEach(selector=>{ gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); })
+          unsafeWindow.battle = new unsafeWindow.Battle();
+          unsafeWindow.battle.clear_infopane();
+          Debug.log('______________newRound', true);
+          newRound(true);
+          onBattle();
+        } catch(e) { e=>console.error(e) }
+      }}
 
       if (g('monsterAlive') > 0) { // Defeat
         SetExitBattleTimeout(g('option').autoSkipDefeated ? 'SkipDefeated' : 'Defeat');
@@ -3832,10 +3858,9 @@ try {
     let skillPack = ['We', 'Im'];
     for (let i = 0; i < skillPack.length; i++) {
       if (g('option')[`debuffSkill${skillPack[i]}All`]) { // 是否启用
-        continue;
-      }
-      if (!checkCondition(g('option')[`debuffSkill${skillPack[i]}AllCondition`])) { // 检查条件
-        continue;
+        if (checkCondition(g('option')[`debuffSkill${skillPack[i]}AllCondition`])) { // 检查条件
+          continue;
+        }
       }
       skillPack.splice(i, 1);
       i--;
@@ -3847,13 +3872,12 @@ try {
     }
     for (let i in skillPack) {
       let buff = skillPack[i];
-      if (i >= toAllCount && !skillPack[i]) { // 检查buff是否启用
-        continue;
+      if (i >= toAllCount) { // 非先全体
+        if (!buff || !checkCondition(g('option')[`debuffSkill${buff}Condition`])) { // 检查条件
+          continue;
+        }
       }
-      if (!checkCondition(g('option')[`debuffSkill${buff}Condition`])) { // 检查条件
-        continue;
-      }
-      let succeed = useDebuffSkill(skillPack[i], i < toAllCount);
+      let succeed = useDebuffSkill(buff, i < toAllCount);
       // 前 toAllCount 个都是先给全体上的
       if (succeed) {
         return true;
@@ -3916,7 +3940,8 @@ try {
     if (!isOn(skillLib[buff].id)) { // 技能不可用
       return false;
     }
-    const monsterStatus = g('battle').monsterStatus;
+    let monsterStatus = g('battle').monsterStatus;
+    let debuffByIndex = isAll && g('option')[`debuffSkill${buff}AllByIndex`];
     let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
     let primaryTarget;
     let max = isAll ? monsterStatus.length : 1;
@@ -3928,8 +3953,9 @@ try {
       if (isDebuffed(target)) { // 检查是否已有该buff
         continue;
       }
-      primaryTarget = target;
-      break;
+      if(!primaryTarget || (debuffByIndex && primaryTarget.order > target.order)){
+        primaryTarget = target;
+      }
     }
     if (primaryTarget === undefined) {
       return false;
@@ -3937,15 +3963,18 @@ try {
 
     let range = 0;
     let ab;
+    const ability = getValue('ability', true);
     for (ab in skillLib[buff].range) {
-      const ranges = skillLib[buff].range[ab][skillLib[buff].skill * 1];
+      const ranges = skillLib[buff].range[ab];
       if (!ranges) {
         continue;
       }
-      range = ranges[getValue('ability', true)[ab].level];
+      if(ability){
+        range = ranges[ability[ab].level];
+      }
       break;
     }
-    let id = getRangeCenterID(primaryTarget, range, isDebuffed);
+    let id = getRangeCenterID(primaryTarget, range, false, isDebuffed, debuffByIndex);
     const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
     // 已有buff小于6个
     // 未开启debuff失败警告
@@ -4027,7 +4056,10 @@ try {
           if (!ranges) {
             continue;
           }
-          range = ranges[getValue('ability', true)[ab]?.level ?? 0];
+          const ability = getValue('ability', true);
+          if(ability){
+            range = ranges[ability[ab].level];
+          }
           break;
         }
       }
@@ -4127,18 +4159,25 @@ try {
       const value = text.innerHTML * 1;
       const percentage = value ? percentages[i] : 0;
       const inner = `[${percentage.toString()}%]`;
+      text.style.cssText += textOC ? `
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 120px;
+      `: "";
       const percentageDiv = gE('div', text);
-      if (percentageDiv) {
-        percentageDiv.innerHTML = inner;
-        return;
-      }
-      text.innerHTML += `<div style="
+      const style = `
         position: relative;
-        top: ${textOC ? -15 : text === textHP ? -16.67 : -16}px;
-        right: ${textOC ? -70 : text === textMP ? -60 : text === textSP ? 40 : -100}px;
+        top: ${textOC ? 0 : text === textHP ? -16.67 : -16}px;
+        right: ${textOC ? -10 : text === textMP ? -60 : text === textSP ? 40 : -100}px;
         filter: brightness(0.2);
         text-align: left;
-        ">${inner}</div>`
+      `
+      if (percentageDiv) {
+        percentageDiv.innerHTML = inner;
+        percentageDiv.style.cssText = style;
+        return;
+      }
+      text.innerHTML += `<div style="${style}">${inner}</div>`
     });
   }
 
