@@ -2912,12 +2912,12 @@ try {
        * @param {(target) => bool} excludeCondition target with id
        * @returns
        */
-  function getRangeCenterID(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined, forceUseIndex = undefined) {
+  function getRangeCenterID(target = undefined, range = undefined, isWeaponAttack = false, excludeCondition = undefined, forceUseIndex = undefined) {
     if (!range) {
       return getMonsterID(target);
     }
     const centralExtraWeight = -1 * Math.log10(1 + (isWeaponAttack ? (g('option').centralExtraRatio / 100) ?? 0 : 0));
-    let order = target.order;
+    let order = target?.order || 0;
     let newOrder = order;
     // sort by order to fix id
     let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
