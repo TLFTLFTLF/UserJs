@@ -3080,7 +3080,7 @@ try {
             await pauseAsync(_1s);
             return await onNewRound();
           }
-          if(gE('#btcp').innerHTML.containes("finishbattle.png")){
+          if(gE('#btcp').innerHTML.includes("finishbattle.png")){
             goto();
             return;
           }
@@ -3099,6 +3099,7 @@ try {
           ['#battle_right', '#battle_left'].forEach(selector=>{ gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); })
           unsafeWindow.battle = new unsafeWindow.Battle();
           unsafeWindow.battle.clear_infopane();
+          document.dispatchEvent(new Event('DOMContentLoaded'));
           Debug.log('______________newRound', true);
           newRound(true);
           onBattle();
