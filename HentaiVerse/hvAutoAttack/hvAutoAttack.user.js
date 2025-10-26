@@ -4007,7 +4007,7 @@ try {
       }
       break;
     }
-    let id = getRangeCenterID(primaryTarget, range, false, isDebuffed, debuffByIndex);
+    let id = getMonsterID(primaryTarget);
     const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
     // 已有buff小于6个
     // 未开启debuff失败警告
