@@ -2301,7 +2301,7 @@ try {
         }
       });
     } catch (e) {console.error(e)}}));
-    setValue('ability', ability);
+    ability['1101'] && setValue('ability', ability);
     logSwitchAsyncTask(arguments);
   } catch (e) {console.error(e)}}
 
