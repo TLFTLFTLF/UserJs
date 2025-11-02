@@ -3005,7 +3005,7 @@ try {
     let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
     msTemp.sort(objArrSort('order'));
     let unreachableWeight = g('option').unreachableWeight;
-    let minRank = 10000;
+    let minRank = Number.MAX_SAFE_INTEGER;
     let rangeStart = 0;
     let rangeEnd = msTemp.length - 1;
     if (target) {
@@ -3899,7 +3899,7 @@ try {
         if (monsterStatus[j].hpNow / monsterStatus[j].hp < 0.25 && gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`) && gE(`#mkey_${getMonsterID(monsterStatus[j])} div.btm2[style^="background"]`)) {
           g('skillOTOS')['T3']++;
           gE('2203').click();
-          gE(`#mkey_${getRangeCenterID(monsterStatus[j])}`).click();
+          gE(`#mkey_${getRangeCenter(monsterStatus[j]).id}`).click();
           return true;
         }
       }
@@ -4088,6 +4088,7 @@ try {
     if (buff === 'Im') {
       isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`))
     }
+    const attackStatus = g('attackStatus');
     let holdDrain = (target) => attackStatus === 5 && !gE(`img[src*="soulfire"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || attackStatus === 6 && !gE(`img[src*="ripesoul"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
     let debuffByIndex = isAll && g('option')[`debuffSkill${buff}AllByIndex`];
     let monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
@@ -4104,34 +4105,31 @@ try {
       if (target.isDead || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
         continue;
       }
-      const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
-      if(!id || center.rank < minRank){
-        minRank = center.rank;
-        id = center.id;
-        if(!isAll){
-          // 只有覆盖全体才需要遍历全部
-          break;
-        }
+      id = getMonsterID(target)
+      const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
+      // 已有buff小于6个
+      // 未开启debuff失败警告
+      // buff剩余持续时间大于等于警报时间
+      if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
+        const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
+        if(!id || center.rank < minRank){
+          minRank = center.rank;
+          id = center.id;
+          if(!isAll){
+            // 只有覆盖全体才需要遍历全部
+            break;
+          }
+        } 
+      } else {
+        return false;
       }
     }
     if (id === undefined) {
       return false;
     }
-
-    const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
-    // 已有buff小于6个
-    // 未开启debuff失败警告
-    // buff剩余持续时间大于等于警报时间
-    if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
-      if (range > 0) {
-        id = getRangeCenterID(skillLib[buff].noPrimary ? undefined : primaryTarget, range, false, isDebuffed);
-      }
-      gE(skillLib[buff].id).click();
-      gE(`#mkey_${id}`).click();
-      return true;
-    } else {
-      return false;
-    }
+    gE(skillLib[buff].id).click();
+    gE(`#mkey_${id}`).click();
+    return true;
 
     _alert(0, '无法正常施放DEBUFF技能，请尝试手动打怪', '無法正常施放DEBUFF技能，請嘗試手動打怪', 'Can not cast de-skills normally, continue the script?\nPlease try attack manually.');
     pauseChange();
