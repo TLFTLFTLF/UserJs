@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.22.26
+// @version      2.90.22.39
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -355,7 +355,8 @@ try {
       return;
     }
     gE('img[src*="startchallenge.png"]', 'all', document).forEach((btn) => {
-      const temp = btn.getAttribute('onclick').match(/init_battle\((\d+),\d+,'(.*?)'\)/);
+      const onclick = btn.getAttribute('onclick');
+      const temp = onclick.match(/init_battle\((\d+),\d+,'(.*?)'\)/) ?? onclick.match(/init_battle\((\d+),\d+\)/);
       if(ar.includes(temp[1])) {
         return;
       }
@@ -524,7 +525,7 @@ try {
 
   function isOn(id) { // 是否可以施放技能/使用物品
     if (id * 1 > 10000) { // 使用物品
-      return gE(`.bti3>div[onmouseover*="${id}"]`);
+      return gE(`.bti3>div[onmouseover*="(${id})"]`);
     } // 施放技能
     return gE(id) && (gE(id).style.opacity * 1 !== 0.5);
   }
@@ -1041,7 +1042,7 @@ try {
       '  <input id="skillOrder_OFC" type="checkbox"><label for="skillOrder_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label><input id="skillOrder_FRD" type="checkbox"><label for="skillOrder_FRD"><l0>龙吼</l0><l1>龍吼</l1><l2>FRD</l2></label><input id="skillOrder_T3" type="checkbox"><label for="skillOrder_T3">T3</label><input id="skillOrder_T2" type="checkbox"><label for="skillOrder_T2">T2</label><input id="skillOrder_T1" type="checkbox"><label for="skillOrder_T1">T1</label></div>',
       '  <div><input id="skill_OFC" type="checkbox"><label for="skill_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label>: <input id="skillOTOS_OFC" type="checkbox"><label for="skillOTOS_OFC"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillOFCCondition}}</div>',
       '  <div><input id="skill_FRD" type="checkbox"><label for="skill_FRD"><l0>龙吼</l0><l1>龍吼</l1><l2>FRD</l2></label>: <input id="skillOTOS_FRD" type="checkbox"><label for="skillOTOS_FRD"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillFRDCondition}}</div>',
-      '  <div><input id="skill_T3" type="checkbox"><label for="skill_T3"><l0>3阶（如果有）</l0><l1>3階（如果有）</l1><l2>T3(if exist)</l2></label>: <input id="skillOTOS_T3" type="checkbox"><label for="skillOTOS_T3"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label><br><input id="mercifulBlow" type="checkbox"><label for="mercifulBlow"><l0>最后的慈悲(MB)：优先攻击满足条件的敌人 (25% HP, 流血)</l0><l1>最後的慈悲(MB)：優先攻擊滿足條件的敵人 (25% HP, 流血)</l1><l2>Merciful Blow: Attack the enemy which has 25% HP and is bleeding first</l2></label>{{skillT3Condition}}</div>',
+      '  <div><input id="skill_T3" type="checkbox"><label for="skill_T3"><l0>3阶（如果有）</l0><l1>3階（如果有）</l1><l2>T3(if exist)</l2></label>: <input id="skillOTOS_T3" type="checkbox"><label for="skillOTOS_T3"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label><br><input id="mercifulBlow" type="checkbox"><label for="mercifulBlow"><l0>最后的慈悲(MB)：优先攻击满足条件的敌人 (25% HP, 流血)</l0><l1>最後的慈悲(MB)：優先攻擊滿足條件的敵人 (25% HP, 流血)</l1><l2>Merciful Blow: Attack the enemy which has 25% HP and is bleeding first</l2><br><input id="mercifulBlowStrict" type="checkbox"><label for="mercifulBlowStrict"><l0>最后的慈悲(MB)：只攻击满足条件的敌人 (25% HP, 流血)</l0><l1>最後的慈悲(MB)：只攻擊滿足條件的敵人 (25% HP, 流血)</l1><l2>Merciful Blow: Attack the enemy which has 25% HP and is bleeding only</l2></label>{{skillT3Condition}}</div>',
       '  <div><input id="skill_T2" type="checkbox"><label for="skill_T2"><l0>2阶（如果有）</l0><l1>2階（如果有）</l1><l2>T2(if exist)</l2></label>: <input id="skillOTOS_T2" type="checkbox"><label for="skillOTOS_T2"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillT2Condition}}</div>',
       '  <div><input id="skill_T1" type="checkbox"><label for="skill_T1"><l0>1阶</l0><l1>1階</l1><l2>T1</l2></label>: <input id="skillOTOS_T1" type="checkbox"><label for="skillOTOS_T1"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillT1Condition}}</div></div>',
 
@@ -2396,16 +2397,38 @@ try {
       return await asyncCheckRepair();
     }
     logSwitchAsyncTask(arguments);
-    const doc = $doc(await $ajax.fetch('?s=Forge&ss=re'));
-    const json = JSON.parse((await $ajax.fetch(gE('#mainpane>script[src]', doc).src)).match(/{.*}/)[0]);
-    const eqps = (await Promise.all(Array.from(gE('.eqp>[id]', 'all', doc)).map(async eqp => { try {
-      const id = eqp.id.match(/\d+/)[0];
-      const condition = 1 * json[id].d.match(/Condition: \d+ \/ \d+ \((\d+)%\)/)[1];
-      if (condition > g('option').repairValue) {
-        return;
-      }
-      return gE('.messagebox_error', $doc(await $ajax.fetch(`?s=Forge&ss=re`, `select_item=${id}`)))?.innerText ? undefined : id;
-    } catch (e) {console.error(e)}}))).filter(e => e);
+    var eqps;
+    if(!isIsekai){
+      var doc = $doc(await $ajax.fetch('?s=Forge&ss=re'));
+      const json = JSON.parse((await $ajax.fetch(gE('#mainpane>script[src]', doc).src)).match(/{.*}/)[0]);
+      eqps = (await Promise.all(Array.from(gE('.eqp>[id]', 'all', doc)).map(async eqp => { try {
+        const id = eqp.id.match(/\d+/)[0];
+        const condition = 1 * json[id].d.match(/Condition: \d+ \/ \d+ \((\d+)%\)/)[1];
+        if (condition > g('option').repairValue) {
+          return;
+        }
+        return gE('.messagebox_error', $doc(await $ajax.fetch(`?s=Forge&ss=re`, `select_item=${id}`)))?.innerText ? undefined : id;
+      } catch (e) {console.error(e)}}))).filter(e => e);
+    } else {
+      doc = $doc(await $ajax.fetch('?s=Bazaar&ss=am&screen=repair&filter=equipped'));
+      eqps = (await Promise.all(Array.from(gE('#equiplist>table>tbody>tr:not(.eqselall):not(.eqtplabel)', 'all', doc)).map(async eqp => { try {
+        const id = eqp.getAttribute('onmouseover').match(/hover_equip\((\d+)\)/)[1];
+        const condition = 1 * gE('td:last-child', eqp).childNodes[0].textContent.replace('%', '');
+        if (condition > g('option').repairValue) {
+          return;
+        }
+        // TODO repair
+        var iframe = cE('iframe');
+        iframe.style.cssText += "display:none"
+        iframe.src = `?s=Bazaar&ss=am&screen=repair&filter=equipped&eqids[]=${id}`;
+        document.body.appendChild(iframe);
+        await loadIframe(iframe);
+        if(gE('#equipsubmit', iframe.contentWindow.document.body).getAttribute('disabled')){
+          return id;
+        }
+        gE('#equipform', iframe.contentWindow.document.body).submit();
+      } catch (e) {console.error(e)}}))).filter(e => e);
+    }
     if (eqps.length) {
       console.log('eqps need repair: ', eqps);
       document.title = `[R!]` + document.title;
@@ -2413,6 +2436,15 @@ try {
     logSwitchAsyncTask(arguments);
     return !eqps.length;
   } catch (e) {console.error(e)}; return false; }
+
+  function loadIframe(iframe) {
+    return new Promise((resolve, reject) => {
+      // 监听iframe的load事件
+      iframe.onload = () => {
+        resolve("Iframe loaded successfully");
+      };
+    });
+  }
 
   function checkStamina(low, cost) {
     let stamina = getValue('stamina');
@@ -2541,12 +2573,26 @@ try {
       await Promise.all(arena.sites.map(async site => { try {
         const doc = $doc(await $ajax.fetch(site));
         if (site === '?s=Battle&ss=gr') {
-          arena.token.gr = gE('img[src*="startgrindfest.png"]', doc).getAttribute('onclick').match(/init_battle\(1, '(.*?)'\)/)[1];
+          const onclickInner = gE('img[src*="startgrindfest.png"]', doc).getAttribute('onclick').match(/init_battle\(1\)/);
+          if(onclickInner){
+            arena.token.gr = null;
+          }
           return;
         }
-        gE('img[src*="startchallenge.png"]', 'all', doc).forEach((_) => {
-          const temp = _.getAttribute('onclick').match(/init_battle\((\d+),\d+,'(.*?)'\)/);
-          arena.token[temp[1]] = temp[2];
+        gE('img[src*="startchallenge.png"]', 'all', doc).forEach((btn) => {
+          const onclick = btn.getAttribute('onclick');
+          var temp = onclick.match(/init_battle\((\d+),\d+,'(.*?)'\)/);
+          if(temp){
+            arena.token[temp[1]] = temp[2];
+            return;
+          }
+          temp = onclick.match(/init_battle\((\d+),\d+\)/);
+          if(temp){
+            arena.token[temp[1]] = null;
+            return;
+          }
+          temp = onclick.match(/init_battle\((\d+)\)/);
+          arena.token[temp[1]] = null;
         });
       } catch (e) {console.error(e)}}));
     }
@@ -2585,6 +2631,15 @@ try {
   }
 
   async function idleArena() { try { // 闲置竞技场
+    function writeArenaStart(){
+      document.title = _alert(-1, '闲置竞技场开始', '閒置競技場開始', 'Idle Arena start');
+      if (key !== 'gr'){
+        arena.arrayDone.push(key);
+      } else {
+        arena.gr--;
+      }
+      setValue('arena', arena);
+    }
     let arena = getValue('arena', true);
     console.log('arena:', getValue('arena', true));
     if (arena.array.length === 0) {
@@ -2646,7 +2701,6 @@ try {
         arena.arrayDone.push('gr');
         return;
       }
-      arena.gr--;
       href = 'gr';
       key = 1;
       cost = staminaCost.gr;
@@ -2662,12 +2716,40 @@ try {
       logSwitchAsyncTask(arguments);
       return;
     }
-    document.title = _alert(-1, '闲置竞技场开始', '閒置競技場開始', 'Idle Arena start');
-    if(key !== 'gr'){
-      arena.arrayDone.push(key);
+    if(token){
+      writeArenaStart();
+      $ajax.open(`?s=Battle&ss=${href}`, `initid=${String(key)}&inittoken=${token}`);
+      logSwitchAsyncTask(arguments);
+      return;
     }
-    setValue('arena', arena);
-    $ajax.open(`?s=Battle&ss=${href}`, `initid=${String(key)}&inittoken=${token}`);
+    // new version in isekai
+    var iframe = cE('iframe');
+    iframe.src = `?s=Battle&ss=${href}`;
+    iframe.style.cssText += "display:none";
+    document.body.appendChild(iframe);
+    await loadIframe(iframe);
+    var btns = gE(`#arena_list>tbody>tr>td>img`, 'all', iframe.contentWindow.document.body);
+    for(let btn of btns){
+      const onclick = btn.getAttribute('onclick');
+      if(!onclick){
+        continue;
+      }
+      var temp = onclick.match(/init_battle\((\d+),\d+\)/) ?? onclick.match(/init_battle\((\d+)\)/);
+      if(!temp || temp[1]*1 !== key){
+        continue;
+      }
+      iframe.contentWindow.confirm = function(message) { // 自动点击进入
+        return true;
+      };
+      iframe.contentWindow.alert = function(message) {
+        return;
+      };
+      writeArenaStart();
+      btn.onclick();
+      await loadIframe(iframe);
+      goto();
+      return;
+    }
     logSwitchAsyncTask(arguments);
   } catch (e) {console.error(e)}}
 
@@ -2906,9 +2988,9 @@ try {
        * @param {(target) => bool} excludeCondition target with id
        * @returns
        */
-  function getRangeCenterID(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined, forceUseIndex = undefined) {
+  function getRangeCenter(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined, forceUseIndex = undefined) {
     if (!range) {
-      return getMonsterID(target);
+      return { id: getMonsterID(target), rank: Number.MAX_SAFE_INTEGER };
     }
     const centralExtraWeight = -1 * Math.log10(1 + (isWeaponAttack ? (g('option').centralExtraRatio / 100) ?? 0 : 0));
     let order = target.order;
@@ -2917,7 +2999,7 @@ try {
     let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
     msTemp.sort(objArrSort('order'));
     let unreachableWeight = g('option').unreachableWeight;
-    let minRank;
+    let minRank = Number.MAX_SAFE_INTEGER;
     for (let i = order - range; i <= order + range; i++) {
       if (i < 0 || i >= msTemp.length || msTemp[i].isDead) {
         continue; // 无法选中
@@ -2939,9 +3021,10 @@ try {
       }
       if (rank < minRank) {
         newOrder = i;
+        minRank = rank;
       }
     }
-    return getMonsterID(newOrder);
+    return { id: getMonsterID(newOrder), rank: minRank};
   }
 
   function autoPause() {
@@ -3065,7 +3148,7 @@ try {
             await pauseAsync(_1s);
             return await onNewRound();
           }
-          if(gE('#btcp').innerHTML.containes("finishbattle.png")){
+          if(gE('#btcp')?.innerHTML.includes("finishbattle.png")){
             goto();
             return;
           }
@@ -3401,7 +3484,8 @@ try {
       }
       let weight = baseHpRatio * Math.log10(monsterStatus[i].hpNow / hpMin); // > 0 生命越低权重越低优先级越高
       monsterStatus[i].hpWeight = weight;
-      if (yggdrasilExtraWeight && ('Yggdrasil' === gE('div.btm3>div>div', monsterBuff[i].parentNode).innerText || '世界树 Yggdrasil' === gE('div.btm3>div>div', monsterBuff[i].parentNode).innerText)) { // 默认设置下，任何情况都优先击杀群体大量回血的boss"Yggdrasil"
+      const name = gE('div.btm3>div>div', monsterBuff[i].parentNode).innerText;
+      if (yggdrasilExtraWeight && ('Yggdrasil' === name || '世界树 Yggdrasil' === name)) { // 默认设置下，任何情况都优先击杀群体大量回血的boss"Yggdrasil"
         weight += yggdrasilExtraWeight; // yggdrasilExtraWeight.defalut -1000
       }
       for (j in skillLib) {
@@ -3442,13 +3526,13 @@ try {
     if (!g('option').scroll) {
       return false;
     }
-    if (!checkCondition(g('option').scrollCondition)) {
-      return false;
-    }
     if (!g('option').scrollRoundType) {
       return false;
     }
     if (!g('option').scrollRoundType[g('battle').roundType]) {
+      return false;
+    }
+    if (!checkCondition(g('option').scrollCondition)) {
       return false;
     }
     const scrollLib = {
@@ -3499,20 +3583,22 @@ try {
       },
     };
     const scrollFirst = (g('option').scrollFirst) ? '_scroll' : '';
-    let isUsed;
     for (const i in scrollLib) {
-      if (g('option').scroll[i] && gE(`.bti3>div[onmouseover*="${scrollLib[i].id}"]`) && checkCondition(g('option')[`scroll${i}Condition`])) {
-        for (let j = 1; j <= scrollLib[i].mult; j++) {
-          if (gE(`#pane_effects>img[src*="${scrollLib[i][`img${j}`]}${scrollFirst}"]`)) {
-            isUsed = true;
-            break;
-          }
-          isUsed = false;
+      if (!g('option').scroll[i]) {
+        continue;
+      }
+      if(!gE(`.bti3>div[onmouseover*="(${scrollLib[i].id})"]`)){
+        continue;
+      }
+      if(!checkCondition(g('option')[`scroll${i}Condition`])){
+        continue;
+      }
+      for (let j = 1; j <= scrollLib[i].mult; j++) {
+        if (gE(`#pane_effects>img[src*="${scrollLib[i][`img${j}`]}${scrollFirst}"]`)) {
+          continue;
         }
-        if (!isUsed) {
-          gE(`.bti3>div[onmouseover*="${scrollLib[i].id}"]`).click();
-          return true;
-        }
+        gE(`.bti3>div[onmouseover*="(${scrollLib[i].id})"]`).click();
+        return true;
       }
     }
     return false;
@@ -3716,8 +3802,8 @@ try {
       },
     };
     for (i in draughtPack) {
-      if (!gE(`#pane_effects>img[src*="${draughtPack[i].img}"]`) && g('option').buffSkill && g('option').buffSkill[i] && checkCondition(g('option')[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="${draughtPack[i].id}"]`)) {
-        gE(`.bti3>div[onmouseover*="${draughtPack[i].id}"]`).click();
+      if (!gE(`#pane_effects>img[src*="${draughtPack[i].img}"]`) && g('option').buffSkill && g('option').buffSkill[i] && checkCondition(g('option')[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`)) {
+        gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`).click();
         return true;
       }
     }
@@ -3754,8 +3840,8 @@ try {
       id: 12601,
       img: 'darkinfusion',
     }];
-    if (gE(`.bti3>div[onmouseover*="${infusionLib[g('attackStatus')].id}"]`) && !gE(`#pane_effects>img[src*="${infusionLib[[g('attackStatus')]].img}"]`)) {
-      gE(`.bti3>div[onmouseover*="${infusionLib[g('attackStatus')].id}"]`).click();
+    if (gE(`.bti3>div[onmouseover*="(${infusionLib[g('attackStatus')].id})"]`) && !gE(`#pane_effects>img[src*="${infusionLib[[g('attackStatus')]].img}"]`)) {
+      gE(`.bti3>div[onmouseover*="(${infusionLib[g('attackStatus')].id})"]`).click();
       return true;
     }
     return false;
@@ -3770,6 +3856,11 @@ try {
   }
 
   function autoSS() {
+    const textSP = gE('#vrs') ?? gE('#dvrs');
+    const spValue = textSP.childNodes[0].textContent * 1;
+    if (spValue <= 1){
+      return false;
+    }
     if ((g('option').turnOnSS && checkCondition(g('option').turnOnSSCondition) && !gE('#ckey_spirit[src*="spirit_a"]')) || (g('option').turnOffSS && checkCondition(g('option').turnOffSSCondition) && gE('#ckey_spirit[src*="spirit_a"]'))) {
       gE('#ckey_spirit').click();
       return true;
@@ -3795,9 +3886,9 @@ try {
     const skillLib = {
       OFC: '1111',
       FRD: '1101',
-      T3: `2${fightStyle}03`,
-      T2: `2${fightStyle}02`,
-      T1: `2${fightStyle}01`
+      T3: fightStyle ? `2${fightStyle}03` : undefined,
+      T2: fightStyle ? `2${fightStyle}02` : undefined,
+      T1: fightStyle ? `2${fightStyle}01` : undefined,
     };
     const skillOC = { // default as 2
       '1101': 4,
@@ -3812,9 +3903,11 @@ try {
       2403: 2,
       1111: 4,
     }
-    const monsterStatus = g('battle').monsterStatus;
     for (let i in skillOrder) {
       let skill = skillOrder[i];
+      if(!skill){
+        return;
+      }
       if (!checkCondition(g('option')[`skill${skill}Condition`])) {
         continue;
       }
@@ -3830,24 +3923,39 @@ try {
       }
       g('skillOTOS')[skill]++;
       gE(id).click();
-      // Merciful Blow
-      let target = 0;
-      if (g('option').mercifulBlow && fightStyle === '2' && skill === 'T3') {
-        for (let j = 0; j < monsterStatus.length; j++) {
-          if (monsterStatus[j].hpNow / monsterStatus[j].hp >= 0.25) {
-            continue;
-          }
-          if (!gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`)) {
-            continue;
-          }
-          target = j;
-          break;
-        }
+      let target = getWeaponSkillTarget(id);
+      if(!target){
+        continue;
       }
       const range = id in rangeSkills ? rangeSkills[id] : 0;
-      gE(`#mkey_${getRangeCenterID(monsterStatus[target], range)}`).click();
+      gE(`#mkey_${getRangeCenter(target, range).id}`).click();
       return true;
     }
+  }
+
+  function getWeaponSkillTarget(id){
+    let target = undefined;
+    const monsterStatus = g('battle').monsterStatus;
+    if (id !== 2203) {
+      return monsterStatus[0];
+    }
+    // Merciful Blow
+    if(g('option').mercifulBlow || g('option').mercifulBlowStrict){
+      // get target with conditions (hp < 0.25 and bleeding)
+      for (let j = 0; j < monsterStatus.length; j++) {
+        if (monsterStatus[j].hpNow / monsterStatus[j].hp >= 0.25) {
+          continue;
+        }
+        if (!gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`)) {
+          continue;
+        }
+        return monsterStatus[j];
+      }
+    }
+    if(!g('option').mercifulBlowStrict){
+      return monsterStatus[0];
+    }
+    return undefined;
   }
 
   function useDeSkill() { // 自动施法DEBUFF技能
@@ -3940,27 +4048,7 @@ try {
     if (!isOn(skillLib[buff].id)) { // 技能不可用
       return false;
     }
-    let monsterStatus = g('battle').monsterStatus;
-    let debuffByIndex = isAll && g('option')[`debuffSkill${buff}AllByIndex`];
-    let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
-    let primaryTarget;
-    let max = isAll ? monsterStatus.length : 1;
-    for (let i = 0; i < max; i++) {
-      let target = buff === 'Dr' ? monsterStatus[max - i - 1] : monsterStatus[i];
-      if (monsterStatus[i].isDead) {
-        continue;
-      }
-      if (isDebuffed(target)) { // 检查是否已有该buff
-        continue;
-      }
-      if(!primaryTarget || (debuffByIndex && primaryTarget.order > target.order)){
-        primaryTarget = target;
-      }
-    }
-    if (primaryTarget === undefined) {
-      return false;
-    }
-
+    // 获取范围
     let range = 0;
     let ab;
     const ability = getValue('ability', true);
@@ -3974,7 +4062,38 @@ try {
       }
       break;
     }
-    let id = getRangeCenterID(primaryTarget, range, false, isDebuffed, debuffByIndex);
+
+    // 获取目标
+    let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
+    let debuffByIndex = isAll && g('option')[`debuffSkill${buff}AllByIndex`];
+    let monsterStatus = g('battle').monsterStatus;
+    if (debuffByIndex){
+      monsterStatus = JSON.parse(JSON.stringify(monsterStatus));
+      monsterStatus.sort(objArrSort('order'));
+    }
+    let max = isAll ? monsterStatus.length : 1;
+
+    let id;
+    let minRank = Number.MAX_SAFE_INTEGER;
+    for (let i = 0; i < max; i++) {
+      let target = buff === 'Dr' ? monsterStatus[max - i - 1] : monsterStatus[i];
+      if (target.isDead || isDebuffed(target)) {
+        continue;
+      }
+      const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
+      if(!id || center.rank < minRank){
+        minRank = center.rank;
+        id = center.id;
+        if(!isAll){
+          // 只有覆盖全体才需要遍历全部
+          break;
+        }
+      }
+    }
+    if (id === undefined) {
+      return false;
+    }
+
     const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
     // 已有buff小于6个
     // 未开启debuff失败警告
@@ -4064,7 +4183,7 @@ try {
         }
       }
     }
-    gE(`#mkey_${getRangeCenterID(monsterStatus[0], range, !attackStatus)}`).click();
+    gE(`#mkey_${getRangeCenter(monsterStatus[0], range, !attackStatus).id}`).click();
     return true;
   }
 
@@ -4149,7 +4268,7 @@ try {
     const barMP = gE('#vbm') ?? gE('#dvbm');
     const barSP = gE('#vbs') ?? gE('#dvbs');
     const barOC = gE('#dvbc');
-    const textHP = gE('#vrhd') ?? gE('#dvrhd');
+    const textHP = gE('#vrhd') ?? gE('#dvrhd') ?? gE('#dvrhb');
     const textMP = gE('#vrm') ?? gE('#dvrm');
     const textSP = gE('#vrs') ?? gE('#dvrs');
     const textOC = gE('#dvrc');
