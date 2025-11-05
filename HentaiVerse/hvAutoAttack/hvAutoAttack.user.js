@@ -2023,7 +2023,7 @@ try {
         if (!buff) {
           return 0;
         }
-        buff = buff.getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1;
+        buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(.*?)\)$/)[1] * 1;
         return isNaN(buff) ? Infinity : buff;
       },
     };
