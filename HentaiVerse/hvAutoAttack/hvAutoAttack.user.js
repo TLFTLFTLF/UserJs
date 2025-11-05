@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.22.39
+// @version      2.90.25
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -1988,6 +1988,14 @@ try {
     }
   }
 
+  function getBuffTurnFromImg(buff, nanValue=NaN) {
+    if (!buff) {
+      return 0;
+    }
+    buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2] * 1;
+    return isNaN(buff) ? nanValue : buff;
+  }
+
   function checkCondition(parms) {
     if (typeof parms === 'undefined') {
       return true;
@@ -2019,12 +2027,7 @@ try {
         return isOn(id) ? 1 : 0;
       },
       buffTurn(img) {
-        let buff = gE(`#pane_effects>img[src*="${img}"]`);
-        if (!buff) {
-          return 0;
-        }
-        buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(.*?)\)$/)[1] * 1;
-        return isNaN(buff) ? Infinity : buff;
+        return getBuffTurnFromImg(gE(`#pane_effects>img[src*="${img}"]`), Infinity);
       },
     };
 
@@ -3711,7 +3714,7 @@ try {
       };
       for (i = 0; i < buff.length; i++) {
         const spellName = buff[i].getAttribute('onmouseover').match(/'(.*?)'/)[1];
-        const buffLastTime = buff[i].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1;
+        const buffLastTime = getBuffTurnFromImg(buff[i]);
         if (isNaN(buffLastTime) || buff[i].src.match(/_scroll.png$/)) {
           continue;
         } else {
