@@ -4461,8 +4461,15 @@ try {
       if (debug) {
         console.log(text);
       }
-      if (text.match(/you for \d+ \w+ damage/)) {
-        reg = text.match(/you for (\d+) (\w+) damage/);
+      if (text.match(/you for \d+ \w+ damage/) || text.match(/take \d+ \w+ damage/) || text.includes('crits you, causing')) {
+        if (isIsekai) {
+          reg = text.match(/take (\d+) (\w+) damage/);
+          if (!reg) {
+            reg = text.match(/causing (\d+) points of (\w+) damage/);
+          }
+        } else {
+          reg = text.match(/you for (\d+) (\w+) damage/);
+        }
         magic = reg[2].replace('ing', '');
         point = reg[1] * 1;
         stats.hurt[magic] = (magic in stats.hurt) ? stats.hurt[magic] + point : point;
@@ -4495,6 +4502,8 @@ try {
         stats.self.focus++;
       } else if (text.match(/Your Spark of Life restores you/)) {
         stats.self.spark++
+      } else if (text.match(/Spark of Life saves you/)) {
+        stats.self.spark++
       } else if (text.match(/^Recovered \d+ points of/) || text.match(/You are healed for \d+ Health Points/) || text.match(/You drain \d+ HP from/)) {
         magic = (parm.mode === 'defend') ? 'defend' : text.match(/You drain \d+ HP from/) ? 'drain' : parm.magic || parm.item;
         point = text.match(/\d+/)[0] * 1;
@@ -4507,7 +4516,14 @@ try {
       } else if (text.match(/absorbs \d+ points of damage from the attack into \d+ points of \w+ damage/)) {
         reg = text.match(/(.*) absorbs (\d+) points of damage from the attack into (\d+) points of (\w+) damage/);
         point = reg[2] * 1;
-        magic = parm.log[i - 1].textContent.match(/you for (\d+) (\w+) damage/)[2].replace('ing', '');
+        if (isIsekai) {
+          magic = parm.log[i - 1].textContent.match(/take (\d+) (\w+) damage/)?.[2].replace('ing', '');
+          if (!magic) {
+            magic = parm.log[i - 1].textContent.match(/causing (\d+) points of (\w+) damage/)?.[2].replace('ing', '');
+          }
+        } else {
+          magic = parm.log[i - 1].textContent.match(/you for (\d+) (\w+) damage/)[2].replace('ing', '');
+        }
         stats.hurt[magic] = (magic in stats.hurt) ? stats.hurt[magic] + point : point;
         point = reg[3] * 1;
         magic = `${reg[1].replace('Your ', '')}_${reg[4]}`;
