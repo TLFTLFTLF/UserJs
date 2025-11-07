@@ -2087,7 +2087,7 @@ try {
 
   function checkCondition(parms, targets=undefined) {
     if (typeof parms === 'undefined') {
-      return g('battle').monsterStatus[0];
+      return targets?.[0] || g('battle').monsterStatus[0];
     }
     let i; let j; let k;
     let target;
@@ -4117,7 +4117,7 @@ try {
         continue;
       }
       if (buff === 'Sle' || buff === 'Co') buff = 'We'
-      let succeed = useDebuffSkill(buff, g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
+      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
       if (succeed) {
         return true;
       }
