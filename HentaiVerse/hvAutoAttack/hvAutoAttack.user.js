@@ -4105,7 +4105,7 @@ try {
     let minRank = Number.MAX_SAFE_INTEGER;
     for (let i = 0; i < max; i++) {
       let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
-      if (target.isDead || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
+      if (isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
         continue;
       }
       id = getMonsterID(target)
