@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.25
+// @version      2.90.32
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -43,6 +43,14 @@ const _1s = 1000;
 const _1m = 60 * _1s;
 const _1h = 60 * _1m;
 const _1d = 24 * _1h;
+
+const monsterStateKeys = {
+  obj: `div.btm1`,
+  lv: `div.btm2`,
+  name: `div.btm3`,
+  bars: `div.btm4>div.btm5`,
+  buffs: `div.btm6`,
+}
 
 try {
   const isFrame = window.self !== window.top;
@@ -388,6 +396,32 @@ try {
         option[itemArray[0]][itemArray[1]] ??= option[aliasDict[key]];
       }
     }
+    // 迁移旧版本最后的慈悲条件为可配置条件
+    const mercifulBlowCondition = option.skillT3Condition ?? {"0":[]};
+    const size = Object.keys(mercifulBlowCondition).length;
+    if (option.mercifulBlowStrict){
+      option.mercifulBlow = false;
+      option.mercifulBlowStrict = false;
+      for(let id in mercifulBlowCondition){
+        const condition = mercifulBlowCondition[id];
+        condition.push("fightingStyle,5,2");
+        condition.push("targetHp,2,0.25");
+        condition.push("_targetBuffTurn_bleed,1,0");
+      }
+    } else if(option.mercifulBlow) {
+      option.mercifulBlow = false;
+      const newCondition = {};
+      for(let id in mercifulBlowCondition){
+        const condition = mercifulBlowCondition[id];
+        newCondition[id] = condition;
+        newCondition[(id*1+size).toString()] = [...condition];
+        newCondition[(id*1+size).toString()].push("fightingStyle,6,2");
+        condition.push("fightingStyle,5,2");
+        condition.push("targetHp,2,0.25");
+        condition.push("_targetBuffTurn_bleed,1,0");
+      }
+      option.skillT3Condition = newCondition;
+    }
     if(isFrame){
       g('option', option);
     } else{
@@ -435,6 +469,8 @@ try {
   function setPauseUI(parent) {
     setPauseButton(parent);
     setPauseHotkey();
+    setStepInButton(parent);
+    setStepInHotkey(parent);
   }
 
   function setPauseButton(parent) {
@@ -450,6 +486,7 @@ try {
     button.className = 'pauseChange';
     button.onclick = pauseChange;
   }
+
   function setPauseHotkey() {
     if (!g('option').pauseHotkey) {
       return;
@@ -460,6 +497,30 @@ try {
       }
       if (e.keyCode === g('option').pauseHotkeyCode) {
         pauseChange();
+      }
+    }, false);
+  }
+
+  function setStepInButton(parent) {
+    if (!g('option').stepInButton) {
+      return;
+    }
+    const button = parent.appendChild(cE('button'));
+    button.innerHTML = '<l0>步进</l0><l1>步進</l1><l2>StepIn</l2>';
+    button.className = 'stepIn';
+    button.onclick = stepIn;
+  }
+
+  function setStepInHotkey() {
+    if (!g('option').stepInHotkey) {
+      return;
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+      if (e.keyCode === g('option').stepInHotkeyCode) {
+        stepIn();
       }
     }, false);
   }
@@ -521,6 +582,33 @@ try {
 
   function cE(name) { // 创建元素
     return document.createElement(name);
+  }
+
+  function getBuffTurnFromImg(buff, nanValue=NaN) {
+    if (!buff) {
+      return 0;
+    }
+    buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2] * 1;
+    return isNaN(buff) ? nanValue : buff;
+  }
+
+  function getMonsterID(s) {
+    if (s.order !== undefined) {
+      return (s.order + 1) % 10;
+    } // case is monsterStatus
+    return (s + 1) % 10; // case is order
+  }
+
+  function getPlayerBuff(buff){
+    return gE(`#pane_effects>img[src*="${buff}"]`);
+  }
+
+  function getMonster(id){
+    return gE(`#mkey_${id}`);
+  }
+
+  function getMonsterBuff(id, buff){
+    return gE(`${monsterStateKeys.buffs}>img[src*="${buff}"]`, getMonster(id));
   }
 
   function isOn(id) { // 是否可以施放技能/使用物品
@@ -714,6 +802,7 @@ try {
       '.hvAACenter{text-align:center;}',
       '.hvAATitle{font-weight:bolder;}',
       '.hvAAGoto{cursor:pointer;text-decoration:underline;}',
+      '.customizeInput{width:193px}',
       '.hvAANew{width:25px;height:25px;float:left;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAMCAYAAACX8hZLAAAAcElEQVQ4jbVRSQ4AIQjz/59mTiZIF3twmnCwFAq4FkeFXM+5vCzohYxjPMtfxS8CN6iqQ7TfE0wrODxVbzJNgoaTo4CmbBO1ZWICouQ0DHaL259MEzaU+w8pZOdSjcUgaPJDHCbO0A2kuAiuwPGQ+wBms12x8HExTwAAAABJRU5ErkJggg==) center no-repeat transparent;}',
       '#hvAATab-Alarm input[type="text"]{width:512px;}',
       '.testAlarms>div{border:2px solid #000;}',
@@ -750,8 +839,8 @@ try {
       '.tlbWARN{text-align:left;font-weight:bold;color:red;font-size:20pt;}', // 标记检测出异常的日志行
       // 怪物标号用数字替代字母，目前弃用
       // '#pane_monster{counter-reset:order;}',
-      // '.btm2>div:nth-child(1):before{font-size:23px;font-weight:bold;text-shadow:1px 1px 2px;content:counter(order);counter-increment:order;}',
-      // '.btm2>div:nth-child(1)>img{display:none;}',
+      // `${monsterStateKeys.lv}>div:nth-child(1):before{font-size:23px;font-weight:bold;text-shadow:1px 1px 2px;content:counter(order);counter-increment:order;}`,
+      // `${monsterStateKeys.lv}>div:nth-child(1)>img{display:none;}`,
     ].join('');
     globalStyle.textContent = cssContent;
     optionButton(lang);
@@ -813,7 +902,10 @@ try {
       '  <div><b><l0>脚本行为</l0><l1>腳本行為</l1><l2>Script Activity</l2></b>',
       '    <div><l0>暂停相关</l0><l1>暫停相關</l1><l2>Pause with</l2>: ',
       '      <input id="pauseButton" type="checkbox"><label for="pauseButton"><l0>使用按钮</l0><l1>使用按鈕</l1><l2>Button</l2></label>; ',
-      '      <input id="pauseHotkey" type="checkbox"><label for="pauseHotkey"><l0>使用热键</l0><l1>使用熱鍵</l1><l2>Hotkey</l2>: <input name="pauseHotkeyStr" style="width:30px;" type="text"><input class="hvAANumber" name="pauseHotkeyCode" type="hidden" disabled="true"></label></div>',
+      '      <input id="pauseHotkey" type="checkbox"><label for="pauseHotkey"><l0>使用热键</l0><l1>使用熱鍵</l1><l2>Hotkey</l2>: <input name="pauseHotkeyStr" style="width:30px;" type="text"><input class="hvAANumber" name="pauseHotkeyCode" type="hidden" disabled="true"></label><br>',
+      '      <input id="stepInButton" type="checkbox"><label for="stepInButton"><l0>步进按钮</l0><l1>步進按鈕</l1><l2>StepIn Button</l2></label>; ',
+      '      <input id="stepInHotkey" type="checkbox"><label for="stepInHotkey"><l0>使用热键</l0><l1>使用熱鍵</l1><l2>StepIn Hotkey</l2>: <input name="stepInHotkeyStr" style="width:30px;" type="text"><input class="hvAANumber" name="stepInHotkeyCode" type="hidden" disabled="true"></label>',
+      '  </div>',
       '    <div><l0>警告相关</l0><l1>警告相關</l1><l2>To Warn</l2>: ',
       '      <input id="alert" type="checkbox"><label for="alert"><l0>音频警报</l0><l1>音頻警報</l1><l2>Audio Alarms</l2></label>; ',
       '      <input id="notification" type="checkbox"><label for="notification"><l0>桌面通知</l0><l1>桌面通知</l1><l2>Notifications</l2></label> ',
@@ -874,16 +966,17 @@ try {
       '        <input id="arLevel_120" value="120,20" type="checkbox"><label for="arLevel_120">120</label> <input id="arLevel_130" value="130,21" type="checkbox"><label for="arLevel_130">130</label> <input id="arLevel_140" value="140,23" type="checkbox"><label for="arLevel_140">140</label> <input id="arLevel_150" value="150,24" type="checkbox"><label for="arLevel_150">150</label> <input id="arLevel_165" value="165,26" type="checkbox"><label for="arLevel_165">165</label> <input id="arLevel_180" value="180,27" type="checkbox"><label for="arLevel_180">180</label> <input id="arLevel_200" value="200,28" type="checkbox"><label for="arLevel_200">200</label> <input id="arLevel_225" value="225,29" type="checkbox"><label for="arLevel_225">225</label> <input id="arLevel_250" value="250,32" type="checkbox"><label for="arLevel_250">250</label> <input id="arLevel_300" value="300,33" type="checkbox"><label for="arLevel_300">300</label> <input id="arLevel_400" value="400,34" type="checkbox"><label for="arLevel_400">400</label> <input id="arLevel_500" value="500,35" type="checkbox"><label for="arLevel_500">500</label>',
       '        <input id="arLevel_RB50" value="RB50,105" type="checkbox"><label for="arLevel_RB50">RB50</label> <input id="arLevel_RB75A" value="RB75A,106" type="checkbox"><label for="arLevel_RB75A">RB75A</label> <input id="arLevel_RB75B" value="RB75B,107" type="checkbox"><label for="arLevel_RB75B">RB75B</label> <input id="arLevel_RB75C" value="RB75C,108" type="checkbox"><label for="arLevel_RB75C">RB75C</label>',
       '        <input id="arLevel_RB100" value="RB100,109" type="checkbox"><label for="arLevel_RB100">RB100</label> <input id="arLevel_RB150" value="RB150,110" type="checkbox"><label for="arLevel_RB150">RB150</label> <input id="arLevel_RB200" value="RB200,111" type="checkbox"><label for="arLevel_RB200">RB200</label> <input id="arLevel_RB250" value="RB250,112" type="checkbox"><label for="arLevel_RB250">RB250</label> <input id="arLevel_GF" value="GF,gr" type="checkbox"><label for="arLevel_GF" >GrindFest </label><input class="hvAANumber" name="idleArenaGrTime" placeholder="1" type="text"></div><div><input id="obscureNotIdleArena" type="checkbox"><label for="obscureNotIdleArena"><l0>页面中置灰未设置且未完成的</l0><l1>頁面中置灰未設置且未完成的</l1><l2>obscure not setted and not battled in Battle&gt;Arena/RingOfBlood</l2></div></div>',
-      '  <div style="display: flex; flex-flow: wrap;">',
-      '      <div><b><l0>精力</l0><l1>精力</l1><l2>Stamina</l2>: </b><l0>阈值</l0><l1>閾值</l1><l2><b></b> threshold</l2>: Min(85, <input class="hvAANumber" name="staminaLow" placeholder="60" type="text">); </div>',
-      '      <div><l0>含本日自然恢复的阈值<l1>含本日自然恢復的閾值</l1><l2><b></b>Stamina threshold with naturally recovers today.</l2>: <input class="hvAANumber" name="staminaLowWithReNat" placeholder="0" type="text">; </div>',
-      '      <div><input id="restoreStamina" type="checkbox"><label for="restoreStamina"><l0>战前恢复</l0><l1>戰前恢復</l1><l2>Restore stamina</l2>; </div>',
-      '      <div><l0>进入遭遇战的最低精力<l1>進入遭遇戰的最低精力</l1><l2><b></b>Minimum stamina to engage encounter</l2>: <input class="hvAANumber" name="staminaEncounter" placeholder="60" type="text"></div>',
-      '      <div><l0>进入压榨届的最低精力<l1>進入壓榨屆的最低精力</l1><l2><b></b>Minimum stamina to auto start GrindFest</l2>: <input class="hvAANumber" name="staminaGrindFest" placeholder="100" type="text"></div>',
+      '  <div>',
+      '      <b>[S!]<l0>精力</l0><l1>精力</l1><l2>Stamina</l2>: </b>',
+      '      <l0>进入遭遇战的最低精力</l0><l1>進入遭遇戰的最低精力</l1><l2><b></b>Minimum stamina to engage encounter</l2>: <input class="hvAANumber" name="staminaEncounter" placeholder="60" type="text"></br>',
+      '      <l0>竞技场/浴血擂台阈值</l0><l1>競技場/浴血擂台閾值</l1><l2><b></b>Minimum stamina to auto start The Arena or Ring Of Blood</l2>: Min(85, <input class="hvAANumber" name="staminaLow" placeholder="60" type="text">)<br>',
+      '      <l0>进入压榨届的最低精力</l0><l1>進入壓榨屆的最低精力</l1><l2><b></b>Minimum stamina to auto start GrindFest</l2>: <input class="hvAANumber" name="staminaGrindFest" placeholder="100" type="text"></br>',
+      '      <b>[S!!]</b><l0>进入竞技场/浴血擂台/压榨届时，含本日自然恢复的阈值</l0><l1>进入競技場/浴血擂台/壓榨屆时，含本日自然恢復的閾值</l1><l2><b></b>Stamina threshold with naturally recovers today for The Arena, Ring Of Bloog, GrindFest</l2>: <input class="hvAANumber" name="staminaLowWithReNat" placeholder="0" type="text"></br>',
+      '      <input id="restoreStamina" type="checkbox"><label for="restoreStamina"><l0>战前恢复</l0><l1>戰前恢復</l1><l2>Restore stamina</l2>',
       '  </div>',
-      '  <div><input id="repair" type="checkbox"><label for="repair"><b><l0>修复装备</l0><l1>修復裝備</l1><l2>Repair Equipment</l2></b></label>: ',
+      '  <div><input id="repair" type="checkbox"><label for="repair"><b>[R!]<l0>修复装备</l0><l1>修復裝備</l1><l2>Repair Equipment</l2></b></label>: ',
       '    <l0>耐久度</l0><l1>耐久度</l1><l2>Durability</l2> ≤ <input class="hvAANumber" name="repairValue" type="text">%</div>',
-      '  <div><input id="checkSupply" type="checkbox"><b><l0>检查物品库存</l0><l1>檢查物品庫存</l1><l2>Check is item needs supply</l2></b>: ',
+      '  <div><input id="checkSupply" type="checkbox"><b>[C!]<l0>检查物品库存</l0><l1>檢查物品庫存</l1><l2>Check is item needs supply</l2></b>: ',
       '  <div class="hvAAcheckItems">',
       '  <input id="isCheck_11191" type="checkbox"><input class="hvAANumber" name="checkItem_11191" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2>',
       '  <input id="isCheck_11195" type="checkbox"><input class="hvAANumber" name="checkItem_11195" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2>',
@@ -1048,7 +1141,7 @@ try {
       '  <input id="skillOrder_OFC" type="checkbox"><label for="skillOrder_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label><input id="skillOrder_FRD" type="checkbox"><label for="skillOrder_FRD"><l0>龙吼</l0><l1>龍吼</l1><l2>FRD</l2></label><input id="skillOrder_T3" type="checkbox"><label for="skillOrder_T3">T3</label><input id="skillOrder_T2" type="checkbox"><label for="skillOrder_T2">T2</label><input id="skillOrder_T1" type="checkbox"><label for="skillOrder_T1">T1</label></div>',
       '  <div><input id="skill_OFC" type="checkbox"><label for="skill_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label>: <input id="skillOTOS_OFC" type="checkbox"><label for="skillOTOS_OFC"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillOFCCondition}}</div>',
       '  <div><input id="skill_FRD" type="checkbox"><label for="skill_FRD"><l0>龙吼</l0><l1>龍吼</l1><l2>FRD</l2></label>: <input id="skillOTOS_FRD" type="checkbox"><label for="skillOTOS_FRD"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillFRDCondition}}</div>',
-      '  <div><input id="skill_T3" type="checkbox"><label for="skill_T3"><l0>3阶（如果有）</l0><l1>3階（如果有）</l1><l2>T3(if exist)</l2></label>: <input id="skillOTOS_T3" type="checkbox"><label for="skillOTOS_T3"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label><br><input id="mercifulBlow" type="checkbox"><label for="mercifulBlow"><l0>最后的慈悲(MB)：优先攻击满足条件的敌人 (25% HP, 流血)</l0><l1>最後的慈悲(MB)：優先攻擊滿足條件的敵人 (25% HP, 流血)</l1><l2>Merciful Blow: Attack the enemy which has 25% HP and is bleeding first</l2><br><input id="mercifulBlowStrict" type="checkbox"><label for="mercifulBlowStrict"><l0>最后的慈悲(MB)：只攻击满足条件的敌人 (25% HP, 流血)</l0><l1>最後的慈悲(MB)：只攻擊滿足條件的敵人 (25% HP, 流血)</l1><l2>Merciful Blow: Attack the enemy which has 25% HP and is bleeding only</l2></label>{{skillT3Condition}}</div>',
+      '  <div><input id="skill_T3" type="checkbox"><label for="skill_T3"><l0>3阶（如果有）</l0><l1>3階（如果有）</l1><l2>T3(if exist)</l2></label>: <input id="skillOTOS_T3" type="checkbox"><label for="skillOTOS_T3"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label><br>{{skillT3Condition}}</div>',
       '  <div><input id="skill_T2" type="checkbox"><label for="skill_T2"><l0>2阶（如果有）</l0><l1>2階（如果有）</l1><l2>T2(if exist)</l2></label>: <input id="skillOTOS_T2" type="checkbox"><label for="skillOTOS_T2"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillT2Condition}}</div>',
       '  <div><input id="skill_T1" type="checkbox"><label for="skill_T1"><l0>1阶</l0><l1>1階</l1><l2>T1</l2></label>: <input id="skillOTOS_T1" type="checkbox"><label for="skillOTOS_T1"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillT1Condition}}</div></div>',
 
@@ -1093,9 +1186,9 @@ try {
       '  </div>',
       '  <div>3. PW(X) += Log10(1 + <l0>武器攻击中央目标伤害倍率(副手及冲击技能)</l0><l1>乘以武器攻擊中央目標傷害倍率(副手及衝擊技能)</l1><l2>Weapon Attack Central Target Damage Ratio (Offhand & Strike)</l2>)<br><l0>额外伤害比例：</l0><l1>額外傷害比例：</l1><l2>Extra DMG Ratio: </l2><input class="hvAANumber" name="centralExtraRatio" placeholder="0" type="text">%</div>',
       '  <div>4. <l0>优先选择权重最低的目标</l0><l1>優先選擇權重最低的目標</l1><l2>Choose target with lowest rank first</l2><br><l0>BOSS:Yggdrasil额外权重</l0><l1>BOSS:Yggdrasil額外權重</l1><l2>BOSS:Yggdrasil Extra Weight</l2><input class="hvAANumber" name="YggdrasilExtraWeight" placeholder="-1000" type="text" style="width:40px"></div>',
-      '  <div><l0>显示权重及顺序</l0><l1>顯示權重及順序</l1><l2>DIsplay Weight and order</l2><input id="displayWeight" type="checkbox">',
-      '  <l0>显示优先级背景色</l0><l1>顯示優先級背景色</l1><l2>DIsplay Priority Background Color</l2><input id="displayWeightBackground" type="checkbox">',
-      '  <l0>CSS格式或可eval执行的公式（可用&lt;rank&gt;, &lt;all&gt;指代优先级和总优先级数量, &lt;style_x&gt;指代第x个的相同配置值），例如：</l0><l1>CSS格式或可eval執行的公式（可用&lt;rank&gt;, &lt;all&gt;指代優先級和總優先級數量, &lt;style_x&gt;指代第x個的相同配置值）：例如</l1><l2>CSS or eval executable formula(use &lt;rank&gt; and &lt;all&gt; to refer to priority rank and total rank count, &lt;style_x&gt; to refer to the same option value of option No.x)Such as: </l2><br>`hsl(${Math.round(240*&lt;rank&gt;/Math.max(1,&lt;all&gt;-1))}deg 50% 50%)`<br>',
+      '  <div><input id="displayWeight" type="checkbox"><l0>显示权重及顺序</l0><l1>顯示權重及順序</l1><l2>DIsplay Weight and order</l2>',
+      '  <input id="displayWeightBackground" type="checkbox"><l0>显示优先级背景色</l0><l1>顯示優先級背景色</l1><l2>DIsplay Priority Background Color</l2>',
+      '  </br><l0>CSS格式或可eval执行的公式（可用&lt;rank&gt;, &lt;all&gt;指代优先级和总优先级数量, &lt;style_x&gt;指代第x个的相同配置值），例如：</l0><l1>CSS格式或可eval執行的公式（可用&lt;rank&gt;, &lt;all&gt;指代優先級和總優先級數量, &lt;style_x&gt;指代第x個的相同配置值）：例如</l1><l2>CSS or eval executable formula(use &lt;rank&gt; and &lt;all&gt; to refer to priority rank and total rank count, &lt;style_x&gt; to refer to the same option value of option No.x)Such as: </l2><br>`hsl(${Math.round(240*&lt;rank&gt;/Math.max(1,&lt;all&gt;-1))}deg 50% 50%)`<br>',
       '   1. <input class="customizeInput" name="weightBackground_1" type="text"><br>',
       '   2. <input class="customizeInput" name="weightBackground_2" type="text">',
       '   3. <input class="customizeInput" name="weightBackground_3" type="text">',
@@ -1314,14 +1407,19 @@ try {
       }
       g('customizeTarget', target);
       const position = target.getBoundingClientRect();
+      const bodyPosition = document.body.getBoundingClientRect();
       gE('.customizeBox').style.zIndex = 5;
-      gE('.customizeBox').style.top = `${position.bottom + window.scrollY}px`;
-      gE('.customizeBox').style.left = `${position.left + window.scrollX}px`;
+      gE('.customizeBox').style.top = `${position.bottom - bodyPosition.top}px`;
+      gE('.customizeBox').style.left = `${position.left - bodyPosition.left}px`;
     };
     // 标签页-主要选项
     gE('input[name="pauseHotkeyStr"]', optionBox).onkeyup = function (e) {
       this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
       gE('input[name="pauseHotkeyCode"]', optionBox).value = e.keyCode;
+    };
+    gE('input[name="stepInHotkeyStr"]', optionBox).onkeyup = function (e) {
+      this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
+      gE('input[name="stepInHotkeyCode"]', optionBox).value = e.keyCode;
     };
     gE('.testNotification', optionBox).onclick = function () {
       _alert(0, '接下来开始预处理。\n如果询问是否允许，请选择允许', '接下來開始預處理。\n如果詢問是否允許，請選擇允許', 'Now, pretreat.\nPlease allow to receive notifications if you are asked for permission');
@@ -1767,6 +1865,11 @@ try {
       '<option value="">- - - -</option>',
       '<option value="_isCd_">isCd</option>',
       '<option value="_buffTurn_">buffTurn</option>',
+      '<option value="">- - - -</option>',
+      '<option value="_targetBuffTurn_">targetBuffTurn</option>',
+      '<option value="targetHp">targetHp</option>',
+      '<option value="targetMp">targetMp</option>',
+      '<option value="targetSp">targetSp</option>',
       '<option value=""></option>',
     ].join('');
     customizeBox.innerHTML = [
@@ -1988,20 +2091,12 @@ try {
     }
   }
 
-  function getBuffTurnFromImg(buff, nanValue=NaN) {
-    if (!buff) {
-      return 0;
-    }
-    buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2] * 1;
-    return isNaN(buff) ? nanValue : buff;
-  }
-
-  function checkCondition(parms) {
+  function checkCondition(parms, targets=undefined) {
     if (typeof parms === 'undefined') {
-      return true;
+      return g('battle').monsterStatus[0];
     }
-    let i; let j; let
-    k;
+    let i; let j; let k;
+    let target;
     const returnValue = function (str) {
       if (str.match(/^_/)) {
         const arr = str.split('_');
@@ -2027,59 +2122,77 @@ try {
         return isOn(id) ? 1 : 0;
       },
       buffTurn(img) {
-        return getBuffTurnFromImg(gE(`#pane_effects>img[src*="${img}"]`), Infinity);
+        return getBuffTurnFromImg(getPlayerBuff(img), 0);
+      },
+      targetBuffTurn(img){
+        return getBuffTurnFromImg(getMonsterBuff(getMonsterID(target), img), 0);
+      },
+      targetHp(){
+        return target.hpNow/target.hp;
+      },
+      targetMp(){
+        return target.mpNow;
+      },
+      targetSp(){
+        return target.spNow;
       },
     };
 
+    targets ??= [g('battle').monsterStatus[0]];
     for (i in parms) {
-      let parmResult = true;
-      for (j = 0; j < parms[i].length; j++) {
-        let result = true;
-        if (!Array.isArray(parms[i])) {
+      for (target of targets){
+        if (target.isDead) {
           continue;
         }
-        k = parms[i][j].split(',');
-        const kk = k.toString();
-        k[0] = returnValue(k[0]);
-        k[2] = returnValue(k[2]);
+        let parmResult = true;
+        for (j = 0; j < parms[i].length; j++) {
+          let result = true;
+          if (!Array.isArray(parms[i])) {
+            continue;
+          }
+          k = parms[i][j].split(',');
+          const kk = k.toString();
+          k[0] = returnValue(k[0]);
+          k[2] = returnValue(k[2]);
 
-        if (k[0] === undefined || k[0] === null || (typeof k[0] !== "string" && isNaN(k[0]))) {
-          Debug.log(kk[0], k[0]);
-        }
-        if (k[2] === undefined || k[2] === null || (typeof k[2] !== "string" && isNaN(k[2]))) {
-          Debug.log(kk[2], k[2]);
-        }
+          if (k[0] === undefined || k[0] === null || (typeof k[0] !== "string" && isNaN(k[0]))) {
+            Debug.log(kk[0], k[0]);
+          }
+          if (k[2] === undefined || k[2] === null || (typeof k[2] !== "string" && isNaN(k[2]))) {
+            Debug.log(kk[2], k[2]);
+          }
 
-        switch (k[1]) {
-          case '1':
-            result = k[0] > k[2];
+          switch (k[1]) {
+            case '1':
+              result = k[0] > k[2];
+              break;
+            case '2':
+              result = k[0] < k[2];
+              break;
+            case '3':
+              result = k[0] >= k[2];
+              break;
+            case '4':
+              result = k[0] <= k[2];
+              break;
+            case '5':
+              result = k[0] === k[2];
+              break;
+            case '6':
+              result = k[0] !== k[2];
+              break;
+          }
+          if (!result) {
+            parmResult = false;
             break;
-          case '2':
-            result = k[0] < k[2];
-            break;
-          case '3':
-            result = k[0] >= k[2];
-            break;
-          case '4':
-            result = k[0] <= k[2];
-            break;
-          case '5':
-            result = k[0] === k[2];
-            break;
-          case '6':
-            result = k[0] !== k[2];
-            break;
+          }
         }
-        if (!result) {
-          parmResult = false;
-          break;
+        if (parmResult){
+          return target;
         }
-      }
-      if (parmResult) {
-        return true;
       }
     }
-    return false;
+    return undefined;
   }
 
   // 答题//
@@ -2631,11 +2744,11 @@ try {
     if(staminaChecked === 1){ // succeed
         return true;
     }
-    if(staminaChecked === 0){ // failed until today ends
+    if(staminaChecked === 0){ // failed currently
       setTimeout(method, Math.floor(time(0) / _1h + 1) * _1h - time(0));
-      document.title = `[S!!]` + document.title;
-    } else { // case -1: // failed with nature recover
       document.title = `[S!]` + document.title;
+    } else { // case -1: // failed with nature recover
+      document.title = `[S!!]` + document.title;
     }
   }
 
@@ -2885,7 +2998,7 @@ try {
       }
       const type = battle.roundType;
       let subtype, title;
-      const monsterNames = Array.from(gE('div.btm3>div>div', 'all')).map(monster => monster.innerHTML);
+      const monsterNames = Array.from(gE(`${monsterStateKeys.name}>div>div`, 'all')).map(monster => monster.innerHTML);
       const lang = g('lang') * 1;
       const info = battleInfoList[type];
       switch (type) {
@@ -2972,22 +3085,17 @@ try {
     const names = g('option').battleOrderName?.split(',') ?? [];
     for (let i = 0; i < names.length; i++) {
       if(taskList[names[i]]()){
+        onStepInDone();
         return;
       }
       delete taskList[names[i]];
     }
     for (let name in taskList) {
       if (taskList[name]()) {
+        onStepInDone();
         return;
       }
     }
-  }
-
-  function getMonsterID(s) {
-    if (s.order !== undefined) {
-      return (s.order + 1) % 10;
-    } // case is monsterStatus
-    return (s + 1) % 10; // case is order
   }
 
   /**
@@ -3079,6 +3187,22 @@ try {
     }
   }
 
+  function stepIn() {
+    setValue('stepIn', true);
+    if (getValue('disabled')) {
+      g('timeNow', time(0));
+      pauseChange();
+    }
+  }
+
+  function onStepInDone(){
+    if(!getValue('stepIn')){
+      return;
+    }
+    delValue('stepIn');
+    pauseChange();
+  }
+
   function SetExitBattleTimeout(alarm){
     setAlarm(alarm);
     if(alarm === 'SkipDefeated') return;
@@ -3093,22 +3217,30 @@ try {
   }
 
   function reloader() {
-    let obj; let a; let cost;
     const battleUnresponsive = {
-      'Alert': { Method: setAlarm },
-      'Reload': { Method: goto },
-      'Alt': { Method: gotoAlt }
+      'Alert': { method: setAlarm },
+      'Reload': { method: goto },
+      'Alt': { method: gotoAlt }
     }
     function clearBattleUnresponsive(){
-      Object.keys(battleUnresponsive).forEach(t=>clearTimeout(battleUnresponsive[t].Timeout));
+      Object.keys(battleUnresponsive).forEach(t=>clearTimeout(battleUnresponsive[t].timeout));
     }
+    async function onBattleUnresponsive(method) {
+      if(getValue('disabled')){
+        await pauseAsync(_1s);
+        return await onBattleUnresponsive();
+      }
+      method();
+    }
+
+    let obj; let a; let cost;
     const eventStart = cE('a');
     eventStart.id = 'eventStart';
     eventStart.onclick = function () {
       a = unsafeWindow.info;
       for(let t in g('option').battleUnresponsive) {
         if (g('option').battleUnresponsive[t]) {
-          battleUnresponsive[t].Timeout = setTimeout(battleUnresponsive[t].Method, Math.max(1, g('option').battleUnresponsiveTime[t]) * _1s);
+          battleUnresponsive[t].timeout = setTimeout(()=>onBattleUnresponsive(battleUnresponsive[t].method), Math.max(1, g('option').battleUnresponsiveTime[t]) * _1s);
         }
       }
       if (g('option').recordUsage) {
@@ -3126,6 +3258,7 @@ try {
       }
     };
     gE('body').appendChild(eventStart);
+
     const eventEnd = cE('a');
     eventEnd.id = 'eventEnd';
     eventEnd.onclick = function () {
@@ -3134,7 +3267,7 @@ try {
       g('timeNow', timeNow);
       const monsterDead = gE('img[src*="nbardead"]', 'all').length;
       g('monsterAlive', g('monsterAll') - monsterDead);
-      const bossDead = gE('div.btm1[style*="opacity"] div.btm2[style*="background"]', 'all').length;
+      const bossDead = gE(`${monsterStateKeys.obj}[style*="opacity"] ${monsterStateKeys.lv}[style*="background"]`, 'all').length;
       g('bossAlive', g('bossAll') - bossDead);
       const battleLog = gE('#textlog>tbody>tr>td', 'all');
       if (g('option').recordUsage) {
@@ -3152,13 +3285,27 @@ try {
       if (g('option').recordUsage) {
         recordUsage2();
       }
-      if (g('battle').roundNow !== g('battle').roundAll && g('monsterAlive') === 0) { // Next Round
-        if(g('option').NewRoundWaitTime){
-          setTimeout(onNewRound, g('option').NewRoundWaitTime * _1s);
-        } else {
-          onNewRound();
+      onRoundEnd();
+      async function onRoundEnd() {
+        if(getValue('disabled')){
+          await pauseAsync(_1s);
+          return await onRoundEnd();
         }
-        return;
+        if (g('battle').roundNow === g('battle').roundAll && g('monsterAlive') === 0) { // Next Round
+          if (g('monsterAlive') > 0) { // Defeat
+            SetExitBattleTimeout(g('option').autoSkipDefeated ? 'SkipDefeated' : 'Defeat');
+          }
+          if (g('battle').roundNow === g('battle').roundAll) { // Victory
+            SetExitBattleTimeout('Victory');
+          }
+        } else {
+          if(g('option').NewRoundWaitTime){
+            setTimeout(onNewRound, g('option').NewRoundWaitTime * _1s);
+          } else {
+            onNewRound();
+          }
+        }
+        clearBattleUnresponsive();
 
         async function onNewRound(){ try {
           if(getValue('disabled')){
@@ -3187,19 +3334,13 @@ try {
           document.dispatchEvent(new Event('DOMContentLoaded'));
           Debug.log('______________newRound', true);
           newRound(true);
+          onStepInDone();
           onBattle();
-        } catch(e) { e=>console.error(e) }
-      }}
-
-      if (g('monsterAlive') > 0) { // Defeat
-        SetExitBattleTimeout(g('option').autoSkipDefeated ? 'SkipDefeated' : 'Defeat');
+        } catch(e) { e=>console.error(e) }}
       }
-      if (g('battle').roundNow === g('battle').roundAll) { // Victory
-        SetExitBattleTimeout('Victory');
-      }
-      clearBattleUnresponsive();
     };
     gE('body').appendChild(eventEnd);
+
     window.sessionStorage.delay = g('option').delay;
     window.sessionStorage.delay2 = g('option').delay2;
     const fakeApiCall = cE('script');
@@ -3264,11 +3405,11 @@ try {
     if (window.location.hash !== '') {
       goto();
     }
-    g('monsterAll', gE('div.btm1', 'all').length);
+    g('monsterAll', gE(monsterStateKeys.obj, 'all').length);
     const monsterDead = gE('img[src*="nbardead"]', 'all').length;
     g('monsterAlive', g('monsterAll') - monsterDead);
-    g('bossAll', gE('div.btm2[style^="background"]', 'all').length);
-    const bossDead = gE('div.btm1[style*="opacity"] div.btm2[style*="background"]', 'all').length;
+    g('bossAll', gE(`${monsterStateKeys.lv}[style^="background"]`, 'all').length);
+    const bossDead = gE(`${monsterStateKeys.obj}[style*="opacity"] ${monsterStateKeys.lv}[style*="background"]`, 'all').length;
     g('bossAlive', g('bossAll') - bossDead);
     const battleLog = gE('#textlog>tbody>tr>td', 'all');
     if (!battle.roundType) {
@@ -3331,8 +3472,8 @@ try {
     if (battleLog[battleLog.length - 1].textContent.match('Initializing')) {
       const monsterStatus = [];
       let order = 0;
-      const monsterNames = Array.from(gE('div.btm3>div>div', 'all')).map(monster => monster.innerText);
-      const monsterLvs = Array.from(gE('div.btm2>div>div', 'all')).map(monster => monster.innerText);
+      const monsterNames = Array.from(gE(`${monsterStateKeys.name}>div>div`, 'all')).map(monster => monster.innerText);
+      const monsterLvs = Array.from(gE(`${monsterStateKeys.lv}>div>div`, 'all')).map(monster => monster.innerText);
       const monsterDB = getValue('monsterDB', true) ?? {};
       const monsterMID = getValue('monsterMID', true) ?? {};
       const oldDB = JSON.stringify(monsterDB);
@@ -3382,7 +3523,7 @@ try {
         battle.roundNow = 1;
         battle.roundAll = 1;
       }
-    } else if (!battle.monsterStatus || battle.monsterStatus.length !== gE('div.btm2', 'all').length) {
+    } else if (!battle.monsterStatus || battle.monsterStatus.length !== gE(monsterStateKeys.lv, 'all').length) {
       battle.roundNow = 1;
       battle.roundAll = 1;
     }
@@ -3419,7 +3560,9 @@ try {
 
   function countMonsterHP() { // 统计敌人血量
     let i, j;
-    const monsterHp = gE('div.btm4>div.btm5:nth-child(1)', 'all');
+    const monsterHp = gE(`${monsterStateKeys.bars}:nth-child(1)`, 'all');
+    const monsterMp = gE(`${monsterStateKeys.bars}:nth-child(2)`, 'all');
+    const monsterSp = gE(`${monsterStateKeys.bars}:nth-child(3)`, 'all');
     let battle = getValue('battle', true);
     const monsterStatus = battle.monsterStatus;
     const hpArray = [];
@@ -3429,7 +3572,9 @@ try {
         monsterStatus[i].hpNow = Infinity;
       } else {
         monsterStatus[i].isDead = false;
-        monsterStatus[i].hpNow = Math.floor(monsterStatus[i].hp * parseFloat(gE('img', monsterHp[i]).style.width) / 120 + 1);
+        monsterStatus[i].hpNow = Math.floor(monsterStatus[i].hp * parseFloat(gE('img:first-child', monsterHp[i]).style.width) / 120 + 1);
+        monsterStatus[i].mpNow = parseFloat(gE('img:first-child', monsterMp[i]).style.width) / 120;
+        monsterStatus[i].spNow = parseFloat(gE('img:first-child', monsterSp[i]).style.width) / 120;
         hpArray.push(monsterStatus[i].hpNow);
       }
     }
@@ -3489,7 +3634,7 @@ try {
         img: 'wpn_bleed',
       },
     };
-    const monsterBuff = gE('div.btm6', 'all');
+    const monsterBuff = gE(monsterStateKeys.buffs, 'all');
     const hpMin = Math.min.apply(null, hpArray);
     const yggdrasilExtraWeight = g('option').YggdrasilExtraWeight;
     const unreachableWeight = g('option').unreachableWeight;
@@ -3502,7 +3647,7 @@ try {
       }
       let weight = baseHpRatio * Math.log10(monsterStatus[i].hpNow / hpMin); // > 0 生命越低权重越低优先级越高
       monsterStatus[i].hpWeight = weight;
-      const name = gE('div.btm3>div>div', monsterBuff[i].parentNode).innerText;
+      const name = gE(`${monsterStateKeys.name}>div>div`, monsterBuff[i].parentNode).innerText;
       if (yggdrasilExtraWeight && ('Yggdrasil' === name || '世界树 Yggdrasil' === name)) { // 默认设置下，任何情况都优先击杀群体大量回血的boss"Yggdrasil"
         weight += yggdrasilExtraWeight; // yggdrasilExtraWeight.defalut -1000
       }
@@ -3612,7 +3757,7 @@ try {
         continue;
       }
       for (let j = 1; j <= scrollLib[i].mult; j++) {
-        if (gE(`#pane_effects>img[src*="${scrollLib[i][`img${j}`]}${scrollFirst}"]`)) {
+        if (getPlayerBuff(scrollLib[i][`img${j}`]+scrollFirst)) {
           continue;
         }
         gE(`.bti3>div[onmouseover*="(${scrollLib[i].id})"]`).click();
@@ -3629,7 +3774,7 @@ try {
     if (!g('option').channelSkill) {
       return false;
     }
-    if (!gE('#pane_effects>img[src*="channeling"]')) {
+    if (!getPlayerBuff('channeling')) {
       return false;
     }
     const skillLib = {
@@ -3685,7 +3830,7 @@ try {
     if (g('option').channelSkill) {
       for (i = 0; i < skillPack.length; i++) {
         j = skillPack[i];
-        if (g('option').channelSkill[j] && !gE(`#pane_effects>img[src*="${skillLib[j].img}"]`) && isOn(skillLib[j].id)) {
+        if (g('option').channelSkill[j] && !getPlayerBuff(skillLib[j].img) && isOn(skillLib[j].id)) {
           gE(skillLib[j].id).click();
           return true;
         }
@@ -3718,7 +3863,7 @@ try {
         if (isNaN(buffLastTime) || buff[i].src.match(/_scroll.png$/)) {
           continue;
         } else {
-          if (spellName === 'Cloak of the Fallen' && !gE('#pane_effects>img[src*="sparklife"]') && isOn('422')) {
+          if (spellName === 'Cloak of the Fallen' && !getPlayerBuff('sparklife') && isOn('422')) {
             gE('422').click();
             return true;
           } if (spellName in name2Skill && isOn(skillLib[name2Skill[spellName]].id)) {
@@ -3792,7 +3937,7 @@ try {
     const skillPack = g('option').buffSkillOrderValue.split(',');
     for (i = 0; i < skillPack.length; i++) {
       let buff = skillPack[i];
-      if (g('option').buffSkill[buff] && checkCondition(g('option')[`buffSkill${buff}Condition`]) && !gE(`#pane_effects>img[src*="${skillLib[buff].img}"]`) && isOn(skillLib[buff].id)) {
+      if (g('option').buffSkill[buff] && checkCondition(g('option')[`buffSkill${buff}Condition`]) && !getPlayerBuff(skillLib[buff].img) && isOn(skillLib[buff].id)) {
         gE(skillLib[buff].id).click();
         return true;
       }
@@ -3820,7 +3965,7 @@ try {
       },
     };
     for (i in draughtPack) {
-      if (!gE(`#pane_effects>img[src*="${draughtPack[i].img}"]`) && g('option').buffSkill && g('option').buffSkill[i] && checkCondition(g('option')[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`)) {
+      if (!getPlayerBuff(draughtPack[i].img) && g('option').buffSkill && g('option').buffSkill[i] && checkCondition(g('option')[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`)) {
         gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`).click();
         return true;
       }
@@ -3858,7 +4003,7 @@ try {
       id: 12601,
       img: 'darkinfusion',
     }];
-    if (gE(`.bti3>div[onmouseover*="(${infusionLib[g('attackStatus')].id})"]`) && !gE(`#pane_effects>img[src*="${infusionLib[[g('attackStatus')]].img}"]`)) {
+    if (gE(`.bti3>div[onmouseover*="(${infusionLib[g('attackStatus')].id})"]`) && !getPlayerBuff(infusionLib[[g('attackStatus')]].img)) {
       gE(`.bti3>div[onmouseover*="(${infusionLib[g('attackStatus')].id})"]`).click();
       return true;
     }
@@ -3935,11 +4080,8 @@ try {
     }
     for (let i in skillOrder) {
       let skill = skillOrder[i];
-      if(!skill){
+      if(!skill || !g('option').skill[skill]){
         return;
-      }
-      if (!checkCondition(g('option')[`skill${skill}Condition`])) {
-        continue;
       }
       let id = skillLib[skill];
       if (!isOn(id)) {
@@ -3952,40 +4094,16 @@ try {
         continue;
       }
       g('skillOTOS')[skill]++;
-      gE(id).click();
-      let target = getWeaponSkillTarget(id);
+      let target = checkCondition(g('option')[`skill${skill}Condition`], g('battle').monsterStatus);
       if(!target){
         continue;
       }
+      gE(id).click();
       const range = id in rangeSkills ? rangeSkills[id] : 0;
-      gE(`#mkey_${getRangeCenter(target, range).id}`).click();
+      getMonster(getRangeCenter(target, range).id).click();
       return true;
     }
-  }
-
-  function getWeaponSkillTarget(id){
-    let target = undefined;
-    const monsterStatus = g('battle').monsterStatus;
-    if (id !== 2203) {
-      return monsterStatus[0];
-    }
-    // Merciful Blow
-    if(g('option').mercifulBlow || g('option').mercifulBlowStrict){
-      // get target with conditions (hp < 0.25 and bleeding)
-      for (let j = 0; j < monsterStatus.length; j++) {
-        if (monsterStatus[j].hpNow / monsterStatus[j].hp >= 0.25) {
-          continue;
-        }
-        if (!gE(`#mkey_${getMonsterID(monsterStatus[j])} img[src*="wpn_bleed"]`)) {
-          continue;
-        }
-        return monsterStatus[j];
-      }
-    }
-    if(!g('option').mercifulBlowStrict){
-      return monsterStatus[0];
-    }
-    return undefined;
+    return false;
   }
 
   function useDeSkill() { // 自动施法DEBUFF技能
@@ -4001,11 +4119,11 @@ try {
       if (!g('option').debuffSkill[buff]) { // 检查buff是否启用
         continue;
       }
-      if (!checkCondition(g('option')[`debuffSkill${buff}Condition`])) { // 检查条件
+      if (!checkCondition(g('option')[`debuffSkill${buff}Condition`], g('battle').monsterStatus)) { // 检查条件
         continue;
       }
       if (buff === 'Sle' || buff === 'Co') buff = 'We'
-      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`]));
+      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
       if (succeed) {
         return true;
       }
@@ -4087,12 +4205,12 @@ try {
     }
 
     // 获取目标
-    let isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="sleep"]`) || gE(`#mkey_${getMonsterID(target)}>.btm6>img[src*="confuse"]`);
+    let isDebuffed = (target) => getMonsterBuff(getMonsterID(target), skillLib[buff].img) || getMonsterBuff(getMonsterID(target), skillLib['Sle'].img) || getMonsterBuff(getMonsterID(target), skillLib['Co'].img);
     if (buff === 'Im') {
-      isDebuffed = (target) => gE(`img[src*="${skillLib[buff].img}"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`))
+      isDebuffed = (target) => getMonsterBuff(getMonsterID(target), skillLib[buff].img)
     }
     const attackStatus = g('attackStatus');
-    let holdDrain = (target) => attackStatus === 5 && !gE(`img[src*="soulfire"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`)) || attackStatus === 6 && !gE(`img[src*="ripesoul"]`, gE(`#mkey_${getMonsterID(target)}>.btm6`));
+    let holdDrain = (target) => attackStatus === 5 && !getMonsterBuff(getMonsterID(target), 'soulfire') || attackStatus === 6 && !getMonsterBuff(getMonsterID(target), 'ripesoul');
     let debuffByIndex = isAll && g('option')[`debuffSkill${buff}AllByIndex`];
     let monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
     if (debuffByIndex){
@@ -4105,11 +4223,12 @@ try {
     let minRank = Number.MAX_SAFE_INTEGER;
     for (let i = 0; i < max; i++) {
       let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
-      if (isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
+      target = checkCondition(g('option')[`debuffSkill${buff}Condition`], [target]);
+      if (!target || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
         continue;
       }
       id = getMonsterID(target)
-      const imgs = gE('img', 'all', gE(`#mkey_${id}>.btm6`));
+      const imgs = gE('img', 'all', gE(monsterStateKeys.buffs, getMonster(id)));
       // 已有buff小于6个
       // 未开启debuff失败警告
       // buff剩余持续时间大于等于警报时间
@@ -4131,7 +4250,7 @@ try {
       return false;
     }
     gE(skillLib[buff].id).click();
-    gE(`#mkey_${id}`).click();
+    getMonster(id).click();
     return true;
 
     _alert(0, '无法正常施放DEBUFF技能，请尝试手动打怪', '無法正常施放DEBUFF技能，請嘗試手動打怪', 'Can not cast de-skills normally, continue the script?\nPlease try attack manually.');
@@ -4178,11 +4297,10 @@ try {
       4502: { 152: [0, 2, 3] },
       4503: { 153: [0, 3, 4, 4] },
     }
-
     let range = 0;
     // Spell > Offensive Magic
     const attackStatus = g('attackStatus');
-    const monsterStatus = g('battle').monsterStatus;
+    let target = g('battle').monsterStatus[0];
     if (attackStatus === 0) {
       if (g('fightingStyle') === '1') { // 二天一流
         range = 1;
@@ -4190,13 +4308,15 @@ try {
     } else {
       if (checkEtherTap()) {
         `pass`
-      }
-      else {
+      } else {
         const skill = 1 * (() => {
           let lv = 3;
           for (let condition of [g('option').highSkillCondition, g('option').middleSkillCondition, undefined]) {
             let id = `1${attackStatus}${lv--}`;
-            if (checkCondition(condition) && isOn(id)) return id;
+            target = checkCondition(condition, g('battle').monsterStatus);
+            if (target && isOn(id)){
+              return id;
+            }
           }
         })();
         gE(skill)?.click();
@@ -4213,13 +4333,16 @@ try {
         }
       }
     }
-    gE(`#mkey_${getRangeCenter(monsterStatus[0], range, !attackStatus).id}`).click();
+    if(!target || target.isDead){
+      return false;
+    }
+    getMonster(getRangeCenter(target, range, !attackStatus).id).click();
     return true;
   }
 
   function checkEtherTap() {
     const monsterStatus = g('battle').monsterStatus;
-    return g('option').etherTap && checkCondition(g('option').etherTapCondition) && gE(`#mkey_${getMonsterID(monsterStatus[0])}>div.btm6>img[src*="coalescemana"]`);
+    return g('option').etherTap && checkCondition(g('option').etherTapCondition) && getMonsterBuff(getMonsterID(target), 'coalescemana');
   }
 
   function getHPFromMonsterDB(mdb, name, lv) {
@@ -4231,10 +4354,10 @@ try {
   function fixMonsterStatus() { // 修复monsterStatus
     // document.title = _alert(-1, 'monsterStatus错误，正在尝试修复', 'monsterStatus錯誤，正在嘗試修復', 'monsterStatus Error, trying to fix');
     const monsterStatus = [];
-    const monsterNames = Array.from(gE('div.btm3>div>div', 'all')).map(monster => monster.innerText);
-    const monsterLvs = Array.from(gE('div.btm2>div>div', 'all')).map(monster => monster.innerText);
+    const monsterNames = Array.from(gE(`${monsterStateKeys.name}>div>div`, 'all')).map(monster => monster.innerText);
+    const monsterLvs = Array.from(gE(`${monsterStateKeys.lv}>div>div`, 'all')).map(monster => monster.innerText);
     const monsterDB = getValue('monsterDB', true);
-    gE('div.btm2', 'all').forEach((monster, order) => {
+    gE(monsterStateKeys.lv, 'all').forEach((monster, order) => {
       monsterStatus.push({
         order: order,
         hp: getHPFromMonsterDB(monsterDB, monsterNames[order], monsterLvs[order]) ?? ((monster.style.background === '') ? 1000 : 100000),
@@ -4270,7 +4393,7 @@ try {
     status.forEach(s => {
       const rank = weights.indexOf(s.finWeight);
       const id = getMonsterID(s);
-      if (!gE(`#mkey_${id}`) || !gE(`#mkey_${id}>.btm3`)) {
+      if (!getMonster(id) || !gE(monsterStateKeys.name, getMonster(id))) {
         return;
       }
       if (g('option').displayWeightBackground) {
@@ -4288,12 +4411,12 @@ try {
           }
           catch {
           }
-          gE(`#mkey_${id}`).style.cssText += `background: ${colorText};`;
+          getMonster(id).style.cssText += `background: ${colorText};`;
         }
       }
-      gE(`#mkey_${id}>.btm3`).style.cssText += 'display: flex; flex-direction: row;'
+      gE(monsterStateKeys.name, getMonster(id)).style.cssText += 'display: flex; flex-direction: row;'
       if (g('option').displayWeight) {
-        gE(`#mkey_${id}>.btm3`).innerHTML += `<div style='font-weight: bolder; right:0px; position: absolute;'>[${rank}|-${-rank + weights.length - 1}|${s.finWeight.toPrecision(s.finWeight >= 1 ? 5 : 4)}]</div>`;
+        gE(monsterStateKeys.name, getMonster(id)).innerHTML += `<div style='font-weight: bolder; right:0px; position: absolute;'>[${rank}|-${-rank + weights.length - 1}|${s.finWeight.toPrecision(s.finWeight >= 1 ? 5 : 4)}]</div>`;
       }
     });
   }
@@ -4461,15 +4584,7 @@ try {
       if (debug) {
         console.log(text);
       }
-      if (text.match(/you for \d+ \w+ damage/) || text.match(/take \d+ \w+ damage/) || text.includes('crits you, causing')) {
-        if (isIsekai) {
-          reg = text.match(/take (\d+) (\w+) damage/);
-          if (!reg) {
-            reg = text.match(/causing (\d+) points of (\w+) damage/);
-          }
-        } else {
-          reg = text.match(/you for (\d+) (\w+) damage/);
-        }
+      if (reg = matchDamageInfoFromLogText(text)) {
         magic = reg[2].replace('ing', '');
         point = reg[1] * 1;
         stats.hurt[magic] = (magic in stats.hurt) ? stats.hurt[magic] + point : point;
@@ -4484,6 +4599,9 @@ try {
           stats.hurt._mcount++;
           stats.hurt._mtotal += point;
           stats.hurt._mavg = Math.round(stats.hurt._mtotal / stats.hurt._mcount);
+        }
+        if (text.match(/You ((partially )*(evade|parry|block)( and )*)+ the attack/)){
+          stats.self.evade++;
         }
       } else if (text.match(/^[\w ]+ [a-z]+s [\w+ -]+ for \d+( .*)? damage/) || text.match(/^You .* for \d+ .* damage/)) {
         reg = text.match(/for (\d+)( .*)? damage/);
@@ -4516,14 +4634,7 @@ try {
       } else if (text.match(/absorbs \d+ points of damage from the attack into \d+ points of \w+ damage/)) {
         reg = text.match(/(.*) absorbs (\d+) points of damage from the attack into (\d+) points of (\w+) damage/);
         point = reg[2] * 1;
-        if (isIsekai) {
-          magic = parm.log[i - 1].textContent.match(/take (\d+) (\w+) damage/)?.[2].replace('ing', '');
-          if (!magic) {
-            magic = parm.log[i - 1].textContent.match(/causing (\d+) points of (\w+) damage/)?.[2].replace('ing', '');
-          }
-        } else {
-          magic = parm.log[i - 1].textContent.match(/you for (\d+) (\w+) damage/)[2].replace('ing', '');
-        }
+        magic = matchDamageInfoFromLogText(parm.log[i - 1].textContent, false)[2].replace('ing', '');
         stats.hurt[magic] = (magic in stats.hurt) ? stats.hurt[magic] + point : point;
         point = reg[3] * 1;
         magic = `${reg[1].replace('Your ', '')}_${reg[4]}`;
@@ -4547,6 +4658,25 @@ try {
       pauseChange();
     }
     setValue('stats', stats);
+  }
+
+  function matchDamageInfoFromLogText(text, isSkipUnmatched=true){
+    const regList = [
+      /you for (\d+) (\w+) damage/,
+      /and take (\d+) (\w+) damage/,
+      /You take (\d+) (\w+) damage/,
+      /hits you, causing (\d+) points of (\w+) damage/
+    ];
+    for (let reg of regList){
+      let match = text.match(reg);
+      if (!match) {
+        continue;
+      }
+      return match;
+    }
+    if(!isSkipUnmatched){
+      console.log(`Can't match damage info from: `, text);
+    }
   }
 
   function recordUsage2() {
