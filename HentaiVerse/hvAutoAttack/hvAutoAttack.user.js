@@ -727,14 +727,8 @@ try {
     return window.hvAA[key];
   }
 
-  function objArrSort(key, isReverse) { // 对象数组排序函数，从小到大排序
+  function objArrSort(key) { // 对象数组排序函数，从小到大排序
     return function (obj1, obj2) {
-      if (key === 'finWeight') {
-        if (obj1.isDead && obj2.isDead) return 0;
-        if (obj1.isDead) return 1;
-        if (obj2.isDead) return -1;
-      }
-      if (isReverse) return (obj2[key] > obj1[key]) ? 1 : (obj2[key] < obj1[key]) ? -1 : 0;
       return (obj2[key] < obj1[key]) ? 1 : (obj2[key] > obj1[key]) ? -1 : 0;
     };
   }
