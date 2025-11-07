@@ -4336,7 +4336,7 @@ try {
 
   function checkEtherTap() {
     const monsterStatus = g('battle').monsterStatus;
-    return g('option').etherTap && checkCondition(g('option').etherTapCondition) && getMonsterBuff(getMonsterID(target), 'coalescemana');
+    return g('option').etherTap && checkCondition(g('option').etherTapCondition) && getMonsterBuff(getMonsterID(monsterStatus[0]), 'coalescemana');
   }
 
   function getHPFromMonsterDB(mdb, name, lv) {
