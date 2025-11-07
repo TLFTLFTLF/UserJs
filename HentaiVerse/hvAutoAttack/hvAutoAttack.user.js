@@ -4117,7 +4117,7 @@ try {
         continue;
       }
       if (buff === 'Sle' || buff === 'Co') buff = 'We'
-      let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
+      let succeed = useDebuffSkill(buff, g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
       if (succeed) {
         return true;
       }
