@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.32
+// @version      2.90.34
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -2086,11 +2086,12 @@ try {
   }
 
   function checkCondition(parms, targets=undefined) {
+    let i; let j; let k; let target;
+
+    targets ??= [g('battle').monsterStatus[0]];
     if (typeof parms === 'undefined') {
       return targets?.[0] || g('battle').monsterStatus[0];
     }
-    let i; let j; let k;
-    let target;
     const returnValue = function (str) {
       if (str.match(/^_/)) {
         const arr = str.split('_');
@@ -2131,8 +2132,6 @@ try {
         return target.spNow;
       },
     };
-
-    targets ??= [g('battle').monsterStatus[0]];
     for (i in parms) {
       for (target of targets){
         if (target.isDead) {
@@ -4179,7 +4178,6 @@ try {
         noPrimary: true,
       },
     };
-
     if (!isOn(skillLib[buff].id)) { // 技能不可用
       return false;
     }
@@ -4217,7 +4215,7 @@ try {
     let minRank = Number.MAX_SAFE_INTEGER;
     for (let i = 0; i < max; i++) {
       let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
-      target = checkCondition(g('option')[`debuffSkill${buff}Condition`], [target]);
+      target = checkCondition(g('option')[`debuffSkill${buff}${isAll ? 'all' : ''}Condition`], [target]);
       if (!target || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
         continue;
       }
