@@ -4224,7 +4224,7 @@ try {
       // 已有buff小于6个
       // 未开启debuff失败警告
       // buff剩余持续时间大于等于警报时间
-      if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
+      if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*,(.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
         const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
         if(!id || center.rank < minRank){
           minRank = center.rank;
@@ -4657,7 +4657,8 @@ try {
       /you for (\d+) (\w+) damage/,
       /and take (\d+) (\w+) damage/,
       /You take (\d+) (\w+) damage/,
-      /hits you, causing (\d+) points of (\w+) damage/
+      /hits you, causing (\d+) points of (\w+) damage/,
+      /crits you, causing (\d+) points of (\w+) damage/
     ];
     for (let reg of regList){
       let match = text.match(reg);
