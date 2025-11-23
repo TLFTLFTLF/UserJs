@@ -2256,14 +2256,14 @@
           },
         },
       ][g('lang')][e];
-      if (typeof GM_notification !== 'undefined') {
-        GM_notification({
-          text: notification.text,
-          image: `${window.location.origin}${unsafeWindow.IMG_URL}hentaiverse.png`,
-          highlight: true,
-          timeout: 1000 * notification.time,
-        });
-      }
+      // if (typeof GM_notification !== 'undefined') {
+      //   GM_notification({
+      //     text: notification.text,
+      //     image: `${window.location.origin}${unsafeWindow.IMG_URL}hentaiverse.png`,
+      //     highlight: true,
+      //     timeout: 1000 * notification.time,
+      //   });
+      // }
       if (window.Notification && window.Notification.permission !== 'denied') {
         window.Notification.requestPermission((status) => {
           if (status === 'granted') {
@@ -2293,7 +2293,7 @@
 
       targets ??= [g('battle').monsterStatus[0]];
       if (typeof parms === 'undefined') {
-        return targets[0];
+        return targets?.[0] || g('battle').monsterStatus[0];
       }
       const returnValue = function (str) {
         if (str.match(/^_/)) {
@@ -3474,6 +3474,7 @@
             ['#battle_right', '#battle_left'].forEach(selector => { gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); })
             unsafeWindow.battle = new unsafeWindow.Battle();
             unsafeWindow.battle.clear_infopane();
+            document.dispatchEvent(new Event('DOMContentLoaded'));
             $debug.log('______________newRound', true);
             newRound(true);
             onStepInDone();
@@ -4228,7 +4229,7 @@
     }
 
     function autoFocus() {
-      if (g('option').focus && checkCondition(g('option').focusCondition)) {
+      if (g('option').focus && !gE(`#pane_effects>img[src*="focus"]`) && checkCondition(g('option').focusCondition) && !checkEtherTap()) {
         gE('#ckey_focus').click();
         return true;
       }
@@ -4319,30 +4320,17 @@
       if (!g('option').debuffSkillSwitch) { // 总开关是否开启
         return false;
       }
-      // 先处理特殊的 “先给全体上buff”
-      let skillPack = ['We', 'Im'];
-      for (let i = 0; i < skillPack.length; i++) {
-        if (g('option')[`debuffSkill${skillPack[i]}All`]) { // 是否启用
-          if (checkCondition(g('option')[`debuffSkill${skillPack[i]}AllCondition`], g('battle').monsterStatus)) { // 检查条件
-            continue;
-          }
-        }
-        skillPack.splice(i, 1);
-        i--;
+      if (!g('option').debuffSkill) { // 是否有启用的buff(不算两个特殊的)
+        return false;
       }
-      skillPack.sort((x, y) => g('option').debuffSkillOrderValue.indexOf(x) - g('option').debuffSkillOrderValue.indexOf(y));
-      let toAllCount = skillPack.length;
-      if (g('option').debuffSkill) { // 是否有启用的buff(不算两个特殊的)
-        skillPack = skillPack.concat(g('option').debuffSkillOrderValue.split(','));
-      }
+      let skillPack = g('option').debuffSkillOrderValue.split(',');
       for (let i in skillPack) {
         let buff = skillPack[i];
-        if (i >= toAllCount) { // 非先全体
-          if (!buff || !checkCondition(g('option')[`debuffSkill${buff}Condition`], g('battle').monsterStatus)) { // 检查条件
-            continue;
-          }
+        if (!buff || !checkCondition(g('option')[`debuffSkill${buff}Condition`], g('battle').monsterStatus)) { // 检查条件
+          continue;
         }
-        let succeed = useDebuffSkill(buff, i < toAllCount);
+        if (buff === 'Sle' || buff === 'Co') buff = 'We'
+        let succeed = useDebuffSkill(buff, g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
         // 前 toAllCount 个都是先给全体上的
         if (succeed) {
           return true;
@@ -4426,9 +4414,13 @@
       }
 
       // 获取目标
-      let isDebuffed = (target) => getMonsterBuff(getMonsterID(target), skillLib[buff].img);
+      let isDebuffed = (target) => getMonsterBuff(getMonsterID(target), skillLib[buff].img) || getMonsterBuff(getMonsterID(target), skillLib['Sle'].img) || getMonsterBuff(getMonsterID(target), skillLib['Co'].img);
+      if (buff === 'Im') {
+        isDebuffed = (target) => getMonsterBuff(getMonsterID(target), skillLib[buff].img)
+      }
+      let holdDrain = (target) => g('attackStatus') === 5 && !getMonsterBuff(getMonsterID(target), 'soulfire') || g('attackStatus') === 6 && !getMonsterBuff(getMonsterID(target), 'ripesoul');
       let debuffByIndex = isAll && g('option')[`debuffSkill${buff}AllByIndex`];
-      let monsterStatus = g('battle').monsterStatus;
+      let monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
       if (debuffByIndex) {
         monsterStatus = JSON.parse(JSON.stringify(monsterStatus));
         monsterStatus.sort(objArrSort('order'));
@@ -4438,33 +4430,35 @@
       let id;
       let minRank = Number.MAX_SAFE_INTEGER;
       for (let i = 0; i < max; i++) {
-        let target = buff === 'Dr' ? monsterStatus[max - i - 1] : monsterStatus[i];
-        target = checkCondition(g('option')[`debuffSkill${buff}${isAll ? 'all' : ''}Condition`], [target]);
-        if (!target || target.isDead || isDebuffed(target)) {
+        let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
+        if (!target || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
           continue;
         }
-        const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
-        if (!id || center.rank < minRank) {
-          minRank = center.rank;
-          id = center.id;
-          if (!isAll) {
-            // 只有覆盖全体才需要遍历全部
-            break;
+        id = getMonsterID(target)
+        const imgs = gE('img', 'all', gE(monsterStateKeys.buffs, getMonster(id)));
+        // 已有buff小于6个
+        // 未开启debuff失败警告
+        // buff剩余持续时间大于等于警报时间
+        if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
+          const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
+          if (!id || center.rank < minRank) {
+            minRank = center.rank;
+            id = center.id;
+            if (!isAll) {
+              // 只有覆盖全体才需要遍历全部
+              break;
+            }
           }
+        } else {
+          return false;
         }
       }
       if (id === undefined) {
         return false;
       }
-      const imgs = gE('img', 'all', gE(monsterStateKeys.buffs, getMonster(id)));
-      // 已有buff小于6个
-      // 未开启debuff失败警告
-      // buff剩余持续时间大于等于警报时间
-      if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && getBuffTurnFromImg(imgs[imgs.length - 1]) >= g('option').debuffSkillTurn[buff])) {
-        gE(skillLib[buff].id).click();
-        getMonster(id).click();
-        return true;
-      }
+      gE(skillLib[buff].id).click();
+      getMonster(id).click();
+      return true;
 
       _alert(0, '无法正常施放DEBUFF技能，请尝试手动打怪', '無法正常施放DEBUFF技能，請嘗試手動打怪', 'Can not cast de-skills normally, continue the script?\nPlease try attack manually.');
       pauseChange();
@@ -4519,7 +4513,7 @@
           range = 1;
         }
       } else {
-        if (g('option').etherTap && getMonsterBuff(getMonsterID(target), 'coalescemana') && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || getPlayerBuff(`wpn_et"][id*="effect_expire`)) && checkCondition(g('option').etherTapCondition)) {
+        if (checkEtherTap()) {
           `pass`
         } else {
           const skill = 1 * (() => {
@@ -4551,6 +4545,11 @@
       }
       getMonster(getRangeCenter(target, range, !attackStatus).id).click();
       return true;
+    }
+
+    function checkEtherTap() {
+      const monsterStatus = g('battle').monsterStatus;
+      return g('option').etherTap && checkCondition(g('option').etherTapCondition) && getMonsterBuff(getMonsterID(monsterStatus[0]), 'coalescemana');
     }
 
     function getHPFromMonsterDB(mdb, name, lv) {
@@ -4755,6 +4754,7 @@
       stats.self.evade = filter.evade ? stats.self.evade ?? 0 : undefined;
       stats.self.miss = filter.miss ? stats.self.miss ?? 0 : undefined;
       stats.self.focus = filter.focus ? stats.self.focus ?? 0 : undefined;
+      stats.self.spark = filter.focus ? stats.self.spark ?? 0 : undefined;
       stats.self.mp = filter.mp ? stats.self.mp ?? 0 : undefined;
       stats.self.oc = filter.oc ? stats.self.oc ?? 0 : undefined;
       stats.restore = filter.restore ? stats.restore ?? {} : undefined; // 回复量
@@ -4884,6 +4884,10 @@
           if (filter.focus) {
             stats.self.focus++;
           }
+        } else if (text.match(/Your Spark of Life restores you/)) {
+          stats.self.spark++
+        } else if (text.match(/Spark of Life saves you/)) {
+          stats.self.spark++
         } else if (text.match(/^Recovered \d+ points of/) || text.match(/You are healed for \d+ Health Points/) || text.match(/You drain \d+ HP from/)) {
           if (filter.restore) {
             magic = (parm.mode === 'defend') ? 'defend' : text.match(/You drain \d+ HP from/) ? 'drain' : parm.magic || parm.item;
