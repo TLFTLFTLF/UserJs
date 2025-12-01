@@ -4754,7 +4754,7 @@
       stats.self.evade = filter.evade ? stats.self.evade ?? 0 : undefined;
       stats.self.miss = filter.miss ? stats.self.miss ?? 0 : undefined;
       stats.self.focus = filter.focus ? stats.self.focus ?? 0 : undefined;
-      stats.self.spark = filter.focus ? stats.self.spark ?? 0 : undefined;
+      stats.self.spark = stats.self.spark ?? 0;
       stats.self.mp = filter.mp ? stats.self.mp ?? 0 : undefined;
       stats.self.oc = filter.oc ? stats.self.oc ?? 0 : undefined;
       stats.restore = filter.restore ? stats.restore ?? {} : undefined; // 回复量
