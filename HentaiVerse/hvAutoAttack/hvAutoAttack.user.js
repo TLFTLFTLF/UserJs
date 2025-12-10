@@ -483,7 +483,7 @@
       $debug.log('______________newRound', false);
       newRound(false);
       if (g('option').recordEach && !getValue('battleCode')) {
-        setValue('battleCode', `${time(1)}: ${g('battle')?.roundType?.toUpperCase()}-${g('battle')?.roundAll}`);
+        setValue('battleCode', `${time(1)}: ${getValue('battle', true)?.roundType?.toUpperCase()}-${getValue('battle', true)?.roundAll}`);
       }
       onBattleRound();
       updateEncounter(false);
@@ -3921,7 +3921,7 @@
           unknown = Array.from(unknown).filter(buff => {
             const img = buff.src.match(/\/y\/e\/(.*)\.png/)[1];
             return !(Object.keys(known).includes(img));
-          }).map(buff=>`${buff.getAttribute('onmouseover').match(/^battle.set_infopane_effect\('(.+)', '.*', .+\)/)[1]}: ${buff.src.match(/\/y\/e\/(.*)\.png/)[1]}`);
+          }).map(buff=>`${buff.getAttribute('onmouseover').match(/^battle.set_infopane_effect\('(.+)','.*',.+\)/)[1]}: ${buff.src.match(/\/y\/e\/(.*)\.png/)[1]}`);
           if (unknown.length) {
             console.log('unsupported buff weight:', unknown);
           }
@@ -4395,8 +4395,8 @@
         if (!buff || !checkCondition(g('option')[`debuffSkill${buff}Condition`], g('battle').monsterStatus)) { // 检查条件
           continue;
         }
-        if (buff === 'Sle' || buff === 'Co') buff = 'We'
-        let succeed = useDebuffSkill(buff, g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
+        if (buff === 'Sle' || buff === 'Co' || buff === 'Si') buff = 'We'
+        let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
         // 前 toAllCount 个都是先给全体上的
         if (succeed) {
           return true;
@@ -4464,6 +4464,9 @@
       if (!isOn(skillLib[buff].id)) { // 技能不可用
         return false;
       }
+      if (!g('option').debuffSkill[buff]) {
+        return
+      }
       // 获取范围
       let range = 0;
       let ab;
@@ -4498,7 +4501,7 @@
       let id;
       let minRank = Number.MAX_SAFE_INTEGER;
       for (let i = 0; i < max; i++) {
-        let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
+        let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || buff === 'Si' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
         target = checkCondition(option[`debuffSkill${buff}${isAll ? 'all' : ''}Condition`], [target]);
         if (!target || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
           continue;
@@ -4508,7 +4511,7 @@
         // 已有buff小于6个
         // 未开启debuff失败警告
         // buff剩余持续时间大于等于警报时间
-        if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*, (.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
+        if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*,(.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
           const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
           if (!id || center.rank < minRank) {
             minRank = center.rank;
