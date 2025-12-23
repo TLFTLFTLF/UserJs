@@ -3921,7 +3921,7 @@
           unknown = Array.from(unknown).filter(buff => {
             const img = buff.src.match(/\/y\/e\/(.*)\.png/)[1];
             return !(Object.keys(known).includes(img));
-          }).map(buff=>`${buff.getAttribute('onmouseover').match(/^battle.set_infopane_effect\('(.+)','.*',.+\)/)[1]}: ${buff.src.match(/\/y\/e\/(.*)\.png/)[1]}`);
+          }).map(buff=>`${buff.getAttribute('onmouseover').match(/^battle.set_infopane_effect\('(.+)', ?'.*', ?.+\)/)[1]}: ${buff.src.match(/\/y\/e\/(.*)\.png/)[1]}`);
           if (unknown.length) {
             console.log('unsupported buff weight:', unknown);
           }
@@ -4361,7 +4361,7 @@
         if (!isOn(id)) {
           continue;
         }
-        if (g('oc') < (id in skillOC ? skillOC[id] : 2)) {
+        if (g('oc') / 25 < (id in skillOC ? skillOC[id] : 2)) {
           continue;
         }
         if (g('option').skillOTOS && g('option').skillOTOS[skill] && g('skillOTOS')[skill] >= 1) {
@@ -4496,7 +4496,7 @@
         monsterStatus = JSON.parse(JSON.stringify(monsterStatus));
         monsterStatus.sort(objArrSort('order'));
       }
-      let max = isAll ? monsterStatus.length : 1;
+      let max = isAll ? ((buff === 'Sle' || buff === 'Co') ? monsterStatus.length - 3 : monsterStatus.length) : 1;
 
       let id;
       let minRank = Number.MAX_SAFE_INTEGER;
