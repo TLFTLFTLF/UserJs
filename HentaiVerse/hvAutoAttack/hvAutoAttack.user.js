@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.79
+// @version      2.90.128
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -32,7 +32,7 @@
 (function () {
   try {
     'use strict';
-    const standalone = ['option', 'arena', 'drop', 'stats', 'staminaLostLog', 'battleCode', 'disabled', 'stamina', 'staminaTime', 'lastHref', 'battle', 'monsterDB', 'monsterMID', 'ability'];
+    const standalone = ['option', 'arena', 'drop', 'stats', 'staminaLostLog', 'battleCode', 'disabled', 'stamina', 'lastHref', 'battle', 'monsterDB', 'monsterMID', 'ability'];
     const sharable = ['option'];
     const excludeStandalone = { 'option': ['optionStandalone', 'version', 'lang'] };
     const href = window.location.href;
@@ -59,7 +59,7 @@
       '<l0>暗</l0><l1>暗</l1><l2>Forbidden</l2>',
     ];
     const monsterStateKeys = { obj: `div.btm1`, lv: `div.btm2`, name: `div.btm3`, bars: `div.btm4>div.btm5`, buffs: `div.btm6` }
-    const [$async, $debug, $ajax] = [initAsync(), initDebug(), initAjax()];
+    const [$RPN, $async, $debug, $ajax] = [initRPN(), initAsync(), initDebug(), window.top.$ajax ??= unsafeWindow.$ajax ??= initAjax()];
     for (let check of [checkIsHV, checkIsWindowTop, checkOption]) {
       if (!check()) return;
     }
@@ -70,6 +70,191 @@
     setTimeout(goto, 5 * _1m);
 
     // ----------Process Steps----------
+    function initRPN() {
+      const $RPN = {
+        operators: {
+          '>=': { precedence : 0, func: (a, b) => a >= b ? 1 : 0 },
+          '<=': { precedence : 0, func: (a, b) => a <= b ? 1 : 0 },
+          '==': { precedence : 0, func: (a, b) => a === b ? 1 : 0 },
+          '!=': { precedence : 0, func: (a, b) => a !== b ? 1 : 0 },
+          '&&': { precedence : -1, func: (a, b) => a && b ? 1 : 0 },
+          '||': { precedence : -1, func: (a, b) => a || b ? 1 : 0 },
+          '**': { precedence:3, func: (a,b) => Math.pow(a, b)},
+          '!': { precedence : -1, func: (a) => a ? 0 : 1 },
+          '+': { precedence : 1, func: (a, b) => a + b },
+          '-': { precedence : 1, func: (a, b) => a - b },
+          '*': { precedence : 2, func: (a, b) => a * b },
+          '/': { precedence : 2, func: (a, b) => a / b },
+          '%': { precedence : 2, func: (a, b) => a % b },
+          '>': { precedence : 0, func: (a, b) => a > b ? 1 : 0 },
+          '<': { precedence : 0, func: (a, b) => a < b ? 1 : 0 },
+        },
+
+        multiCharOperators: ['>=', '<=', '==', '!=', '&&', '||', '**'],
+
+        isOperator(token) {
+          return token in $RPN.operators || $RPN.multiCharOperators.includes(token);
+        },
+
+        isMultiCharOperator(token) {
+          return $RPN.multiCharOperators.includes(token);
+        },
+
+        hasHigherPrecedence(op1, op2) {
+          return $RPN.operators[op1].precedence >= $RPN.operators[op2].precedence;
+        },
+
+        tokenize(expression) {
+          const tokens = [];
+          let i = 0;
+
+          while (i < expression.length) {
+            const ch = expression[i];
+
+            if (ch === ' ') {
+              i++;
+              continue;
+            }
+
+            if (ch === '(' || ch === ')') {
+              tokens.push(ch);
+              i++;
+              continue;
+            }
+
+            let isMultiChar = false;
+            for (const op of $RPN.multiCharOperators) {
+              if (expression.startsWith(op, i)) {
+                tokens.push(op);
+                i += op.length;
+                isMultiChar = true;
+                break;
+              }
+            }
+            if (isMultiChar) continue;
+
+            if ($RPN.isOperator(ch)) {
+              tokens.push(ch);
+              i++;
+              continue;
+            }
+
+            if (/[0-9]/.test(ch)) {
+              let num = '';
+              while (i < expression.length && /[0-9.]/.test(expression[i])) {
+                num += expression[i];
+                i++;
+              }
+              tokens.push(parseFloat(num));
+              continue;
+            }
+
+            if (/[a-zA-Z_.'"]/.test(ch)) {
+              let varName = '';
+              while (i < expression.length && /[a-zA-Z0-9_.'"]/.test(expression[i])) {
+                varName += expression[i];
+                i++;
+              }
+              tokens.push(varName);
+              continue;
+            }
+
+            throw new Error(`Unknown character: ${ch} from ${expression}`);
+          }
+
+          return tokens;
+        },
+
+        infixToPostfix(infixTokens) {
+          const output = [];
+          const stack = [];
+
+          for (const token of infixTokens) {
+            if (typeof token === 'number' || /[a-zA-Z_'"]/.test(token[0])) {
+              output.push(token);
+            }
+            else if (token === '(') {
+              stack.push(token);
+            }
+            else if (token === ')') {
+              while (stack.length && stack[stack.length - 1] !== '(') {
+                output.push(stack.pop());
+              }
+              stack.pop();
+            }
+            else if ($RPN.isOperator(token)) {
+              while (
+                stack.length &&
+                stack[stack.length - 1] !== '(' &&
+                $RPN.hasHigherPrecedence(stack[stack.length - 1], token)
+              ) {
+                output.push(stack.pop());
+              }
+              stack.push(token);
+            }
+          }
+
+          while (stack.length) {
+            output.push(stack.pop());
+          }
+
+          return output;
+        },
+
+        evaluatePostfix(postfixTokens, resolver) {
+          const stack = [];
+          for (const token of postfixTokens) {
+            if (typeof token === 'number') {
+              stack.push(token);
+            }
+            else if (typeof token === 'string' && /[a-zA-Z_.'"]/.test(token[0])) {
+              let value = resolver ? resolver(token) : token;
+              if (typeof value === 'string' && value[0] !== "'" && value[0] != '"') value = `'${value}'`;
+              stack.push(value);
+            }
+            else {
+              let a, b;
+              if (stack.length < 2) {
+                if (token === '-') {
+                  b = stack.pop();
+                  a = 0;
+                } else if (token === '!') {
+                  a = stack.pop();
+                  b = undefined;
+                } else {
+                  throw new Error('Wrong Expression.');
+                }
+              } else {
+                b = stack.pop();
+                a = stack.pop();
+              }
+
+              let result;
+              if (token in $RPN.operators) {
+                result = $RPN.operators[token].func(a, b);
+              } else {
+                throw new Error(`Unknow operator: ${token}`);
+              }
+              stack.push(result);
+            }
+          }
+
+          if (stack.length !== 1) {
+            throw new Error('Wrong Expression.');
+          }
+
+          return stack[0];
+        },
+
+        evaluate(expression, variableHandler = null) {
+          const tokens = $RPN.tokenize(expression);
+          const postfix = $RPN.infixToPostfix(tokens);
+          return $RPN.evaluatePostfix(postfix, variableHandler);
+        }
+      };
+      return $RPN;
+    }
+
     function initDebug() {
       const $debug = {
         Stack: class extends Error {
@@ -115,17 +300,20 @@
 
     function initAjax() {
       const $ajax = {
+        debug: false,
         interval: 300, // DO NOT DECREASE THIS NUMBER, OR IT MAY TRIGGER THE SERVER'S LIMITER AND YOU WILL GET BANNED
         max: 4,
         tid: null,
         error: null,
         conn: 0,
-        index: 0,
         queue: [],
 
-        fetch: function (url, data, method, context = {}, headers = {}) {
+        insert: function (url, data, method, context = {}, headers = {}) {
+          return $ajax.fetch(url, data, method, context, headers, true);
+        },
+        fetch: function (url, data, method, context = {}, headers = {}, isInsert = false) {
           return new Promise((resolve, reject) => {
-            $ajax.add(method, url, data, resolve, reject, context, headers);
+            $ajax.add(method, url, data, resolve, reject, context, headers, isInsert);
           });
         },
         open: function (url, data, method, context = {}, headers = {}) {
@@ -141,12 +329,7 @@
           }
           return list;
         },
-        add: function (method, url, data, onload, onerror, context = {}, headers = {}) {
-          const isDuplicate = this.queue.some(req => req.method === method && req.url === url && JSON.stringify(req.data) === JSON.stringify(data));
-          if (isDuplicate) {
-            console.log('Skip duplicated fetch:', url, method, data);
-            return;
-          }
+        add: function (method, url, data, onload, onerror, context = {}, headers = {}, isInsert = false) {
           method = !data ? 'GET' : method ?? 'POST';
           if (method === 'POST') {
             headers['Content-Type'] ??= 'application/x-www-form-urlencoded';
@@ -162,16 +345,21 @@
           }
           context.onload = onload;
           context.onerror = onerror;
-          $ajax.queue.push({ method, url, data, headers, context, onload: $ajax.onload, onerror: $ajax.onerror });
+          if (isInsert) {
+            $ajax.queue.unshift({ method, url, data, headers, context, onload: $ajax.onload, onerror: $ajax.onerror });
+          } else {
+            $ajax.queue.push({ method, url, data, headers, context, onload: $ajax.onload, onerror: $ajax.onerror });
+          }
           $ajax.next();
         },
         next: function () {
-          if (!$ajax.queue[$ajax.index] || $ajax.error) {
+          if (!$ajax.queue.length || $ajax.error) {
             return;
           }
           if ($ajax.tid) {
             if (!$ajax.conn) {
               clearTimeout($ajax.tid);
+              $ajax.tid = null;
               $ajax.timer();
               $ajax.send();
             }
@@ -182,27 +370,43 @@
             }
           }
         },
+        getLast: function () {
+          const v = localStorage.getItem((isIsekai ? 'hvuti' : 'hvut') + '_last_post');
+          return v === null ? undefined : JSON.parse(v);
+        },
+        setLast: function (last) {
+          localStorage.setItem((isIsekai ? 'hvuti' : 'hvut') + '_last_post', JSON.stringify(last));
+        },
         timer: function () {
-          const _ns = isIsekai ? 'hvuti' : 'hvut';
-          function getValue(k, d, p = _ns + '_') { const v = localStorage.getItem(p + k); return v === null ? d : JSON.parse(v); }
-          function setValue(k, v, p = _ns + '_', r) { localStorage.setItem(p + k, JSON.stringify(v, r)); }
           function ontimer() {
             const now = new Date().getTime();
-            const last = getValue('last_post');
-            if (last && last - now < $ajax.interval) {
+            const last = $ajax.getLast();
+            if (last && now - last >= $ajax.interval) {
               $ajax.next();
               return;
             }
-            setValue('last_post', now);
+            $ajax.setLast(now);
             $ajax.tid = null;
             $ajax.next();
           };
           $ajax.tid = setTimeout(ontimer, $ajax.interval);
         },
+        simplify: function (r) {
+          const info = {};
+          info.url = r.url;
+          if (r.data) info.data = r.data;
+          if (r.method) info.method = r.method;
+          if (r.context && JSON.stringify(r.context) !== JSON.stringify({})) info.context = r.context;
+          if (r.headers && JSON.stringify(r.headers) !== JSON.stringify({})) info.headers = r.headers;
+          return info;
+        },
         send: function () {
-          GM_xmlhttpRequest($ajax.queue[$ajax.index]);
-          $ajax.index++;
+          const current = $ajax.queue.shift();
+          GM_xmlhttpRequest(current);
           $ajax.conn++;
+          if (!$ajax.debug) return;
+          const remain = $ajax.queue.map($ajax.simplify);
+          console.log('$ajax.send:', $ajax.simplify(current), remain?.length ? 'remain:' : '', remain?.length ? remain : '');
         },
         onload: function (r) {
           $ajax.conn--;
@@ -337,17 +541,66 @@
           eventpane.style.cssText += 'color:gray;' // 链接置灰提醒
         }
       } else { // 战斗外，自动跳转
-        loadOption();
+        checkOption();
         $ajax.openNoFetch(`${g('option').altBattleFirst ? href.replace('hentaiverse.org', 'alt.hentaiverse.org').replace('alt.alt', 'alt') : href}/${url}`);
       }
       return false;
     }
 
+    // 答题//
+    async function riddleAlert() { try {
+      setAlarm('Riddle');
+      const option = g('option');
+      const answerTime = option.riddleAnswerTime ?? 0;
+      let time;
+      const timeDiv = gE('#riddlecounter>div>div', 'all');
+      while (time === undefined || time > answerTime) {
+        if (timeDiv.length === 0) {
+          await pauseAsync(_1s);
+          continue;
+        }
+        time = undefined;
+        for (let t of timeDiv) {
+          time = (t.style.backgroundPosition.match(/(\d+)px$/)[1] / 12).toString() + (time ?? '');
+        }
+        time *= 1;
+        document.title = time;
+        await pauseAsync(_1s);
+      }
+      for (let ans of gE('#riddler1>*', 'all').children) {
+        if (!ans.children[0].children[0].checked) continue;
+        console.log('riddle submit');
+        gE('#riddlesubmit').click();
+        return;
+      }
+      if (!option.riddleAnswerChoose) return;
+      // if no answer selected
+      const answers = ['aj', 'fs', 'pp', 'ra', 'rd', 'ts'];
+      answers.sort(Math.random);
+      const answer = `riddlesubmit=Submit+Answer` + answers.slice(0, Math.max(0, Math.min(6, option.riddleAnswerChoose ?? 0))).map(ans=>`&riddleanswer[]=${ans}`).join('');
+      console.log('random submit', answer);
+      const battle = gE('#battle_main', $doc(await $ajax.fetch(window.location.href, answer)));
+      if (!battle) {
+        console.error('ERROR: Failed fetch submit.');
+      }
+      goto();
+    } catch(e) { console.error(e) }}
+
     function checkIsWindowTop() {
       const currentUrl = window.self.location.href;
       if (!isFrame) {
-        loadOption();
-        if (!g('option').riddlePopup || !window.opener || window.opener === window.self || window.opener.closed || gE('#riddlecounter')) {
+        checkOption();
+        if (!g('option').riddlePopup || gE('#riddlecounter')) { // 未开启使用弹窗或仍处于答题
+          return true;
+        }
+        if (!window.opener || window.opener === window.self || window.opener.closed) { // 没有仍存在的opener
+          return true;
+        }
+        try {
+          if (!gE('#riddlecounter,#battle_main', window.opener.document)) { // opener不处于战斗或答题中
+            return true;
+          }
+        } catch(e) {
           return true;
         }
         try {
@@ -373,7 +626,7 @@
         return false;
       }
       if (currentUrl.match(/\?s=Battle&ss=(ar|rb)/)) {
-        loadOption();
+        checkOption();
         setArenaDisplay();
       }
       return false;
@@ -433,7 +686,7 @@
         return false;
       }
       if (!g('option').riddlePopup || window.opener) {
-        setAlarm('Riddle');
+        riddleAlert();
         return true;
       }
       window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
@@ -473,6 +726,7 @@
       setPauseUI(box2);
       reloader();
       g('attackStatus', g('option').attackStatus);
+      // 1二天 2单手 3双手 4双持 5法杖
       for (let fightingStyle = 1; fightingStyle < 6; fightingStyle++) {
         if (gE(`2${fightingStyle}01`)) {
           g('fightingStyle', fightingStyle.toString());
@@ -482,16 +736,46 @@
       g('runSpeed', 1);
       $debug.log('______________newRound', false);
       newRound(false);
-      if (g('option').recordEach && !getValue('battleCode')) {
-        setValue('battleCode', `${time(1)}: ${getValue('battle', true)?.roundType?.toUpperCase()}-${getValue('battle', true)?.roundAll}`);
-      }
       onBattleRound();
+      if (g('option').recordEach) {
+        const token = document.body.innerHTML.match(`var battle_token = \"(.*)\";`)[1];
+        let code = getValue('battleCode', true);
+        if (code?.token != token || !code?.r || !code?.rc) {
+          const now = code?.token === token ? code?.time ?? time(1) : time(1);
+          const type = g('battle')?.roundType?.toUpperCase();
+          const roundAll = g('battle')?.roundAll;
+          code = {
+            token: token,
+            time: now,
+            roundType: type,
+            roundAll: roundAll,
+            name: `${now}: ${type}-${roundAll}`,
+          };
+          setValue('battleCode', code);
+        }
+      }
       updateEncounter(false);
       return true;
     }
 
     // ----------methods----------
     // 通用//
+
+    function unique(arr) {
+      const newArr = [];
+      for (let i = 0; i < arr.length; i++) {
+        if (newArr.indexOf(arr[i]) === -1) {
+          newArr.push(arr[i]);
+        }
+      }
+      return newArr;
+    }
+
+    function splitOrders(orderValue, defaultOrder) {
+      const order = orderValue?.split(',') ?? [];
+      return unique(order.concat(defaultOrder ?? []));
+    }
+
     function goto() { // 前进
       window.location.reload();
       setTimeout(goto, 5000);
@@ -600,12 +884,13 @@
       }
       for (let key in aliasDict) {
         const itemArray = key.split('_');
+        const alias = aliasDict[key];
         if (itemArray.length === 1) {
-          option[key] ??= option[aliasDict[key]];
-          option[aliasDict[key]] = undefined;
+          option[key] ??= option[alias];
+          option[alias] = undefined;
         } else {
           option[itemArray[0]] ??= {};
-          option[itemArray[0]][itemArray[1]] ??= option[aliasDict[key]];
+          option[itemArray[0]][itemArray[1]] ??= option[alias];
         }
       }
       // 迁移旧版本最后的慈悲条件为可配置条件
@@ -634,6 +919,7 @@
         }
         option.skillT3Condition = newCondition;
       }
+
       if (isFrame) {
         g('option', option);
       } else {
@@ -897,11 +1183,13 @@
     }
 
     function addStyle(lang) { // CSS
-      const langStyle = gE('head').appendChild(cE('style'));
-      langStyle.className = 'hvAA-LangStyle';
-      langStyle.textContent = `l${lang}{display:inline!important;}`;
-      if (/^[01]$/.test(lang)) {
-        langStyle.textContent = `${langStyle.textContent}l01{display:inline!important;}`;
+      if (!gE('.hvAA-LangStyle')) {
+        const langStyle = gE('head').appendChild(cE('style'));
+        langStyle.className = 'hvAA-LangStyle';
+        langStyle.textContent = `l${lang}{display:inline!important;}`;
+        if (/^[01]$/.test(lang)) {
+          langStyle.textContent = `${langStyle.textContent}l01{display:inline!important;}`;
+        }
       }
       const globalStyle = gE('head').appendChild(cE('style'));
       const cssContent = [
@@ -909,7 +1197,7 @@
         'l0,l1,l01,l2{display:none;}', // l0: 简体 l1: 繁体 l01:简繁体共用 l2: 英文
         '#hvAABox2{position:absolute;left:1075px;padding-top: 6px;}',
         '.hvAALog{font-size:20px;}',
-        '.hvAAPauseUI{top:50px;left:1246px;position:absolute;z-index:9999}',
+        '.hvAAPauseUI{top:50px;left:1246px;position:absolute;z-index:9999; width:80px}',
         '.hvAAButton{top:5px;left:1255px;position:absolute;z-index:9999;cursor:pointer;width:40px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
         '#hvAABox{left:calc(50% - 350px);top:50px;font-size:16px!important;z-index:4;width:700px;height:538px;position:absolute;text-align:left;background-color:#E3E0D1;border:1px solid #000;border-radius:10px;font-family:"Microsoft Yahei";}',
         '.hvAATablist{position:relative;left:14px;}',
@@ -947,6 +1235,7 @@
         '.hvAAcheckItems>input.hvAANumber{width:32px}',
         '.hvAAConfig{width:100%;height:16px;}',
         '.hvAAButtonBox{position:relative;top:468px;}',
+        '.hvAAPauseUI>.encounterUI{font-weight:bold;position:unset;font-size:10pt;text-decoration:none;}',
         '.encounterUI{font-weight:bold;font-size:10pt;position:absolute;top:30px;left:1240px;text-decoration:none;}',
         '.quickSiteBar{position:absolute;top:0px;left:1290px;font-size:18px;text-align:left;width:165px;height:calc(100% - 10px);display:flex;flex-direction:column;flex-wrap:wrap;}',
         '.quickSiteBar>span{display:block;max-height:24px;overflow:hidden;text-overflow:ellipsis;}',
@@ -983,6 +1272,7 @@
     }
 
     function optionButton(lang) { // 配置按钮
+      if (gE('.hvAAButton')) return;
       const optionButton = gE('body').appendChild(cE('div'));
       optionButton.className = 'hvAAButton';
       optionButton.onclick = function () {
@@ -1030,7 +1320,9 @@
         '  <div><b><l0>异世界相关</l0><l1>異世界相關</l1><l2>Isekai</l2></b>: ',
         '    <input id="optionStandalone" type="checkbox"><label for="optionStandalone"><l0>两个世界使用不同的配置</l0><l1>兩個世界使用不同的配置</l1><l2>Use standalone options.</l2></label>; ',
         '    <br><input id="isekai" type="checkbox"><l0>在任意页面停留</l0><l1>在任意頁面停留</l1><l2>While idle in any page for </l2><input class="hvAANumber" name="isekaiTime" type="text"><l0>秒后，自动切换恒定世界和异世界</l0><l1>秒後，自動切換恆定世界和異世界</l1><l2>s, auto switch between Isekai and Persistent</l2></label></div>',
-        '<div><b><l0>小马答题</l0><l1>小馬答題</l1><l2>RIDDLE</l2></b>: <input id="riddlePopup" type="checkbox"><label for="riddlePopup"><l0>弹窗答题(Firefox中可能导致报错)</l0><l1>弹窗答题(Firefox中可能導致報錯)</l1><l2>POPUP a window to answer(Might cause in Firefox)</l2></label>; <button class="testPopup"><l0>预处理</l0><l1>預處理</l1><l2>Pretreat</l2></button>',
+        '  <div>',
+        '    <b><l0>小马答题</l0><l1>小馬答題</l1><l2>RIDDLE</l2></b>: <input id="riddlePopup" type="checkbox"><label for="riddlePopup"><l0>弹窗答题(Firefox中可能导致报错)</l0><l1>弹窗答题(Firefox中可能導致報錯)</l1><l2>POPUP a window to answer(Might cause in Firefox)</l2></label>; <button class="testPopup"><l0>预处理</l0><l1>預處理</l1><l2>Pretreat</l2></button>',
+        '    <div><l0>时间</l0><l1>時間</l1><l2>If ETR</l2> ≤ <input class="hvAANumber" name="riddleAnswerTime" placeholder="3" type="text"><l0>秒，提交当前选中答案 或 为空时随机选中</l0><l1>秒，提交當前選中答案 或 為空時隨機選中</l1><l2>s submit chosen answers or random </l2> <input class="hvAANumber" name="riddleAnswerChoose" placeholder="0" type="text"><l0>个答案并提交<br><a style="color:red;" href="https://ehwiki.org/wiki/RiddleMaster/Chinese#.E6.AD.A3.E7.A2.BA.E6.88.96.E9.8C.AF.E8.AA.A4">注意：错选小马比漏选小马的错误计数更多 - 所以有疑问时，最好不要猜测，留空就好</a></l0><l1>个答案並提交<br><a style="color:red;" href="https://ehwiki.org/wiki/RiddleMaster/Chinese#.E6.AD.A3.E7.A2.BA.E6.88.96.E9.8C.AF.E8.AA.A4">注意：錯選小馬比漏選小馬的錯誤計數更多 - 所以有疑問時，最好不要猜測，留空就好</a></l1><l2>answers if none is chosen.<br><a style="color:red;" href="https://ehwiki.org/wiki/RiddleMaster#Correct_or_Incorrect">Notice: Selecting a pony that is not in the picture will count more severe towards a penalty than missing one pony - so when in doubt, best not to guess but leave one blank</a></l2></div>',
         '  </div>',
         '  <div><b><l0>脚本行为</l0><l1>腳本行為</l1><l2>Script Activity</l2></b>',
         '    <div>',
@@ -1049,25 +1341,50 @@
         '    <div><l0>延迟</l0><l1>延遲</l1><l2>Delay</l2>: 1. <l0>Buff/Debuff/其他技能</l0><l1>Buff/Debuff/其他技能</l1><l2>Skills&BUFF/DEBUFF Spells</l2>: <input class="hvAANumber" name="delay" placeholder="200" type="text">ms 2. <l01>其他</l01><l2>Other</l2>: <input class="hvAANumber" name="delay2" placeholder="30" type="text">ms (',
         '      <l0>说明: 单位毫秒，且在设定值基础上取其的50%-150%进行延迟，0表示不延迟</l0><l1>說明: 單位毫秒，且在設定值基礎上取其的50%-150%進行延遲，0表示不延遲</l1><l2>Note: unit milliseconds, and based on the set value multiply 50% -150% to delay, 0 means no delay</l2>)</div>',
         '  </div>',
-        '  <div id="attackStatus" style="color:red;"><b>*<l0>攻击模式</l0><l1>攻擊模式</l1><l2>Attack Mode</l2></b>:',
-        '    <select class="hvAANumber" name="attackStatus"><option value="-1"></option><option value="0">物理 / Physical</option><option value="1">火 / Fire</option><option value="2">冰 / Cold</option><option value="3">雷 / Elec</option><option value="4">风 / Wind</option><option value="5">圣 / Divine</option><option value="6">暗 / Forbidden</option></select></div>',
+        '  <div id="attackStatus" style="color:red;"><b>*<l0>默认攻击模式</l0><l1>默認攻擊模式</l1><l2>Default Attack Mode</l2></b>:',
+        '    <select class="hvAANumber" name="attackStatus"><option value="-1"></option><option value="0">物理 / Physical</option><option value="1">火 / Fire</option><option value="2">冰 / Cold</option><option value="3">雷 / Elec</option><option value="4">风 / 風 / Wind</option><option value="5">圣 / 聖 / Divine</option><option value="6">暗 / Forbidden</option></select></div>',
 
-        '  <div class="battleOrder"><b><l0>战斗执行顺序(未配置的按照下面的顺序)</l0><l1>戰鬥執行順序(未配置的按照下面的順序)</l1><l2>Battal Order(Using order below as default if not configed)</l2></b>: <input name="battleOrderName" style="width:80%;" type="text" disabled="true"><input name="battleOrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(4, 1fr);">',
-        '      <div><input id="battleOrder_autoPause" value="Pause,2" type="checkbox"><label for="battleOrder_autoPause"><l0>自动暂停</l0><l1>自動暫停</l1><l2>Auto Pause</l2></label></div>',
-        '      <div><input id="battleOrder_autoRecover" value="Rec,1" type="checkbox"><label for="battleOrder_autoRecover"><l0>恢复技能</l0><l1>恢復技能</l1><l2>Cure Skills</l2></label></div>',
-        '      <div><input id="battleOrder_autoDefend" value="Def,4" type="checkbox"><label for="battleOrder_autoDefend"><l0>自动防御</l0><l1>自動防禦</l1><l2>Auto Defence</l2></label></div>',
-        '      <div><input id="battleOrder_useScroll" value="Scroll,5" type="checkbox"><label for="battleOrder_useScroll"><l0>使用卷轴</l0><l1>使用捲軸</l1><l2>Use Scroll</l2></label><br></div>',
-        '      <div><input id="battleOrder_useChannelSkill" value="Channel,6" type="checkbox"><label for="battleOrder_useChannelSkill"><l0>引导技能</l0><l1>引導技能</l1><l2>Channel Skill</l2></label></div>',
-        '      <div><input id="battleOrder_useBuffSkill" value="Buff,7" type="checkbox"><label for="battleOrder_useBuffSkill"><l0>Buff技能</l0><l1>Buff技能</l1><l2>Buff Skills</l2></label></div>',
-        '      <div><input id="battleOrder_useInfusions" value="Infus,8" type="checkbox"><label for="battleOrder_useInfusions"><l0>使用魔药</l0><l1>使用魔藥</l1><l2>Infusions</l2></label></div>',
-        '      <div><input id="battleOrder_useDeSkill" value="Debuff,9" type="checkbox"><label for="battleOrder_useDeSkill"><l0>Debuff技能</l0><l1>Debuff技能</l1><l2>Debuff Skills</l2></label><br></div>',
-        '      <div><input id="battleOrder_autoFocus" value="Focus,10" type="checkbox"><label for="battleOrder_autoFocus"><l0>自动集中</l0><l1>自動集中</l1><l2>Focus</l2></label></div>',
-        '      <div><input id="battleOrder_autoSS" value="SS,3" type="checkbox"><label for="battleOrder_autoSS"><l0>灵动架式</l0><l1>靈動架式</l1><l2>Auto Sprite</l2></label></div>',
-        '      <div><input id="battleOrder_autoSkill" value="Skill,11" type="checkbox"><label for="battleOrder_autoSkill"><l0>释放技能</l0><l1>釋放技能</l1><l2>Auto Skill</l2></label></div>',
-        '      <div><input id="battleOrder_attack" value="Atk,12" type="checkbox"><label for="battleOrder_attack"><l0>自动攻击</l0><l1>自動攻擊</l1><l2>Attack</l2></label></div>',
-        '    </div></div>',
-        '    <div><input id="infusionSwitch" type="checkbox"><b><l0>使用魔药(与攻击模式相同)</l0><l1>使用魔藥(與攻擊模式相同)</l1><l2>Use Infusion(same as attack mode)</l2></b>{{infusionCondition}}</div>',
+        '  <div><b><l0>战斗执行顺序(未配置的按照下面的顺序)</l0><l1>戰鬥執行順序(未配置的按照下面的順序)</l1><l2>Battal Order(Using order below as default if not configed)</l2></b>: <input id="battleOrderDefaultOnly" type="checkbox"><label for="battleOrderDefaultOnly">(<l0>只使用默认顺序</l0><l1>只使用默認順序</l1><l2>Default order only</l2>)</label>',
+        '    <div class="battleOrder"><input name="battleOrderName" style="width:80%;" type="text" disabled="true"><br>',
+        '      <div class="hvAATable" style="display:grid; grid-template-columns:repeat(4, 1fr);">',
+        '        <div><input id="battleOrder_autoPause" value="Pause" type="checkbox"><label for="battleOrder_autoPause"><l0>自动暂停</l0><l1>自動暫停</l1><l2>Auto Pause</l2></label></div>',
+        '        <div><input id="battleOrder_autoCure" value="Cure" type="checkbox"><label for="battleOrder_autoCure"><l0>使用治疗</l0><l1>使用治療</l1><l2>Cure</l2></label></div>',
+        '        <div><input id="battleOrder_autoSSDisable" value="SSDisable" type="checkbox"><label for="battleOrder_autoSSDisable"><l0>关闭灵动架式</l0><l1>關閉靈動架式</l1><l2>Disable Sprite</l2></label></div>',
+        '        <div><input id="battleOrder_autoRecover" value="Rec" type="checkbox"><label for="battleOrder_autoRecover"><l0>恢复(含治疗)</l0><l1>恢復(含治療)</l1><l2>Recover(& cure)</l2></label></div>',
+        '        <div><input id="battleOrder_useScroll" value="Scroll" type="checkbox"><label for="battleOrder_useScroll"><l0>使用卷轴</l0><l1>使用捲軸</l1><l2>Use Scroll</l2></label><br></div>',
+        '        <div><input id="battleOrder_useInfusions" value="Infus" type="checkbox"><label for="battleOrder_useInfusions"><l0>使用魔药</l0><l1>使用魔藥</l1><l2>Infusions</l2></label></div>',
+        '        <div><input id="battleOrder_autoDefend" value="Def" type="checkbox"><label for="battleOrder_autoDefend"><l0>自动防御</l0><l1>自動防禦</l1><l2>Auto Defence</l2></label></div>',
+        '        <div><input id="battleOrder_useChannelSkill" value="Channel" type="checkbox"><label for="battleOrder_useChannelSkill"><l0>引导技能</l0><l1>引導技能</l1><l2>Channel Skill</l2></label></div>',
+        '        <div><input id="battleOrder_useBuffSkill" value="Buff" type="checkbox"><label for="battleOrder_useBuffSkill"><l0>Buff技能</l0><l1>Buff技能</l1><l2>Buff Skills</l2></label></div>',
+        '        <div><input id="battleOrder_useDeSkill" value="Debuff" type="checkbox"><label for="battleOrder_useDeSkill"><l0>Debuff技能</l0><l1>Debuff技能</l1><l2>Debuff Skills</l2></label><br></div>',
+        '        <div><input id="battleOrder_autoFocus" value="Focus" type="checkbox"><label for="battleOrder_autoFocus"><l0>自动集中</l0><l1>自動集中</l1><l2>Focus</l2></label></div>',
+
+        '       <div><input id="battleOrder_autoSS" value="SS" type="checkbox"><label for="battleOrder_autoSS"><l0>灵动架式(开&关)</l0><l1>靈動架式(開&關)</l1><l2>On & Off Sprite</l2></label></div>',
+        '       <div><input id="battleOrder_autoSkill" value="Skill" type="checkbox"><label for="battleOrder_autoSkill"><l0>释放技能</l0><l1>釋放技能</l1><l2>Auto Skill</l2></label></div>',
+        '       <div><input id="battleOrder_attack" value="Atk" type="checkbox"><label for="battleOrder_attack"><l0>自动攻击</l0><l1>自動攻擊</l1><l2>Attack</l2></label></div>',
+        '    </div></div></div>',
+        '    <div><input id="infusionSwitch" type="checkbox"><b><l0>使用魔药(与默认攻击模式相同)</l0><l1>使用魔藥(與默認攻擊模式相同)</l1><l2>Use Infusion(same as default attack mode)</l2></b>{{infusionCondition}}</div>',
+
+        '  <div><b><l0>次要攻击模式顺序(未配置的按照下面的顺序)</l0><l1>次要攻擊模式順序(未配置的按照下面的順序)</l1><l2>Attack Mode Order(Using order below as default if not configed)</l2></b>:',
+        '    <div class="attackStatusOrder"><input name="attackStatusOrderName" style="width:80%;" type="text" disabled="true"><input name="attackStatusOrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
+        '      <div class="hvAATable" style="display:grid; grid-template-columns:repeat(7, 1fr);">',
+        '        <div><input id="attackStatusOrder_0" value="Phys,0" type="checkbox"><label for="attackStatusOrder_0"><l0>物理</l0><l1>物理</l1><l2>Physical</l2></label></div>',
+        '        <div><input id="attackStatusOrder_1" value="Fire,1" type="checkbox"><label for="attackStatusOrder_1"><l0>火</l0><l1>火</l1><l2>Fire</l2></label></div>',
+        '        <div><input id="attackStatusOrder_2" value="Cold,2" type="checkbox"><label for="attackStatusOrder_2"><l0>冰</l0><l1>冰</l1><l2>Cold</l2></label></div>',
+        '        <div><input id="attackStatusOrder_3" value="Elec,3" type="checkbox"><label for="attackStatusOrder_3"><l0>雷</l0><l1>雷</l1><l2>Elec</l2></label></div>',
+        '        <div><input id="attackStatusOrder_4" value="Wind,4" type="checkbox"><label for="attackStatusOrder_4"><l0>风</l0><l1>風</l1><l2>Wind</l2></label></div>',
+        '        <div><input id="attackStatusOrder_5" value="Divi,5" type="checkbox"><label for="attackStatusOrder_5"><l0>圣</l0><l1>聖</l1><l2>Divine</l2></label></div>',
+        '        <div><input id="attackStatusOrder_6" value="Forb,6" type="checkbox"><label for="attackStatusOrder_6"><l0>暗</l0><l1>暗</l1><l2>Forbidden</l2></label></div>',
+        '    </div></div></div>',
+
+        '    <div><input id="attackStatusSwitch_0" type="checkbox"><label for="attackStatusSwitch_0"><b><l0>攻击模式 物理</l0><l1>攻擊模式 物理</l1><l2>Attack Mode: Physical</l2></b>: {{attackStatusSwitchCondition0}}</label></div>',
+        '    <div><input id="attackStatusSwitch_1" type="checkbox"><label for="attackStatusSwitch_1"><b><l0>攻击模式 火</l0><l1>攻擊模式 火</l1><l2>Attack Mode: Fire</l2></b>: {{attackStatusSwitchCondition1}}</label></div>',
+        '    <div><input id="attackStatusSwitch_2" type="checkbox"><label for="attackStatusSwitch_2"><b><l0>攻击模式 冰</l0><l1>攻擊模式 冰</l1><l2>Attack Mode: Cold</l2></b>: {{attackStatusSwitchCondition2}}</label></div>',
+        '    <div><input id="attackStatusSwitch_3" type="checkbox"><label for="attackStatusSwitch_3"><b><l0>攻击模式 雷</l0><l1>攻擊模式 雷</l1><l2>Attack Mode: Elec</l2></b>: {{attackStatusSwitchCondition3}}</label></div>',
+        '    <div><input id="attackStatusSwitch_4" type="checkbox"><label for="attackStatusSwitch_4"><b><l0>攻击模式 风</l0><l1>攻擊模式 風</l1><l2>Attack Mode: Wind</l2></b>: {{attackStatusSwitchCondition4}}</label></div>',
+        '    <div><input id="attackStatusSwitch_5" type="checkbox"><label for="attackStatusSwitch_5"><b><l0>攻击模式 圣</l0><l1>攻擊模式 聖</l1><l2>Attack Mode: Divine</l2></b>: {{attackStatusSwitchCondition5}}</label></div>',
+        '    <div><input id="attackStatusSwitch_6" type="checkbox"><label for="attackStatusSwitch_6"><b><l0>攻击模式 暗</l0><l1>攻擊模式 暗</l1><l2>Attack Mode: Forbidden</l2></b>: {{attackStatusSwitchCondition6}}</label></div>',
+        '    <div><label for="lowSkillCondition"><b><l0>低阶魔法技能使用条件</l0><l1>低階魔法技能使用條件</l1><l2>Conditions for 1st Tier Offensive Magic</l2></b>: {{lowSkillCondition}}</label></div>',
         '    <div><label for="middleSkillCondition"><b><l0>中阶魔法技能使用条件</l0><l1>中階魔法技能使用條件</l1><l2>Conditions for 2nd Tier Offensive Magic</l2></b>: {{middleSkillCondition}}</label></div>',
         '    <div><label for="highSkillCondition"><b><l0>高阶魔法技能使用条件</l0><l1>高階魔法技能使用條件</l1><l2>Conditions for 3rd Tier Offensive Magic</l2></b>: {{highSkillCondition}}</label></div>',
         '    <div><input id="etherTap" type="checkbox"><label for="etherTap"><b><l0>以太水龙头</l0><l1>以太水龍頭</l1><l2>Ether Tap</l2></b></label>: {{etherTapCondition}}</div>',
@@ -1080,11 +1397,11 @@
         '    <div><input id="autoSkipDefeated" type="checkbox"><label for="autoSkipDefeated"><b><l0>战败自动退出战斗</l0><l1>戰敗自動退出戰鬥</l1><l2>Exit battle when defeated.</l2></b></label></div>',
         '    <div><b><l0>继续新回合延时</l0><l1>繼續新回合延時</l1><l2>New round wait time</l2></b>: <input class="hvAANumber" name="NewRoundWaitTime" placeholder="0" type="text"> <l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
         '    <div><b><l0>战斗结束退出延时</l0><l1>戰鬥結束退出延時</l1><l2>Exit battle wait time</l2></b>: <input class="hvAANumber" name="ExitBattleWaitTime" placeholder="3" type="text"> <l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
-        '    <div style="display: flex; flex-flow: wrap;"><b><l0>当损失精力</l0><l1>當損失精力</l1><l2>If it lost Stamina</l2></b> ≥ <input class="hvAANumber" name="staminaLose" placeholder="5" type="text">: ',
-        '    <input id="staminaPause" type="checkbox"><label for="staminaPause"><l0>脚本暂停</l0><l1>腳本暫停</l1><l2>pause script</l2></label>;',
-        '    <input id="staminaWarn" type="checkbox"><label for="staminaWarn"><l01>警告</l01><l2>warn</l2></label>; ',
-        '    <input id="staminaFlee" type="checkbox"><label for="staminaFlee"><l01>逃跑</l01><l2>flee</l2></label>',
-        '    <button class="staminaLostLog"><l0>精力损失日志</l0><l1>精力損失日誌</l1><l2>staminaLostLog</l2></button></div>',
+        // '    <div style="display: flex; flex-flow: wrap;"><b><l0>当损失精力</l0><l1>當損失精力</l1><l2>If it lost Stamina</l2></b> ≥ <input class="hvAANumber" name="staminaLose" placeholder="5" type="text">: ',
+        // '    <input id="staminaPause" type="checkbox"><label for="staminaPause"><l0>脚本暂停</l0><l1>腳本暫停</l1><l2>pause script</l2></label>;',
+        // '    <input id="staminaWarn" type="checkbox"><label for="staminaWarn"><l01>警告</l01><l2>warn</l2></label>; ',
+        // '    <input id="staminaFlee" type="checkbox"><label for="staminaFlee"><l01>逃跑</l01><l2>flee</l2></label>',
+        // '    <button class="staminaLostLog"><l0>精力损失日志</l0><l1>精力損失日誌</l1><l2>staminaLostLog</l2></button></div>',
         '    <div><b><l0>战斗页面停留</l0><l1>戰鬥頁面停留</l1><l2>If not active for </l2></b>: ',
         '      <br><input id="battleUnresponsive_Alert" type="checkbox"><label for="battleUnresponsive_Alert"><input class="hvAANumber" name="battleUnresponsiveTime_Alert" type="text"> <l0>秒，警报</l0><l1>秒，警報</l1><l2>(s), alarm</l2></label>; ',
         '      <br><input id="battleUnresponsive_Reload" type="checkbox"><label for="battleUnresponsive_Reload"><input class="hvAANumber" name="battleUnresponsiveTime_Reload" type="text"> <l0>秒，刷新页面</l0><l1>秒，刷新頁面</l1><l2>(s), reload page</l2></label>',
@@ -1120,14 +1437,14 @@
         '  <div><input id="equStorage" type="checkbox"><label for="equStorage"><b>[E!]<l0>装备库存</l0><l1>裝備庫存</l1><l2>Equipment Storage</l2></b></label> ≤ <input class="hvAANumber" style="width: 32px;" name="equStorageValue" placeholder="2000" type="text">; <input id="encounterEquStorage" type="checkbox"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></div>',
         '  <div><input id="checkSupply" type="checkbox"><b>[C!]<l0>检查物品库存</l0><l1>檢查物品庫存</l1><l2>Check is item needs supply</l2>;</b><input id="encounterSupply" type="checkbox"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2>',
         '  <div class="hvAAcheckItems hvAATable">',
-        '    <div><input id="isCheck_11191" type="checkbox"><input class="hvAANumber" name="checkItem_11191" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
-        '    <div><input id="isCheck_11195" type="checkbox"><input class="hvAANumber" name="checkItem_11195" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
+        '    <div><input id="isCheck_11191" type="checkbox"><input class="hvAANumber" name="checkItem_11191" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
+        '    <div><input id="isCheck_11195" type="checkbox"><input class="hvAANumber" name="checkItem_11195" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
         '    <div><input id="isCheck_11199" type="checkbox"><input class="hvAANumber" name="checkItem_11199" placeholder="0" type="text"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></div>',
-        '    <div><input id="isCheck_11291" type="checkbox"><input class="hvAANumber" name="checkItem_11291" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
-        '    <div><input id="isCheck_11295" type="checkbox"><input class="hvAANumber" name="checkItem_11295" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
+        '    <div><input id="isCheck_11291" type="checkbox"><input class="hvAANumber" name="checkItem_11291" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
+        '    <div><input id="isCheck_11295" type="checkbox"><input class="hvAANumber" name="checkItem_11295" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
         '    <div><input id="isCheck_11299" type="checkbox"><input class="hvAANumber" name="checkItem_11299" placeholder="0" type="text"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></div>',
-        '    <div><input id="isCheck_11391" type="checkbox"><input class="hvAANumber" name="checkItem_11391" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
-        '    <div><input id="isCheck_11395" type="checkbox"><input class="hvAANumber" name="checkItem_11395" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
+        '    <div><input id="isCheck_11391" type="checkbox"><input class="hvAANumber" name="checkItem_11391" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
+        '    <div><input id="isCheck_11395" type="checkbox"><input class="hvAANumber" name="checkItem_11395" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
         '    <div><input id="isCheck_11399" type="checkbox"><input class="hvAANumber" name="checkItem_11399" placeholder="0" type="text"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></div>',
         '    <div><input id="isCheck_19111" type="checkbox"><input class="hvAANumber" name="checkItem_19111" placeholder="0" type="text"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></div>',
         '    <div><input id="isCheck_19131" type="checkbox"><input class="hvAANumber" name="checkItem_19131" placeholder="0" type="text"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></div>',
@@ -1150,14 +1467,14 @@
         '</div></div>',
         '  <div><input id="checkSupplyGF" type="checkbox"><b>[C!!]<l0>压榨届使用额外的库存检查</l0><l1>壓榨屆使用額外的庫存檢查</l1><l2>Extra supply check for Grind Fest</l2></b>',
         '  <div class="hvAAcheckItems hvAATable">',
-        '    <div><input id="isCheckGF_11191" type="checkbox"><input class="hvAANumber" name="checkItemGF_11191" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
-        '    <div><input id="isCheckGF_11195" type="checkbox"><input class="hvAANumber" name="checkItemGF_11195" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
+        '    <div><input id="isCheckGF_11195" type="checkbox"><input class="hvAANumber" name="checkItemGF_11195" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
+        '    <div><input id="isCheckGF_11191" type="checkbox"><input class="hvAANumber" name="checkItemGF_11191" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
         '    <div><input id="isCheckGF_11199" type="checkbox"><input class="hvAANumber" name="checkItemGF_11199" placeholder="0" type="text"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></div>',
-        '    <div><input id="isCheckGF_11291" type="checkbox"><input class="hvAANumber" name="checkItemGF_11291" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
-        '    <div><input id="isCheckGF_11295" type="checkbox"><input class="hvAANumber" name="checkItemGF_11295" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
+        '    <div><input id="isCheckGF_11295" type="checkbox"><input class="hvAANumber" name="checkItemGF_11295" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
+        '    <div><input id="isCheckGF_11291" type="checkbox"><input class="hvAANumber" name="checkItemGF_11291" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
         '    <div><input id="isCheckGF_11299" type="checkbox"><input class="hvAANumber" name="checkItemGF_11299" placeholder="0" type="text"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></div>',
-        '    <div><input id="isCheckGF_11391" type="checkbox"><input class="hvAANumber" name="checkItemGF_11391" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
-        '    <div><input id="isCheckGF_11395" type="checkbox"><input class="hvAANumber" name="checkItemGF_11395" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
+        '    <div><input id="isCheckGF_11395" type="checkbox"><input class="hvAANumber" name="checkItemGF_11395" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
+        '    <div><input id="isCheckGF_11391" type="checkbox"><input class="hvAANumber" name="checkItemGF_11391" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
         '    <div><input id="isCheckGF_11399" type="checkbox"><input class="hvAANumber" name="checkItemGF_11399" placeholder="0" type="text"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></div>',
         '    <div><input id="isCheckGF_19111" type="checkbox"><input class="hvAANumber" name="checkItemGF_19111" placeholder="0" type="text"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></div>',
         '    <div><input id="isCheckGF_19131" type="checkbox"><input class="hvAANumber" name="checkItemGF_19131" placeholder="0" type="text"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></div>',
@@ -1181,80 +1498,94 @@
         '  </div>',
 
         '<div class="hvAATab" id="hvAATab-Recovery">',
-        '  <div class="itemOrder"><b><l0>施放顺序</l0><l1>施放順序</l1><l2>Cast Order</l2></b>: <input name="itemOrderName" style="width:80%;" type="text" disabled="true"><input name="itemOrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
+        '  <div class="itemOrder"><b><l0>施放顺序(未配置的按照下面的顺序)</l0><l1>施放順序(未配置的按照下面的順序)</l1><l2>Cast Order(Using order below as default if not configed)</l2></b>: <input name="itemOrderName" style="width:80%;" type="text" disabled="true"><input name="itemOrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
         '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(4, 1fr);">' ,
-        '    <div><input id="itemOrder_Cure" value="Cure,311" type="checkbox"><label for="itemOrder_Cure"><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></label></div>',
         '    <div><input id="itemOrder_FC" value="FC,313" type="checkbox"><label for="itemOrder_FC"><l0>完全治愈(FC)</l0><l1>完全治愈(FC)</l1><l2>Full-Cure</l2></label></div>',
-        '    <div><input id="itemOrder_ED" value="ED,11401" type="checkbox"><label for="itemOrder_ED"><l0>能量饮料(ED)</l0><l1>能量飲料(ED)</l1><l2>Energy Drink</l2></label></div>',
-        '    <div><input id="itemOrder_CC" value="CC,11402" type="checkbox"><label for="itemOrder_CC"><l0>咖啡因糖果(CC)</l0><l1>咖啡因糖果(CC)</l1><l2>Caffeinated Candy</l2></label></div>',
-        '    <div><input id="itemOrder_HG" value="HG,10005" type="checkbox"><label for="itemOrder_HG"><l0>生命宝石(HG)</l0><l1>生命寶石(HG)</l1><l2>Health Gem</l2></label></div>',
-        '    <div><input id="itemOrder_MG" value="MG,10006" type="checkbox"><label for="itemOrder_MG"><l0>魔力宝石(MG)</l0><l1>魔力寶石(MG)</l1><l2>Mana Gem</l2></label></div>',
-        '    <div><input id="itemOrder_SG" value="SG,10007" type="checkbox"><label for="itemOrder_SG"><l0>灵力宝石(SG)</l0><l1>靈力寶石(SG)</l1><l2>Spirit Gem</l2></label></div>',
-        '    <div><input id="itemOrder_Mystic" value="Mystic,10008" type="checkbox"><label for="itemOrder_Mystic"><l0>神秘宝石(Mystic)</l0><l1>神秘寶石(Mystic)</l1><l2>Mystic Gem</l2></label></div>',
-        '    <div><input id="itemOrder_HP" value="HP,11195" type="checkbox"><label for="itemOrder_HP"><l0>生命药水(HP)</l0><l1>生命藥水(HP)</l1><l2>Health Potion</l2></label></div>',
-        '    <div><input id="itemOrder_MP" value="MP,11295" type="checkbox"><label for="itemOrder_MP"><l0>魔力药水(MP)</l0><l1>魔力藥水(MP)</l1><l2>Mana Potion</l2></label></div>',
-        '    <div><input id="itemOrder_SP" value="SP,11395" type="checkbox"><label for="itemOrder_SP"><l0>灵力药水(SP)</l0><l1>靈力藥水(SP)</l1><l2>Spirit Potion</l2></label></div>',
-        '    <div><input id="itemOrder_LE" value="LE,11501" type="checkbox"><label for="itemOrder_LE"><l0>最终秘药(LE)</l0><l1>最終秘藥(LE)</l1><l2>Last Elixir</l2></label></div>',
         '    <div><input id="itemOrder_HE" value="HE,11199" type="checkbox"><label for="itemOrder_HE"><l0>生命秘药(HE)</l0><l1>生命秘藥(HE)</l1><l2>Health Elixir</l2></label></div>',
+        '    <div><input id="itemOrder_LE" value="LE,11501" type="checkbox"><label for="itemOrder_LE"><l0>最终秘药(LE)</l0><l1>最終秘藥(LE)</l1><l2>Last Elixir</l2></label></div>',
+        '    <div><input id="itemOrder_HG" value="HG,10005" type="checkbox"><label for="itemOrder_HG"><l0>生命宝石(HG)</l0><l1>生命寶石(HG)</l1><l2>Health Gem</l2></label></div>',
+        '    <div><input id="itemOrder_HP" value="HP,11195" type="checkbox"><label for="itemOrder_HP"><l0>生命药水(HP)</l0><l1>生命藥水(HP)</l1><l2>Health Potion</l2></label></div>',
+        '    <div><input id="itemOrder_Cure" value="Cure,311" type="checkbox"><label for="itemOrder_Cure"><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></label></div>',
+        '    <div><input id="itemOrder_MG" value="MG,10006" type="checkbox"><label for="itemOrder_MG"><l0>魔力宝石(MG)</l0><l1>魔力寶石(MG)</l1><l2>Mana Gem</l2></label></div>',
+        '    <div><input id="itemOrder_MP" value="MP,11295" type="checkbox"><label for="itemOrder_MP"><l0>魔力药水(MP)</l0><l1>魔力藥水(MP)</l1><l2>Mana Potion</l2></label></div>',
         '    <div><input id="itemOrder_ME" value="ME,11299" type="checkbox"><label for="itemOrder_ME"><l0>魔力秘药(ME)</l0><l1>魔力秘藥(ME)</l1><l2>Mana Elixir</l2></label></div>',
+        '    <div><input id="itemOrder_SG" value="SG,10007" type="checkbox"><label for="itemOrder_SG"><l0>灵力宝石(SG)</l0><l1>靈力寶石(SG)</l1><l2>Spirit Gem</l2></label></div>',
+        '    <div><input id="itemOrder_SP" value="SP,11395" type="checkbox"><label for="itemOrder_SP"><l0>灵力药水(SP)</l0><l1>靈力藥水(SP)</l1><l2>Spirit Potion</l2></label></div>',
         '    <div><input id="itemOrder_SE" value="SE,11399" type="checkbox"><label for="itemOrder_SE"><l0>灵力秘药(SE)</l0><l1>靈力秘藥(SE)</l1><l2>Spirit Elixir</l2></label></div>',
+        '    <div><input id="itemOrder_Mystic" value="Mystic,10008" type="checkbox"><label for="itemOrder_Mystic"><l0>神秘宝石(Mystic)</l0><l1>神秘寶石(Mystic)</l1><l2>Mystic Gem</l2></label></div>',
+        '    <div><input id="itemOrder_CC" value="CC,11402" type="checkbox"><label for="itemOrder_CC"><l0>咖啡因糖果(CC)</l0><l1>咖啡因糖果(CC)</l1><l2>Caffeinated Candy</l2></label></div>',
+        '    <div><input id="itemOrder_ED" value="ED,11401" type="checkbox"><label for="itemOrder_ED"><l0>能量饮料(ED)</l0><l1>能量飲料(ED)</l1><l2>Energy Drink</l2></label></div>',
         '  </div></div>',
-        '  <div><input id="item_HG" type="checkbox"><label for="item_HG"><b><l0>生命宝石(HG)</l0><l1>生命寶石(HG)</l1><l2>Health Gem</l2></b></label>: {{itemHGCondition}}</div>',
-        '  <div><input id="item_MG" type="checkbox"><label for="item_MG"><b><l0>魔力宝石(MG)</l0><l1>魔力寶石(MG)</l1><l2>Mana Gem</l2></b></label>: {{itemMGCondition}}</div>',
-        '  <div><input id="item_SG" type="checkbox"><label for="item_SG"><b><l0>灵力宝石(SG)</l0><l1>靈力寶石(SG)</l1><l2>Spirit Gem</l2></b></label>: {{itemSGCondition}}</div>',
-        '  <div><input id="item_Mystic" type="checkbox"><label for="item_Mystic"><b><l0>神秘宝石(Mystic)</l0><l1>神秘寶石(Mystic)</l1><l2>Mystic Gem</l2></b></label>: {{itemMysticCondition}}</div>',
-        '  <div><input id="item_Cure" type="checkbox"><label for="item_Cure"><b><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></b></label>: {{itemCureCondition}}</div>',
+
         '  <div><input id="item_FC" type="checkbox"><label for="item_FC"><b><l0>完全治愈(FC)</l0><l1>完全治愈(FC)</l1><l2>Full-Cure</l2></b></label>: {{itemFCCondition}}</div>',
-        '  <div><input id="item_HP" type="checkbox"><label for="item_HP"><b><l0>生命药水(HP)</l0><l1>生命藥水(HP)</l1><l2>Health Potion</l2></b></label>: {{itemHPCondition}}</div>',
         '  <div><input id="item_HE" type="checkbox"><label for="item_HE"><b><l0>生命秘药(HE)</l0><l1>生命秘藥(HE)</l1><l2>Health Elixir</l2></b></label>: {{itemHECondition}}</div>',
+        '  <div><input id="item_LE" type="checkbox"><label for="item_LE"><b><l0>最终秘药(LE)</l0><l1>最終秘藥(LE)</l1><l2>Last Elixir</l2></b></label>: {{itemLECondition}}</div>',
+        '  <div><input id="item_HG" type="checkbox"><label for="item_HG"><b><l0>生命宝石(HG)</l0><l1>生命寶石(HG)</l1><l2>Health Gem</l2></b></label>: {{itemHGCondition}}</div>',
+        '  <div><input id="item_HP" type="checkbox"><label for="item_HP"><b><l0>生命药水(HP)</l0><l1>生命藥水(HP)</l1><l2>Health Potion</l2></b></label>: {{itemHPCondition}}</div>',
+        '  <div><input id="item_Cure" type="checkbox"><label for="item_Cure"><b><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></b></label>: {{itemCureCondition}}</div>',
+        '  <div><input id="item_MG" type="checkbox"><label for="item_MG"><b><l0>魔力宝石(MG)</l0><l1>魔力寶石(MG)</l1><l2>Mana Gem</l2></b></label>: {{itemMGCondition}}</div>',
         '  <div><input id="item_MP" type="checkbox"><label for="item_MP"><b><l0>魔力药水(MP)</l0><l1>魔力藥水(MP)</l1><l2>Mana Potion</l2></b></label>: {{itemMPCondition}}</div>',
         '  <div><input id="item_ME" type="checkbox"><label for="item_ME"><b><l0>魔力秘药(ME)</l0><l1>魔力秘藥(ME)</l1><l2>Mana Elixir</l2></b></label>: {{itemMECondition}}</div>',
+        '  <div><input id="item_SG" type="checkbox"><label for="item_SG"><b><l0>灵力宝石(SG)</l0><l1>靈力寶石(SG)</l1><l2>Spirit Gem</l2></b></label>: {{itemSGCondition}}</div>',
         '  <div><input id="item_SP" type="checkbox"><label for="item_SP"><b><l0>灵力药水(SP)</l0><l1>靈力藥水(SP)</l1><l2>Spirit Potion</l2></b></label>: {{itemSPCondition}}</div>',
         '  <div><input id="item_SE" type="checkbox"><label for="item_SE"><b><l0>灵力秘药(SE)</l0><l1>靈力秘藥(SE)</l1><l2>Spirit Elixir</l2></b></label>: {{itemSECondition}}</div>',
-        '  <div><input id="item_LE" type="checkbox"><label for="item_LE"><b><l0>最终秘药(LE)</l0><l1>最終秘藥(LE)</l1><l2>Last Elixir</l2></b></label>: {{itemLECondition}}</div>',
-        '  <div><input id="item_ED" type="checkbox"><label for="item_ED"><b><l0>能量饮料(ED)</l0><l1>能量飲料(ED)</l1><l2>Energy Drink</l2></b></label>: {{itemEDCondition}}</div>',
-        '  <div><input id="item_CC" type="checkbox"><label for="item_CC"><b><l0>咖啡因糖果(CC)</l0><l1>咖啡因糖果(CC)</l1><l2>Caffeinated Candy</l2></b></label>: {{itemCCCondition}}</div></div>',
+        '  <div><input id="item_Mystic" type="checkbox"><label for="item_Mystic"><b><l0>神秘宝石(Mystic)</l0><l1>神秘寶石(Mystic)</l1><l2>Mystic Gem</l2></b></label>: {{itemMysticCondition}}</div>',
+        '  <div><input id="item_CC" type="checkbox"><label for="item_CC"><b><l0>咖啡因糖果(CC)</l0><l1>咖啡因糖果(CC)</l1><l2>Caffeinated Candy</l2></b></label>: {{itemCCCondition}}</div>',
+        '  <div><input id="item_ED" type="checkbox"><label for="item_ED"><b><l0>能量饮料(ED)</l0><l1>能量飲料(ED)</l1><l2>Energy Drink</l2></b></label>: {{itemEDCondition}}</div></div>',
 
         '<div class="hvAATab" id="hvAATab-Channel">',
-        '  <l0><b>获得引导时</b>（此时1点MP施法与150%伤害）</l0><l1><b>獲得引導時</b>（此時1點MP施法與150%傷害）</l1><l2><b>During Channeling effect</b> (1 mp spell cost and 150% spell damage)</l2>:',
+        '  <div><l0><b>获得引导时</b>（此时1点MP施法与150%伤害）</l0><l1><b>獲得引導時</b>（此時1點MP施法與150%傷害）</l1><l2><b>During Channeling effect</b> (1 mp spell cost and 150% spell damage)</l2>:</div>',
+        '  <div><b><l0>超过时不释放</l0><l1>超過時不釋放</l1><l2>Not cast if remain turns above</l2></b>: ',
+        '    <div><label for="channelThreshold_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Pr" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SL" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SS" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Ha" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_AF" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_He" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Re" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SV" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '    <div><label for="channelThreshold_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Ab" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '  </div>',
         '  <div><b><l0>先施放引导技能</l0><l1>先施放引導技能</l1><l2>First cast</l2></b>: <br>',
         '    <l0>注意: 此处的施放顺序与</l0><l1>注意: 此處的施放順序与</l1><l2>Note: The cast order here is the same as in</l2><a class="hvAAGoto" name="hvAATab-Buff">BUFF<l01>技能</l01><l2> Spells</l2></a><l0>里的相同</l0><l1>裡的相同</l1><br>',
-        '    <input id="channelSkill_Pr" type="checkbox"><label for="channelSkill_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label>',
-        '    <input id="channelSkill_SL" type="checkbox"><label for="channelSkill_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
         '    <input id="channelSkill_SS" type="checkbox"><label for="channelSkill_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2></label>',
-        '    <input id="channelSkill_Ha" type="checkbox"><label for="channelSkill_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label><br>',
-        '    <input id="channelSkill_AF" type="checkbox"><label for="channelSkill_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label>',
-        '    <input id="channelSkill_He" type="checkbox"><label for="channelSkill_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
-        '    <input id="channelSkill_Re" type="checkbox"><label for="channelSkill_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
+        '    <input id="channelSkill_SL" type="checkbox"><label for="channelSkill_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
+        '    <input id="channelSkill_Pr" type="checkbox"><label for="channelSkill_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label><br>',
+        '    <input id="channelSkill_Ab" type="checkbox"><label for="channelSkill_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label>',
         '    <input id="channelSkill_SV" type="checkbox"><label for="channelSkill_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label>',
-        '    <input id="channelSkill_Ab" type="checkbox"><label for="channelSkill_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label></div>',
+        '    <input id="channelSkill_Re" type="checkbox"><label for="channelSkill_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
+        '    <input id="channelSkill_Ha" type="checkbox"><label for="channelSkill_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label>',
+        '    <input id="channelSkill_He" type="checkbox"><label for="channelSkill_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
+        '    <input id="channelSkill_AF" type="checkbox"><label for="channelSkill_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label></div>',
         '  <div><input id="channelSkill2" type="checkbox"><label for="channelSkill2"><b><l0>再使用技能</l0><l1>再使用技能</l1><l2>Then use Skill</l2></b></label>: ',
         '    <div class="channelSkill2Order"><l0>施放顺序</l0><l1>施放順序</l1><l2>Cast Order</l2>: <input name="channelSkill2OrderName" style="width:80%;" type="text" disabled="true"><input name="channelSkill2OrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
-        '    <input id="channelSkill2Order_Cu" value="Cu,311" type="checkbox"><label for="channelSkill2Order_Cu"><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></label>',
         '    <input id="channelSkill2Order_FC" value="FC,313" type="checkbox"><label for="channelSkill2Order_FC"><l0>完全治愈(FC)</l0><l1>完全治愈(FC)</l1><l2>Full-Cure</l2></label>',
-        '    <input id="channelSkill2Order_Pr" value="Pr,411" type="checkbox"><label for="channelSkill2Order_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label>',
-        '    <input id="channelSkill2Order_SL" value="SL,422" type="checkbox"><label for="channelSkill2Order_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
+        '    <input id="channelSkill2Order_Cu" value="Cu,311" type="checkbox"><label for="channelSkill2Order_Cu"><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></label>',
         '    <input id="channelSkill2Order_SS" value="SS,423" type="checkbox"><label for="channelSkill2Order_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2></label>',
-        '    <input id="channelSkill2Order_Ha" value="Ha,412" type="checkbox"><label for="channelSkill2Order_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label><br>',
-        '    <input id="channelSkill2Order_AF" value="AF,432" type="checkbox"><label for="channelSkill2Order_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label>',
-        '    <input id="channelSkill2Order_He" value="He,431" type="checkbox"><label for="channelSkill2Order_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
-        '    <input id="channelSkill2Order_Re" value="Re,312" type="checkbox"><label for="channelSkill2Order_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
+        '    <input id="channelSkill2Order_SL" value="SL,422" type="checkbox"><label for="channelSkill2Order_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
+        '    <input id="channelSkill2Order_Pr" value="Pr,411" type="checkbox"><label for="channelSkill2Order_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label>',
+        '    <input id="channelSkill2Order_Ab" value="Ab,421" type="checkbox"><label for="channelSkill2Order_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label>',
         '    <input id="channelSkill2Order_SV" value="SV,413" type="checkbox"><label for="channelSkill2Order_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label>',
-        '    <input id="channelSkill2Order_Ab" value="Ab,421" type="checkbox"><label for="channelSkill2Order_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label></div></div>',
-        '  <div><l0><b>最后ReBuff</b>: 重新施放最先消失的Buff</l0><l1><b>最後ReBuff</b>: 重新施放最先消失的Buff</l1><l2><b>At last, re-cast the spells which will expire first</b></l2>.</div></div>',
+        '    <input id="channelSkill2Order_Re" value="Re,312" type="checkbox"><label for="channelSkill2Order_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
+        '    <input id="channelSkill2Order_Ha" value="Ha,412" type="checkbox"><label for="channelSkill2Order_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label>',
+        '    <input id="channelSkill2Order_He" value="He,431" type="checkbox"><label for="channelSkill2Order_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
+        '    <input id="channelSkill2Order_AF" value="AF,432" type="checkbox"><label for="channelSkill2Order_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label>',
+        '  </div></div>',
+        '  <div><input id="channelRebuff" type="checkbox"><l0><b>最后ReBuff</b>: 重新施放最先将要消失的Buff</l0><l1><b>最後ReBuff</b>: 重新施放最先將要消失的Buff</l1><l2><b>At last, re-cast the spells which will expire first</b></l2>.</div>',
+        '</div>',
 
         '<div class="hvAATab" id="hvAATab-Buff">',
-        '  <div class="buffSkillOrder"><l0>施放顺序</l0><l1>施放順序</l1><l2>Cast Order</l2>: ',
+        '  <div class="buffSkillOrder"><l0>施放顺序(未配置的按照下面的顺序)</l0><l1>施放順序(未配置的按照下面的順序)</l1><l2>Cast Order(Using order below as default if not configed)</l2>: ',
         '    <input name="buffSkillOrderValue" style="width:80%;" type="text" disabled="true"><br>',
-        '    <input id="buffSkillOrder_Pr" type="checkbox"><label for="buffSkillOrder_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label>',
-        '    <input id="buffSkillOrder_SL" type="checkbox"><label for="buffSkillOrder_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
         '    <input id="buffSkillOrder_SS" type="checkbox"><label for="buffSkillOrder_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2></label>',
-        '    <input id="buffSkillOrder_Ha" type="checkbox"><label for="buffSkillOrder_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label><br>',
-        '    <input id="buffSkillOrder_AF" type="checkbox"><label for="buffSkillOrder_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label>',
-        '    <input id="buffSkillOrder_He" type="checkbox"><label for="buffSkillOrder_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
-        '    <input id="buffSkillOrder_Re" type="checkbox"><label for="buffSkillOrder_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
-        '    <input id="buffSkillOrder_SV" type="checkbox"><label for="buffSkillOrder_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label>',
+        '    <input id="buffSkillOrder_SL" type="checkbox"><label for="buffSkillOrder_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
+        '    <input id="buffSkillOrder_Pr" type="checkbox"><label for="buffSkillOrder_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label>',
         '    <input id="buffSkillOrder_Ab" type="checkbox"><label for="buffSkillOrder_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label>',
+        '    <input id="buffSkillOrder_SV" type="checkbox"><label for="buffSkillOrder_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label>',
+        '    <input id="buffSkillOrder_Re" type="checkbox"><label for="buffSkillOrder_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
+        '    <input id="buffSkillOrder_Ha" type="checkbox"><label for="buffSkillOrder_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label>',
+        '    <input id="buffSkillOrder_He" type="checkbox"><label for="buffSkillOrder_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
+        '    <input id="buffSkillOrder_AF" type="checkbox"><label for="buffSkillOrder_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label>',
         '  </div>',
         '  <div><l0>Buff释放条件</l0><l1>Buff釋放條件</l1><l2>Cast spells Condition</l2>{{buffSkillCondition}}</div>',
         '    <div><input id="buffSkill_HD" type="checkbox"><label for="buffSkill_HD"><l0>生命长效药(HD)</l0><l1>生命長效藥(HD)</l1><l2>Health Draught</l2> <= <input class="hvAANumber" placeholder="0" name="buffSkillThreshold_HD" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{buffSkillHDCondition}}</div>',
@@ -1278,40 +1609,78 @@
         '  <div><input id="debuffSkillTurnAlert" type="checkbox"><label for="debuffSkillTurnAlert"><l0>剩余Turns低于阈值时警报</l0><l1>剩餘Turns低於閾值時警報</l1><l2>Alert when remain expire turns less than threshold</l2></label><br>',
         '    <l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2>: <input class="hvAANumber" name="debuffSkillTurn_Sle" type="text">',
         '    <l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2>: <input class="hvAANumber" name="debuffSkillTurn_Bl" type="text">',
-        '    <l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2>: <input class="hvAANumber" name="debuffSkillTurn_Slo" type="text"><br>',
-        '    <l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2>: <input class="hvAANumber" name="debuffSkillTurn_Im" type="text">',
-        '    <l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2>: <input class="hvAANumber" name="debuffSkillTurn_MN" type="text">',
-        '    <l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2>: <input class="hvAANumber" name="debuffSkillTurn_Si" type="text"><br>',
+        '    <l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2>: <input class="hvAANumber" name="debuffSkillTurn_We" type="text"><br>',
+        '    <l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2>: <input class="hvAANumber" name="debuffSkillTurn_Si" type="text">',
+        '    <l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2>: <input class="hvAANumber" name="debuffSkillTurn_Slo" type="text">',
+        '    <l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2>: <input class="hvAANumber" name="debuffSkillTurn_Im" type="text"><br>',
+        '    <l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2>: <input class="hvAANumber" name="debuffSkillTurn_Co" type="text">',
         '    <l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2>: <input class="hvAANumber" name="debuffSkillTurn_Dr" type="text">',
-        '    <l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2>: <input class="hvAANumber" name="debuffSkillTurn_We" type="text">',
-        '    <l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2>: <input class="hvAANumber" name="debuffSkillTurn_Co" type="text"></div>',
-        '  <div class="debuffSkillOrder"><l0>施放顺序</l0><l1>施放順序</l1><l2>Cast Order</l2>:',
+        '    <l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2>: <input class="hvAANumber" name="debuffSkillTurn_MN" type="text"></div>',
+        '  <div class="debuffSkillOrderAll">1. <l0>特殊先给全体施放的顺序(未配置的按照下面的顺序)</l0><l1>特殊先給全體施放的順序(未配置的按照下面的順序)</l1><l2>Cast Order for Special Debuff all enemies first(Using order below as default if not configed)</l2>:',
+        '    <input name="debuffSkillOrderAllValue" style="width:80%;" type="text" disabled="true"><br>',
+        // Dr, MN无法覆盖全体
+        '    <input id="debuffSkillOrderAll_Sle" type="checkbox"><label for="debuffSkillOrderAll_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label>',
+        '    <input id="debuffSkillOrderAll_Bl" type="checkbox"><label for="debuffSkillOrderAll_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label>',
+        '    <input id="debuffSkillOrderAll_We" type="checkbox"><label for="debuffSkillOrderAll_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
+        '    <input id="debuffSkillOrderAll_Si" type="checkbox"><label for="debuffSkillOrderAll_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label>',
+        '    <input id="debuffSkillOrderAll_Slo" type="checkbox"><label for="debuffSkillOrderAll_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
+        '    <input id="debuffSkillOrderAll_Dr" type="checkbox"><label for="debuffSkillOrderAll_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
+        '    <input id="debuffSkillOrderAll_Im" type="checkbox"><label for="debuffSkillOrderAll_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
+        '    <input id="debuffSkillOrderAll_MN" type="checkbox"><label for="debuffSkillOrderAll_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2></label>',
+        '    <input id="debuffSkillOrderAll_Co" type="checkbox"><label for="debuffSkillOrderAll_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
+        '  </div>',
+
+        '  <div>1.a. <l0>特殊先给全体施放时，视作覆盖的互斥Debuff</l0><l1>特殊特殊先給全體施放時，視作覆蓋的互斥Debuff</l1><l2>Exclusive debuffs during \'Cast Order for Special Debuff all enemies first\'</l2>:',
+        // Dr, MN无法覆盖全体
+        '    <input id="debuffAllExclusive_Sle" type="checkbox"><label for="debuffAllExclusive_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label>',
+        '    <input id="debuffAllExclusive_Bl" type="checkbox"><label for="debuffAllExclusive_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label>',
+        '    <input id="debuffAllExclusive_We" type="checkbox"><label for="debuffAllExclusive_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
+        '    <input id="debuffAllExclusive_Si" type="checkbox"><label for="debuffAllExclusive_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label>',
+        '    <input id="debuffAllExclusive_Slo" type="checkbox"><label for="debuffAllExclusive_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
+        '    <input id="debuffAllExclusive_Dr" type="checkbox"><label for="debuffAllExclusive_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
+        '    <input id="debuffAllExclusive_Im" type="checkbox"><label for="debuffAllExclusive_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
+        '    <input id="debuffAllExclusive_MN" type="checkbox"><label for="debuffAllExclusive_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2></label>',
+        '    <input id="debuffAllExclusive_Co" type="checkbox"><label for="debuffAllExclusive_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
+        '  </div>',
+
+        '  <div class="debuffSkillOrder">2. <l0>单体施放顺序(未配置的按照下面的顺序)</l0><l1>單體施放順序(未配置的按照下面的順序)</l1><l2>Cast Order for each enemy(Using order below as default if not configed)</l2>:',
         '    <input name="debuffSkillOrderValue" style="width:80%;" type="text" disabled="true"><br>',
         '    <input id="debuffSkillOrder_Sle" type="checkbox"><label for="debuffSkillOrder_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label>',
         '    <input id="debuffSkillOrder_Bl" type="checkbox"><label for="debuffSkillOrder_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label>',
+        '    <input id="debuffSkillOrder_We" type="checkbox"><label for="debuffSkillOrder_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
+        '    <input id="debuffSkillOrder_Si" type="checkbox"><label for="debuffSkillOrder_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label>',
         '    <input id="debuffSkillOrder_Slo" type="checkbox"><label for="debuffSkillOrder_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
+        '    <input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
         '    <input id="debuffSkillOrder_Im" type="checkbox"><label for="debuffSkillOrder_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
         '    <input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2></label>',
-        '    <input id="debuffSkillOrder_Si" type="checkbox"><label for="debuffSkillOrder_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label>',
-        '    <input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
-        '    <input id="debuffSkillOrder_We" type="checkbox"><label for="debuffSkillOrder_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
-        '    <input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给所有敌人上虚弱(We)</l0><l1>先給所有敵人上虛弱(We)</l1><l2>Weakened all enemies first.</l2></label><input id="debuffSkillWeAllByIndex" type="checkbox"><label for="debuffSkillWeAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead weight</l2></label></div>{{debuffSkillWeAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给所有敌人上陷危(Im)</l0><l1>先給所有敵人上陷危(Im)</l1><l2>Imperiled all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead weight</l2></label></div>{{debuffSkillImAllCondition}}',
+        '    <input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
+        '  </div>',
+        '  <div><l0>特殊先给全体施放和单体施放使用共享的阈值和各自独立的条件</l0><l1>特殊先給全體施放和單體施放使用共享的閾值和各自獨立的條件</l1><l2>Using sharing threshold and standalone conditions between special cast for debuff all enemies first and cast for debuff each enemy</l2></div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSleAll" type="checkbox"><label for="debuffSkillSleAll"><l0>先给全体上沉眠(Sl)</l0><l1>先給全體上沉眠(Sl)</l1><l2>Sleep all enemies first.</l2></label><input id="debuffSkillSleAllByIndex" type="checkbox"><label for="debuffSkillSleAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSleAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillBlAll" type="checkbox"><label for="debuffSkillBlAll"><l0>先给全体上致盲(Bl)</l0><l1>先給全體上致盲(Bl)</l1><l2>Blind all enemies first.</l2></label><input id="debuffSkillBlAllByIndex" type="checkbox"><label for="debuffSkillBlAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillBlAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给全体上虚弱(We)</l0><l1>先給全體上虛弱(We)</l1><l2>Weakened all enemies first.</l2></label><input id="debuffSkillWeAllByIndex" type="checkbox"><label for="debuffSkillWeAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillWeAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSiAll" type="checkbox"><label for="debuffSkillSiAll"><l0>先给全体上沉默(Si)</l0><l1>先給全體上沉默(Si)</l1><l2>Silence all enemies first.</l2></label><input id="debuffSkillSiAllByIndex" type="checkbox"><label for="debuffSkillSiAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSiAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSloAll" type="checkbox"><label for="debuffSkillSloAll"><l0>先给全体上缓慢(Slo)</l0><l1>先給全體上緩慢(Slo)</l1><l2>Slow all enemies first.</l2></label><input id="debuffSkillSloAllByIndex" type="checkbox"><label for="debuffSkillSloAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSloAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillDrAll" type="checkbox"><label for="debuffSkillDrAll"><l0>先给全体上枯竭(Dr)</l0><l1>先給全體上枯竭(Dr)</l1><l2>Drain all enemies first.</l2></label><input id="debuffSkillDrAllByIndex" type="checkbox"><label for="debuffSkillDrAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillDrAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给全体上陷危(Im)</l0><l1>先給全體上陷危(Im)</l1><l2>Imperiled all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillImAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillMNAll" type="checkbox"><label for="debuffSkillMNAll"><l0>先给全体上魔磁网(MN)</l0><l1>先給全體上魔磁網(MN)</l1><l2>MagNet all enemies first.</l2></label><input id="debuffSkillMNAllByIndex" type="checkbox"><label for="debuffSkillMNAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillMNAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillCoAll" type="checkbox"><label for="debuffSkillCoAll"><l0>先给全体上混乱(Co)</l0><l1>先給全體上混亂(Co)</l1><l2>Confuse all enemies first.</l2></label><input id="debuffSkillCoAllByIndex" type="checkbox"><label for="debuffSkillCoAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillCoAllCondition}}',
+
         '    <div><input id="debuffSkill_Sle" type="checkbox"><label for="debuffSkill_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Sle" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSleCondition}}</div>',
         '    <div><input id="debuffSkill_Bl" type="checkbox"><label for="debuffSkill_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Bl" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillBlCondition}}</div>',
+        '    <div><input id="debuffSkill_We" type="checkbox"><label for="debuffSkill_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_We" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillWeCondition}}</div>',
+        '    <div><input id="debuffSkill_Si" type="checkbox"><label for="debuffSkill_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Si" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSiCondition}}</div>',
         '    <div><input id="debuffSkill_Slo" type="checkbox"><label for="debuffSkill_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Slo" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSloCondition}}</div>',
+        '    <div><input id="debuffSkill_Dr" type="checkbox"><label for="debuffSkill_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Dr" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillDrCondition}}</div>',
         '    <div><input id="debuffSkill_Im" type="checkbox"><label for="debuffSkill_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Im" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillImCondition}}</div>',
         '    <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_MN" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillMNCondition}}</div>',
-        '    <div><input id="debuffSkill_Si" type="checkbox"><label for="debuffSkill_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Si" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSiCondition}}</div>',
-        '    <div><input id="debuffSkill_Dr" type="checkbox"><label for="debuffSkill_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Dr" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillDrCondition}}</div>',
-        '    <div><input id="debuffSkill_We" type="checkbox"><label for="debuffSkill_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_We" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillWeCondition}}</div>',
         '    <div><input id="debuffSkill_Co" type="checkbox"><label for="debuffSkill_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Co" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></label>{{debuffSkillCoCondition}}</div>',
         '  </div>',
 
         '<div class="hvAATab" id="hvAATab-Skill">',
         '  <div><span><l0>注意: 默认在灵动架式状态下使用，请在<a class="hvAAGoto" name="hvAATab-Main">主要选项</a>勾选并设置<b>开启/关闭灵动架式</b></l0><l1>注意: 默認在靈動架式狀態下使用，請在<a class="hvAAGoto" name="hvAATab-Main">主要選項</a>勾選並設置<b>開啟/關閉靈動架式</b></l1><l2>Note: use under Spirit by default, please check and set the <b>Turn on/off Spirit Stance</b> in <a class="hvAAGoto" name="hvAATab-Main">Main</a></l2></span></div>',
-        '  <div class="skillOrder"><l0>施放顺序</l0><l1>施放順序</l1><l2>Cast Order</l2>: ',
+
+        '  <div class="skillOrder"><l0>施放顺序(未配置的按照下面的顺序)</l0><l1>施放順序(未配置的按照下面的順序)</l1><l2>Cast Order(Using order below as default if not configed)</l2>: ',
         '  <input name="skillOrderValue" style="width:80%;" type="text" disabled="true"><br>',
         '  <input id="skillOrder_OFC" type="checkbox"><label for="skillOrder_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label><input id="skillOrder_FRD" type="checkbox"><label for="skillOrder_FRD"><l0>龙吼</l0><l1>龍吼</l1><l2>FRD</l2></label><input id="skillOrder_T3" type="checkbox"><label for="skillOrder_T3">T3</label><input id="skillOrder_T2" type="checkbox"><label for="skillOrder_T2">T2</label><input id="skillOrder_T1" type="checkbox"><label for="skillOrder_T1">T1</label></div>',
         '  <div><input id="skill_OFC" type="checkbox"><label for="skill_OFC"><l0>友情小马砲</l0><l1>友情小馬砲</l1><l2>OFC</l2></label>: <input id="skillOTOS_OFC" type="checkbox"><label for="skillOTOS_OFC"><l01>一回合只使用一次</l01><l2>One round only spell one time</l2></label>{{skillOFCCondition}}</div>',
@@ -1509,7 +1878,7 @@
             }
           } else {
             if (getValue('drop')) {
-              drop.__name = getValue('battleCode');
+              drop.__name = getValue('battleCode', true)?.name;
               dropOld.push(drop);
             }
             dropOld.reverse();
@@ -1561,7 +1930,7 @@
             }
           } else {
             if (getValue('stats')) {
-              stats.__name = getValue('battleCode');
+              stats.__name = getValue('battleCode', true)?.name;
               statsOld.push(stats);
             }
             statsOld.reverse();
@@ -1686,16 +2055,16 @@
           }
         }, 3000);
       };
-      gE('.staminaLostLog', optionBox).onclick = function () {
-        const out = [];
-        const staminaLostLog = getValue('staminaLostLog', true);
-        for (const i in staminaLostLog) {
-          out.push(`${i}: ${staminaLostLog[i]}`);
-        }
-        if (window.confirm(`总共${out.length}条记录 (There are ${out.length} logs): \n${out.reverse().join('\n')}\n是否重置 (Whether to reset)?`)) {
-          setValue('staminaLostLog', {});
-        }
-      };
+      // gE('.staminaLostLog', optionBox).onclick = function () {
+      //   const out = [];
+      //   const staminaLostLog = getValue('staminaLostLog', true);
+      //   for (const i in staminaLostLog) {
+      //     out.push(`${i}: ${staminaLostLog[i]}`);
+      //   }
+      //   if (window.confirm(`总共${out.length}条记录 (There are ${out.length} logs): \n${out.reverse().join('\n')}\n是否重置 (Whether to reset)?`)) {
+      //     setValue('staminaLostLog', {});
+      //   }
+      // };
       gE('.idleArenaReset', optionBox).onclick = function () {
         if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
           delValue('arena');
@@ -1729,16 +2098,34 @@
         gE('input[name="idleArenaValue"]').value = value;
       };
 
-      gE('.battleOrder', optionBox).onclick = function (e) {
+      gE('.attackStatusOrder', optionBox).onclick = function (e) {
         if (e.target.tagName !== 'INPUT' && e.target.type !== 'checkbox') {
           return;
         }
         const valueArray = e.target.value.split(',');
+        let levels = gE('input[name="attackStatusOrderName"]').value;
+        let { value } = gE('input[name="attackStatusOrderValue"]');
+        if (e.target.checked) {
+          levels = levels + ((levels) ? `,${valueArray[0]}` : valueArray[0]);
+          value = value + ((value) ? `,${valueArray[1]}` : valueArray[1]);
+        } else {
+          levels = levels.replace(new RegExp(`(^|,)${valueArray[0]}(,|$)`), '$2').replace(/^,/, '');
+          value = value.replace(new RegExp(`(^|,)${valueArray[1]}(,|$)`), '$2').replace(/^,/, '');
+        }
+        gE('input[name="attackStatusOrderName"]').value = levels;
+        gE('input[name="attackStatusOrderValue"]').value = value;
+      };
+
+      gE('.battleOrder', optionBox).onclick = function (e) {
+        if (e.target.tagName !== 'INPUT' && e.target.type !== 'checkbox') {
+          return;
+        }
+        const value = e.target.value;
         let name = gE('input[name="battleOrderName"]').value;
         if (e.target.checked) {
-          name = name + ((name) ? `,${valueArray[0]}` : valueArray[0]);
+          name = name + ((name) ? `,${value}` : value);
         } else {
-          name = name.replace(new RegExp(`(^|,)${valueArray[0]}(,|$)`), '$2').replace(/^,/, '');
+          name = name.replace(new RegExp(`(^|,)${value}(,|$)`), '$2').replace(/^,/, '');
         }
         gE('input[name="battleOrderName"]').value = name;
       };
@@ -1806,6 +2193,19 @@
           value = value.replace(new RegExp(`(^|,)${name}(,|$)`), '$2').replace(/^,/, '');
         }
         gE('input[name="debuffSkillOrderValue"]').value = value;
+      };
+      gE('.debuffSkillOrderAll', optionBox).onclick = function (e) {
+        if (e.target.tagName !== 'INPUT' && e.target.type !== 'checkbox') {
+          return;
+        }
+        const name = e.target.id.match(/_(.*)/)[1];
+        let { value } = gE('input[name="debuffSkillOrderAllValue"]');
+        if (e.target.checked) {
+          value = value + ((value) ? `,${name}` : name);
+        } else {
+          value = value.replace(new RegExp(`(^|,)${name}(,|$)`), '$2').replace(/^,/, '');
+        }
+        gE('input[name="debuffSkillOrderAllValue"]').value = value;
       };
       // 标签页-其他技能
       gE('.skillOrder', optionBox).onclick = function (e) {
@@ -2102,9 +2502,36 @@
         '<option value="roundLeft">roundLeft</option>',
         '<option value="roundType">roundType</option>',
         '<option value="turn">turn</option>',
+        '<option value="_isRoundType_">isRoundType</option>',
+        '<option value="_ba">ba</option>',
+        '<option value="_gr">gr</option>',
+        '<option value="_iw">iw</option>',
+        '<option value="_ar">ar</option>',
+        '<option value="_rb">rb</option>',
+        '<option value="_tw">tw</option>',
         '<option value="">- - - -</option>',
         '<option value="attackStatus">attackStatus</option>',
+        '<option value="_phys">phys</option>',
+        '<option value="_fire">fire</option>',
+        '<option value="_cold">cold</option>',
+        '<option value="_elec">elec</option>',
+        '<option value="_wind">wind</option>',
+        '<option value="_divi">divi</option>',
+        '<option value="_forb">forb</option>',
+        '<option value="_attackStatusCur">attackStatusCur</option>',
+        '<option value="_physCur">physCur</option>',
+        '<option value="_fireCur">fireCur</option>',
+        '<option value="_coldCur">coldCur</option>',
+        '<option value="_elecCur">elecCur</option>',
+        '<option value="_windCur">windCur</option>',
+        '<option value="_diviCur">diviCur</option>',
+        '<option value="_forbCur">forbCur</option>',
         '<option value="fightingStyle">fightingStyle</option>',
+        '<option value="_nt">nt</option>',
+        '<option value="_1h">1h</option>',
+        '<option value="_2h">2h</option>',
+        '<option value="_dw">dw</option>',
+        '<option value="_staff">staff</option>',
         '<option value="">- - - -</option>',
         '<option value="_isCd_">isCd</option>',
         '<option value="_spirit">spirit</option>',
@@ -2122,7 +2549,7 @@
         `<span class="hvAAInspect" title="off">${String.fromCharCode(0x21F1.toString(10))}</span>`,
         '<select name="groupChoose"></select>',
         `<select name="statusA">${statusOption}</select>`,
-        '<select name="compareAB"><option value="1">＞</option><option value="2">＜</option><option value="3">≥</option><option value="4">≤</option><option value="5">＝</option><option value="6">≠</option></select>',
+        '<select name="compareAB"><option value="&gt;">&gt;</option><option value="&lt;">&lt;</option><option value="&gt;=">≥(&gt;=)</option><option value="&lt;=">≤(&lt;=)</option><option value="=">＝</option><option value="!=">≠(!=,<>,~=)</option></select>',
         `<select name="statusB">${statusOption}</select>`,
         '<button class="groupAdd">ADD</button>',
       ].join(' ');
@@ -2176,7 +2603,7 @@
         input.type = 'text';
         input.className = 'customizeInput';
         input.name = `${target.getAttribute('name')}_${groupChoose - 1}`;
-        input.value = `${selects[1].value},${selects[2].value},${selects[3].value}`;
+        input.value = `${selects[1].value} ${selects[2].value} ${selects[3].value}`;
       };
 
       function attr(target) {
@@ -2337,32 +2764,113 @@
 
     function checkCondition(parms, targets = undefined) {
       let i, j, k, target;
-
       targets ??= [g('battle').monsterStatus[0]];
       if (typeof parms === 'undefined') {
         return targets?.[0] || g('battle').monsterStatus[0];
       }
       const returnValue = function (str) {
-        if (str.match(/^_/)) {
+        if (str.match(/^_/) && !str.match(/\./)) {
           const arr = str.split('_');
           return func[arr[1]](...[...arr].splice(2));
-        } if (str.match(/^'.*?'$|^".*?"$/)) {
-          return str.substr(1, str.length - 2);
         } if (isNaN(str * 1)) {
           const paramList = str.split('.');
-          let result;
+          let result, isInData;
           for (let key of paramList) {
             if (!result) {
               result = (g('battle') ?? getValue('battle', true))[key] ?? g(key) ?? getValue(key) ?? g('option')?.[key];
+              isInData = result;
               continue;
             }
             result = result[key]
           }
-          return isNaN(result * 1) ? result : (result * 1);
+          result ??= isInData ? 0 : result;
+          return isNaN(result * 1) ? result ?? str : (result * 1);
         }
         return str * 1;
       };
       const func = {
+        ar() {
+          return g('battle').roundType === 'ar' ? 1 : 0;
+        },
+        gr() {
+          return g('battle').roundType === 'gr' ? 1 : 0;
+        },
+        tw() {
+          return g('battle').roundType === 'tw' ? 1 : 0;
+        },
+        rb() {
+          return g('battle').roundType === 'rb' ? 1 : 0;
+        },
+        iw() {
+          return g('battle').roundType === 'iw' ? 1 : 0;
+        },
+        ba() {
+          return g('battle').roundType === 'ba' ? 1 : 0;
+        },
+        isRoundType(t) {
+          return g('battle').roundType === t ? 1 : 0;
+        },
+        phys() {
+          return g('attackStatus') * 1 === 0 ? 1 : 0;
+        },
+        fire() {
+          return g('attackStatus') * 1 === 1 ? 1 : 0;
+        },
+        cold() {
+          return g('attackStatus') * 1 === 2 ? 1 : 0;
+        },
+        elec() {
+          return g('attackStatus') * 1 === 3 ? 1 : 0;
+        },
+        wind() {
+          return g('attackStatus') * 1 === 4 ? 1 : 0;
+        },
+        divi() {
+          return g('attackStatus') * 1 === 5 ? 1 : 0;
+        },
+        forb() {
+          return g('attackStatus') * 1 === 6 ? 1 : 0;
+        },
+        attackStatusCur() {
+          return getCurrentAttackStatus() * 1;
+        },
+        physCur() {
+          return getCurrentAttackStatus() * 1 === 0 ? 1 : 0;
+        },
+        fireCur() {
+          return getCurrentAttackStatus() * 1 === 1 ? 1 : 0;
+        },
+        coldCur() {
+          return getCurrentAttackStatus() * 1 === 2 ? 1 : 0;
+        },
+        elecCur() {
+          return getCurrentAttackStatus() * 1 === 3 ? 1 : 0;
+        },
+        windCur() {
+          return getCurrentAttackStatus() * 1 === 4 ? 1 : 0;
+        },
+        diviCur() {
+          return getCurrentAttackStatus() * 1 === 5 ? 1 : 0;
+        },
+        forbCur() {
+          return getCurrentAttackStatus() * 1 === 6 ? 1 : 0;
+        },
+
+        nt() {
+          return g('fightingStyle') * 1 === 1 ? 1 : 0;
+        },
+        onehanded() {
+          return g('fightingStyle') * 1 === 2 ? 1 : 0;
+        },
+        twohanded() {
+          return g('fightingStyle') * 1 === 3 ? 1 : 0;
+        },
+        dw() {
+          return g('fightingStyle') * 1 === 4 ? 1 : 0;
+        },
+        staff() {
+          return g('fightingStyle') * 1 === 5 ? 1 : 0;
+        },
         isCd(id) { // is cool down done
           return isOn(id) ? 1 : 0;
         },
@@ -2370,10 +2878,10 @@
           return gE('#ckey_spirit[src*="spirit_a"]') ? 1 : 0;
         },
         buffTurn(img) {
-          return getBuffTurnFromImg(getPlayerBuff(img), 1);
+          return getBuffTurnFromImg(getPlayerBuff(img));
         },
         targetBuffTurn(img) {
-          return getBuffTurnFromImg(getMonsterBuff(getMonsterID(target), img), 1);
+          return getBuffTurnFromImg(getMonsterBuff(getMonsterID(target), img));
         },
         targetHp() {
           return target.hpNow / target.hp;
@@ -2396,38 +2904,50 @@
             if (!Array.isArray(parms[i])) {
               continue;
             }
-            k = parms[i][j].split(',');
-            const kk = k.toString();
-            k[0] = returnValue(k[0]);
-            k[2] = returnValue(k[2]);
-
-            if (k[0] === undefined || k[0] === null || (typeof k[0] !== "string" && isNaN(k[0]))) {
-              $debug.log(kk[0], k[0]);
-            }
-            if (k[2] === undefined || k[2] === null || (typeof k[2] !== "string" && isNaN(k[2]))) {
-              $debug.log(kk[2], k[2]);
-            }
-
-            switch (k[1]) {
-              case '1':
-                result = k[0] > k[2];
-                break;
-              case '2':
-                result = k[0] < k[2];
-                break;
-              case '3':
-                result = k[0] >= k[2];
-                break;
-              case '4':
-                result = k[0] <= k[2];
-                break;
-              case '5':
-                result = k[0] === k[2];
-                break;
-              case '6':
-                result = k[0] !== k[2];
-                break;
-            }
+            k = parms[i][j].replace(/,\s*(.*)\s*,/, (match, p1) => {
+              switch (p1) {
+                case '>':
+                case '1':
+                  return '>';
+                case '<':
+                case '2':
+                  return '<';
+                case '≥':
+                case '>=':
+                case '3':
+                  return '>=';
+                case '≤':
+                case '<=':
+                case '4':
+                  return '<=';
+                case '=':
+                case '==':
+                case '===':
+                case '5':
+                  return '==';
+                case '≠':
+                case '~=':
+                case '<>':
+                case '!=':
+                case '6':
+                  return '!=';
+              }
+            }).replace(/(?<![=!~><])=(?!=)|≥|≤|≠|~=|<>/g, (match) => {
+              switch (match) {
+                case '≥':
+                  return '>=';
+                case '≤':
+                  return '<=';
+                case '=':
+                case '===':
+                  return '==';
+                case '≠':
+                case '~=':
+                case '<>':
+                  return '!=';
+              }
+            }).replace('_1h', '_onehanded').replace('_2h', '_twohanded');
+            result = $RPN.evaluate(k, returnValue);
             if (!result) {
               parmResult = false;
               break;
@@ -2627,49 +3147,95 @@
     async function asyncSetAbilityData() { try {
       await waitPause();
       $async.logSwitch(arguments);
-      const html = await $ajax.fetch('?s=Character&ss=ab');
+      const html = await $ajax.insert('?s=Character&ss=ab');
       const doc = $doc(html);
+      const abd = {
+        // 'HP Tank': { id: 1101, unlock: [0, 25, 50, 75, 100, 120, 150, 200, 250, 300], level: 0 },
+        // 'MP Tank': { id: 1102, unlock: [0, 30, 60, 90, 120, 160, 210, 260, 310, 350], level: 0 },
+        // 'SP Tank': { id: 1103, unlock: [0, 40, 80, 120, 170, 220, 270, 330, 390, 450], level: 0 },
+        // 'Better Health Pots': { id: 1104, unlock: [0, 100, 200, 300, 400], level: 0 },
+        // 'Better Mana Pots': { id: 1105, unlock: [0, 80, 140, 220, 380], level: 0 },
+        // 'Better Spirit Pots': { id: 1106, unlock: [0, 90, 160, 240, 400], level: 0 },
+        // '1H Damage': { id: 2101, unlock: [0, 100, 200], level: 0 },
+        // '1H Accuracy': { id: 2102, unlock: [50, 150], level: 0 },
+        // '1H Block': { id: 2103, unlock: [250], level: 0 },
+        // '2H Damage': { id: 2201, unlock: [0, 100, 200], level: 0 },
+        // '2H Accuracy': { id: 2202, unlock: [50, 150], level: 0 },
+        // '2H Parry': { id: 2203, unlock: [250], level: 0 },
+        // 'DW Damage': { id: 2301, unlock: [0, 100, 200], level: 0 },
+        // 'DW Accuracy': { id: 2302, unlock: [50, 150], level: 0 },
+        // 'DW Crit': { id: 2303, unlock: [250], level: 0 },
+        // 'Staff Spell Damage': { id: 2501, unlock: [0, 100, 200], level: 0 },
+        // 'Staff Accuracy': { id: 2502, unlock: hvVersion < 91 ? [50, 150, 300] : [50, 150], level: 0 },
+        // 'Staff Damage': { id: 2503, unlock: [0], level: 0 },
+        // 'Cloth Spellacc': { id: 3101, unlock: hvVersion < 91 ? [0, 120, 240] : [120], level: 0 },
+        // 'Cloth Spellcrit': { id: 3102, unlock: [0, 40, 90, 130, 190], level: 0 },
+        // 'Cloth Castspeed': { id: 3103, unlock: [150, 250], level: 0 },
+        // 'Cloth MP': { id: 3104, unlock: [0, 60, 110, 170, 230, 290, 350], level: 0 },
+        // 'Light Acc': { id: 3201, unlock: [0], level: 0 },
+        // 'Light Crit': { id: 3202, unlock: [0, 40, 90, 130, 190], level: 0 },
+        // 'Light Speed': { id: 3203, unlock: [150, 250], level: 0 },
+        // 'Light HP/MP': { id: 3204, unlock: [0, 60, 110, 170, 230, 290, 350], level: 0 },
+        // 'Heavy Crush': { id: 3301, unlock: [0, 75, 150], level: 0 },
+        // 'Heavy Prcg': { id: 3302, unlock: [0, 75, 150], level: 0 },
+        // 'Heavy Slsh': { id: 3303, unlock: [0, 75, 150], level: 0 },
+        // 'Heavy HP': { id: 3304, unlock: [0, 60, 110, 170, 230, 290, 350], level: 0 },
+        // 'Better Weaken': { id: 4201, unlock: [70, 100, 130, 190, 250], level: 0 },
+        'Faster Weaken': { id: 4202, unlock: [80, 165, 250], level: 0 },
+        // 'Better Imperil': { id: 4203, unlock: [130, 175, 230, 285, 330], level: 0 },
+        'Faster Imperil': { id: 4204, unlock: [140, 225, 310], level: 0 },
+        // 'Better Blind': { id: 4205, unlock: [110, 130, 160, 190, 220], level: 0 },
+        'Faster Blind': { id: 4206, unlock: [120, 215, 275], level: 0 },
+        'Mind Control': { id: 4207, unlock: [80, 130, 170], level: 0 },
+        'Better Silence': { id: 4211, unlock: [120, 170, 215], level: 0 },
+        'Better MagNet': hvVersion < 91 ? { id: 4212, unlock: [250, 295, 340, 370, 400], level: 0 } : undefined,
+        'Better Immobilize': hvVersion < 91 ? undefined : { id: 4212, unlock: [250, 295, 340, 370, 400], level: 0 },
+        'Better Slow': { id: 4213, unlock: [30, 50, 75, 105, 135], level: 0 },
+        // 'Better Drain': { id: 4216, unlock: [20, 50, 90], level: 0 },
+        // 'Faster Drain': { id: 4217, unlock: [30, 70, 110, 150, 200], level: 0 },
+        // 'Ether Theft': { id: 4218, unlock: [150], level: 0 },
+        // 'Spirit Theft': { id: 4219, unlock: [150], level: 0 },
+        // 'Better Haste': { id: 4102, unlock: [60, 75, 90, 110, 130], level: 0 },
+        // 'Better Shadow Veil': { id: 4103, unlock: [90, 105, 120, 135, 155], level: 0 },
+        // 'Better Absorb': { id: 4104, unlock: [40, 60, 80], level: 0 },
+        // 'Stronger Spirit': { id: 4105, unlock: [200, 220, 240, 265, 285], level: 0 },
+        // 'Better Heartseeker': { id: 4106, unlock: [140, 185, 225, 265, 305, 345, 385], level: 0 },
+        // 'Better Arcane Focus': { id: 4107, unlock: [175, 205, 245, 285, 325, 365, 405], level: 0 },
+        // 'Better Regen': { id: 4108, unlock: [50, 70, 95, 145, 195, 245, 295, 375, 445, 500], level: 0 },
+        // 'Better Cure': { id: 4109, unlock: [0, 35, 65], level: 0 },
+        // 'Better Spark': { id: 4110, unlock: [100, 125, 150], level: 0 },
+        // 'Better Protection': { id: 4101, unlock: [40, 55, 75, 95, 120], level: 0 },
+        // 'Flame Spike Shield': { id: 4111, unlock: [10, 65, 140, 220, 300], level: 0 },
+        // 'Frost Spike Shield': { id: 4112, unlock: [10, 65, 140, 220, 300], level: 0 },
+        // 'Shock Spike Shield': { id: 4113, unlock: [10, 65, 140, 220, 300], level: 0 },
+        // 'Storm Spike Shield': { id: 4114, unlock: [10, 65, 140, 220, 300], level: 0 },
+        'Conflagration': { id: 4301, unlock: [50, 100, 150, 200, 250, 300, 400], level: 0 },
+        'Cryomancy': { id: 4302, unlock: [50, 100, 150, 200, 250, 300, 400], level: 0 },
+        'Havoc': { id: 4303, unlock: [50, 100, 150, 200, 250, 300, 400], level: 0 },
+        'Tempest': { id: 4304, unlock: [50, 100, 150, 200, 250, 300, 400], level: 0 },
+        // 'Sorcery': { id: 4305, unlock: [70, 140, 210, 280, 350], level: 0 },
+        // 'Elementalism': { id: 4306, unlock: [85, 170, 255, 340, 425], level: 0 },
+        // 'Archmage': { id: 4307, unlock: [90, 180, 270, 360, 450], level: 0 },
+        'Better Corruption': { id: 4401, unlock: [75, 150], level: 0 },
+        'Better Disintegrate': { id: 4402, unlock: [175, 250], level: 0 },
+        'Better Ragnarok': { id: 4403, unlock: [250, 325, 400], level: 0 },
+        // 'Ripened Soul': { id: 4404, unlock: [150, 300, 450], level: 0 },
+        // 'Dark Imperil': { id: 4405, unlock: [175, 225, 275, 325, 375], level: 0 },
+        'Better Smite': { id: 4501, unlock: [75, 150], level: 0 },
+        'Better Banish': { id: 4502, unlock: [175, 250], level: 0 },
+        'Better Paradise': { id: 4503, unlock: [250, 325, 400], level: 0 },
+        // 'Soul Fire': { id: 4504, unlock: [150, 300, 450], level: 0 },
+        // 'Holy Imperil': { id: 4505, unlock: [175, 225, 275, 325, 375], level: 0 },
+      }
+
       let ability = {};
-      const loadSucceed = true;
-      await Promise.all(Array.from(gE('#ability_treelist>div>img', 'all', doc)).map(async img => {
-        try {
-          const _ = img.getAttribute('onclick')?.match(/(\?s=(.*)tree=(.*))'/);
-          const [href, type] = _ ? [_[1], _[3]] : ['?s=Character&ss=ab&tree=general', 'general'];
-          switch (type) {
-            case 'deprecating1':
-            case 'deprecating2':
-            case 'elemental':
-            case 'forbidden':
-            case 'divine':
-              break;
-            default:
-              return;
-          }
-          const html = await $ajax.fetch(href);
-          const doc = $doc(html);
-          const slots = Array.from(gE('.ability_slotbox>div>div', 'all', doc)).forEach(slot => {
-            const id = slot.id.match(/_(\d*)/)[1];
-            const parent = slot.parentNode.parentNode.parentNode;
-            ability[id] = {
-              name: gE('.fc2', parent).innerText,
-              type: type,
-              level: Array.from(gE('.aw1,.aw2,.aw3,.aw4,.aw5,.aw6,.aw7,.aw8,.aw9,.aw10', parent).children).map(div => div.style.cssText.indexOf('f.png') === -1 ? 0 : 1).reduce((x, y) => x + y),
-            }
-          });
-        } catch (e) {
-          console.error(e);
-          loadSucceed = false;
-        }
-      }));
-      if (!loadSucceed) {
-        ability = getValue('ability');
-      }
-      for (let ab in ability) {
-        if (typeof ability[ab] !== 'object') {
-          break;
-        }
-        ability[ab] = ability[ab].level; // old version data
-      }
+      gE('#ability_top div[onmouseover*="overability"]', 'all', doc).forEach((div) => {
+        const exec = div.getAttribute('onmouseover').match(/overability\(\d+, '([^']+)','.+?','(?:(Not Acquired|At Maximum)|Requires <strong>Level (\d+).+?)','(Not Acquired|At Maximum|Requires <strong>Level (\d+).+?)'/);
+        const name = exec[1];
+        const ab = abd[name];
+        if (!ab) return;
+        ability[ab.id] = exec[2] ? 0 : ab.unlock.indexOf(1*exec[3]) + 1;
+      });
       setValue('ability', ability);
       $async.logSwitch(arguments);
     } catch (e) { console.error(e) } }
@@ -2677,21 +3243,22 @@
     async function asyncSetStamina() { try {
       await waitPause();
       $async.logSwitch(arguments);
-      const stamina = getValue('stamina') ?? {};
-      [stamina.current, stamina.perk]= await Promise.all([
+      const stamina = getValue('stamina', true) ?? { ratio: 1 };
+      let [last, lastTime] = [stamina.current, stamina.time];
+      [stamina.current, stamina.perk] = await Promise.all([
         getCurrentStamina(),
         (async () => { try {
+          const perk = stamina.perk ?? {};
           if (isIsekai || !g('option').restoreStamina) {
-            return;
+            return perk;
           }
           let currentID = getCurrentUser();
-          const perk = stamina.perk ?? {};
           if (perk[currentID]) {
-            return;
+            return perk;
           }
-          const html = await $ajax.fetch('https://e-hentai.org/hathperks.php');
+          const html = await $ajax.insert('https://e-hentai.org/hathperks.php');
           if (!html) {
-            return;
+            return perk;
           }
           const doc = $doc(html);
           const perks = gE('.stuffbox>table>tbody>tr', 'all', doc);
@@ -2701,7 +3268,18 @@
           return perk;
         } catch(e) {console.error(e) }})()
       ]);
+      stamina.time = time(0);
+      const lastCost = stamina.lastCost;
+      if (stamina.lastCost) {
+        last += Math.floor(stamina.time / _1h) - Math.floor(lastTime / _1h);
+        const delta = last - stamina.current;
+        if (delta !== 0 && stamina.lastCost > 0.06 ) {
+          stamina.ratio = Math.max(1, delta / stamina.lastCost);
+          stamina.lastCost = undefined;
+        }
+      }
       setValue('stamina', stamina);
+      console.log('stamina', stamina, last, stamina.current, lastCost, stamina.ratio);
       $async.logSwitch(arguments);
     } catch (e) { console.error(e) } }
 
@@ -2711,7 +3289,7 @@
       }
       await waitPause();
       $async.logSwitch(arguments);
-      const html = await $ajax.fetch('?s=Character&ss=it');
+      const html = await $ajax.insert('?s=Character&ss=it');
       const items = {};
       for (let each of gE('.nosel.itemlist>tbody', $doc(html)).children) {
         const name = each.children[0].children[0].innerText;
@@ -2764,20 +3342,20 @@
       }
       if (hvVersion < 91) {
         const href = `?s=Forge&ss=re`;
-        const doc = $doc(await $ajax.fetch(href));
-        const json = JSON.parse((await $ajax.fetch(gE('#mainpane>script[src]', doc).src)).match(/{.*}/)[0]);
+        const doc = $doc(await $ajax.insert(href));
+        const json = JSON.parse((await $ajax.insert(gE('#mainpane>script[src]', doc).src)).match(/{.*}/)[0]);
         eqps = await Promise.all(Array.from(gE('.eqp>[id]', 'all', doc)).map(async eqp => { try {
           const id = eqp.id.match(/\d+/)[0];
           const condition = 1 * json[id].d.match(/Condition: \d+ \/ \d+ \((\d+)%\)/)[1];
           if (condition > threshold) {
             return;
           }
-          const after = $doc(await $ajax.fetch(href, `select_item=${id}`));
+          const after = $doc(await $ajax.insert(href, `select_item=${id}`));
           return gE('.messagebox_error', )?.innerText ? undefined : json[id].t;
         } catch (e) { console.error(e) } }));
       } else {
         const href = `?s=Bazaar&ss=am&screen=repair&filter=equipped`;
-        const doc = $doc(await $ajax.fetch(href));
+        const doc = $doc(await $ajax.insert(href));
         const token = gE('#equipform>input[name="postoken"]', doc).value;
         eqps = await Promise.all(Array.from(gE('#equiplist>table>tbody>tr:not(.eqselall):not(.eqtplabel)', 'all', doc)).map(async eqp => { try {
           const id = gE('input', eqp).value;
@@ -2785,13 +3363,13 @@
           if (condition > threshold) {
             return;
           }
-          const after = $doc(await $ajax.fetch(href, `&eqids[]=${id}&postoken=${token}&replace_charms=on`));
+          const after = $doc(await $ajax.insert(href, `&eqids[]=${id}&postoken=${token}&replace_charms=on`));
           return gE(`#e${id}`, after) ? gE('.lc', eqp).childNodes[2].textContent : undefined;
         } catch (e) { console.error(e) } }));
       }
       eqps = eqps.filter(e=>e);
       if (eqps.length) {
-        console.log('eqps need repair: ', eqps.join('\n'));
+        console.log('eqps need repair:\n', eqps.join('\n '));
         document.title = `[R!]` + document.title;
       }
       $async.logSwitch(arguments);
@@ -2808,11 +3386,11 @@
       let count;
       if (hvVersion < 91) {
         const href = `?s=Character&ss=in`;
-        const doc = $doc(await $ajax.fetch(href));
+        const doc = $doc(await $ajax.insert(href));
         count = gE('#eqinv_bot>div>div>div', doc).innerText.match(/: (\d+) \/ \d+/)[1];
       } else {
         const href = `?s=Bazaar&ss=am`;
-        const doc = $doc(await $ajax.fetch(href));
+        const doc = $doc(await $ajax.insert(href));
         count = gE('#equipblurb>table>tbody>tr>td:nth-child(2)', doc).innerText;
       }
       $async.logSwitch(arguments);
@@ -2829,7 +3407,8 @@
         }
       }
       const staminaChecked = await checkStamina(condition.staminaLow, condition.staminaCost);
-      console.log(`stamina check done:\n${condition.staminaLow ? `low: ${condition.staminaLow}\n` : ''}${condition.staminaCost ? `cost: ${condition.staminaCost}\n` : ''}status: ${staminaChecked === 1 ? 'succeed' : staminaChecked === 0 ? 'failed' : 'failed with nature recover'}`);
+      const option = g('option');
+      console.log(`stamina check done:\nlow: ${condition.staminaLow ?? option.staminaLow}\n${condition.staminaCost ? `cost: ${condition.staminaCost}\n` : ''}status: ${staminaChecked === 1 ? 'succeed' : staminaChecked === 0 ? 'failed' : `failed with nature recover ${option.staminaLowWithReNat}`}`);
       if (staminaChecked === 1) { // succeed
         return true;
       }
@@ -2843,11 +3422,11 @@
     }
 
     async function getCurrentStamina() { try {
-      return gE('#stamina_readout .fc4.far>div', $doc(await $ajax.fetch(window.location.href))).textContent.match(/\d+/)[0] * 1;
+      return gE('#stamina_readout .fc4.far>div', $doc(await $ajax.insert(window.location.href))).textContent.match(/\d+/)[0] * 1;
     } catch(e) { console.error(e); }}
 
     async function checkStamina(low, cost) {
-      const stamina = getValue('stamina');
+      const stamina = getValue('stamina', true);
       const option = g('option');
       let now = time(0);
       let hours = Math.floor(now / _1h);
@@ -2871,7 +3450,7 @@
         const isPerk = (stamina.perk??{})[getCurrentUser()];
         const recover = recoverItems[id] ? isPerk ? 20 : 10 : 5;
         if (current + recover >= 100) continue; // check if overflow by (20 or 10) -> (5)
-        const recovered = gE('#stamina_readout .fc4.far>div', $doc(await $ajax.fetch(window.location.href, 'recover=stamina'))).textContent.match(/\d+/)[0] * 1;
+        const recovered = gE('#stamina_readout .fc4.far>div', $doc(await $ajax.insert(window.location.href, 'recover=stamina'))).textContent.match(/\d+/)[0] * 1;
         goto();
         break;
       }
@@ -2898,7 +3477,7 @@
       }
       cd = Math.max(0, cd);
       const ui = gE('.encounterUI') ?? (() => {
-        const ui = gE('body').appendChild(cE('a'));
+        const ui = (gE('.hvAAPauseUI') ?? gE('body')).appendChild(cE('a'));
         ui.className = 'encounterUI';
         ui.title = `${time(3, last)}\nEncounter Time: ${count}`;
         if (!gE('#battle_main')) {
@@ -2935,7 +3514,7 @@
     } catch (e) { console.error(e) } }
 
     async function onEncounter() { try {
-      while (!(await $ajax.fetch(href))) { // perhaps network connect not available
+      while (!(await $ajax.insert(href))) { // perhaps network connect not available
         await pauseAsync(_1m);
       }
       $async.logSwitchStrict('updateEncounter', true);
@@ -2977,7 +3556,7 @@
         arena.token = {};
         await Promise.all(['gr', 'ar', 'rb'].map(async site => {
           try {
-            const doc = $doc(await $ajax.fetch(`?s=Battle&ss=${site}`));
+            const doc = $doc(await $ajax.insert(`?s=Battle&ss=${site}`));
             getStartBattleButtons(doc).forEach(btn => { arena.token[btn.id] = btn.token ?? null; });
           } catch (e) { console.error(e) }
         }));
@@ -3050,9 +3629,11 @@
         105: 1, 106: 1, 107: 1, 108: 1, 109: 1, 110: 1, 111: 1, 112: 1,
         gr: 0
       }
-      let stamina = await getCurrentStamina();
+      let stamina = getValue('stamina', true);
+      stamina.current = await getCurrentStamina();
+      stamina.time = time(0);
       for (let id in staminaCost) {
-        staminaCost[id] *= (isIsekai ? 2 : 1) * (stamina >= 60 ? 0.03 : 0.02)
+        staminaCost[id] *= (isIsekai ? 2 : 1) * (stamina.current >= 60 ? 0.03 : 0.02)
       }
 
       let query;
@@ -3083,13 +3664,15 @@
       if (hvVersion < 91) {
         token = `&inittoken=${token}`;
       } else {
-        token = `&postoken=${gE('#initform>input[name="postoken"]', $doc(await $ajax.fetch(query))).value}`;
+        token = `&postoken=${gE('#initform>input[name="postoken"]', $doc(await $ajax.insert(query))).value}`;
       }
       await waitPause();
       writeArenaStart();
-      await $ajax.fetch(query, `initid=${id === 'gr' ? 1 : id}${token}`);
+      await $ajax.insert(query, `initid=${id === 'gr' ? 1 : id}${token}`);
       console.log('Arena Fetch Done.', 'altBattleFirst:', option.altBattleFirst);
-      if (option.altBattleFirst && await $ajax.fetch(href.replace('hentaiverse.org', 'alt.hentaiverse.org').replace('alt.alt', 'alt'))) {
+      stamina.lastCost = id === 'gr' ? undefined : cost;
+      setValue('stamina', stamina);
+      if (option.altBattleFirst && await $ajax.insert(href.replace('hentaiverse.org', 'alt.hentaiverse.org').replace('alt.alt', 'alt'))) {
         console.log('Arena goto alt');
         gotoAlt(true);
       } else {
@@ -3101,6 +3684,7 @@
 
     // 战斗中//
     function onBattleRound() { // 主程序
+      if (!gE('#battle_main')) return;
       let battle = getValue('battle', true);
       if (!battle || !battle.roundAll) { // 修复因多个页面/世界同时读写造成缓存数据异常的情况
         battle = JSON.parse(JSON.stringify(g('battle')));
@@ -3285,7 +3869,8 @@
       }
       const taskList = {
         'Pause': autoPause,
-        'Rec': autoRecover,
+        'Cure': ()=>autoRecover(true),
+        'Rec': ()=>autoRecover(false),
         'Def': autoDefend,
         'Scroll': useScroll,
         'Channel': useChannelSkill,
@@ -3293,11 +3878,13 @@
         'Infus': useInfusions,
         'Debuff': useDeSkill,
         'Focus': autoFocus,
-        'SS': autoSS,
+        'SS': ()=>autoSS(false),
+        'SSDisable': ()=>autoSS(true),
         'Skill': autoSkill,
         'Atk': attack,
       };
-      const names = g('option').battleOrderName?.split(',') ?? [];
+      const option = g('option');
+      const names = option.battleOrderDefaultOnly ? [] : option.battleOrderName?.split(',') ?? [];
       for (let i = 0; i < names.length; i++) {
         if (taskList[names[i]]()) {
           onStepInDone();
@@ -3313,12 +3900,19 @@
       }
     }
 
-    function getBuffTurnFromImg(buff, nanValue = NaN) {
+    function getBuffTurnFromImg(buff) {
       if (!buff) {
         return 0;
       }
-      buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2] * 1;
-      return isNaN(buff) ? nanValue : buff;
+      buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2];
+      if (!buff) {
+        buff = 0;
+      } else if (buff ==='permanent') {
+        buff = Infinity;
+      } else {
+        buff *= 1;
+      }
+      return buff;
     }
 
     function getMonsterID(s) {
@@ -3351,11 +3945,14 @@
          * 按照技能范围，获取包含原目标且范围内最终权重(finweight)之和最低的范围的中心目标
          * @param {int} id id from g('battle').monsterStatus.sort(objArrSort('finWeight'));
          * @param {int} range radius, 0 for single-target and all-targets, 1 for treble-targets, ..., n for (2n+1) targets
-         * @param {(target) => bool} excludeCondition target with id
+         * @param {(target) => number} excludeWeightRatio target with id
          * @returns
          */
-    function getRangeCenter(target, range = undefined, isWeaponAttack = false, excludeCondition = undefined, forceUseIndex = undefined) {
-      if (!range) {
+    function getRangeCenter(target, range, isWeaponAttack, excludeWeightRatio, forceUseIndex) {
+      let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
+      msTemp.sort(objArrSort('order'));
+      // 0. 范围大于等于全体时，直接释放全体
+      if (!range || range <= msTemp.length) {
         return { id: getMonsterID(target), rank: Number.MAX_SAFE_INTEGER };
       }
       const option = g('option');
@@ -3363,32 +3960,43 @@
       let order = target.order;
       let newOrder = order;
       // sort by order to fix id
-      let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
-      msTemp.sort(objArrSort('order'));
       let unreachableWeight = option.unreachableWeight;
       let minRank = Number.MAX_SAFE_INTEGER;
-      for (let i = order - range; i <= order + range; i++) {
-        if (i < 0 || i >= msTemp.length || msTemp[i].isDead) {
-          continue; // 无法选中
-        }
+      // 1. 以选中目标为中心，优先向上
+      // 2. 超过顶部则向下找
+      // 3. 死亡、超过底下的将被溢出抛弃
+      const up = Math.floor(range / 2);
+      const down = range - up - 1;
+      const top = order <= range ? 0 : Math.max(order - down, 0);
+      const bottom = Math.min(order + up, msTemp.length-1);
+      for (let i = top; i <= bottom; i++) {
+        let center = i;
+        if (msTemp[center].isDead) continue;
         let rank = 0;
-        for (let j = i - range; j <= (i + range); j++) {
-          let cew = j === i ? centralExtraWeight : 0; // cew <= 0, 增加未命中权重，降低命中权重
-          let mon = msTemp[j];
-          if (j < 0 || j >= msTemp.length // 超出范围
-              || mon.isDead // 死亡目标
-              || (excludeCondition && excludeCondition(mon))) { // 特殊排除判定
-            rank += unreachableWeight - cew;
+        let overflow = Math.max(up-center,0);
+        const [min, max] = [center - up + overflow, center + down + overflow];
+        for (let inRange = min; inRange <= max; inRange++) {
+          let cew = inRange === center ? centralExtraWeight : 0; // cew <= 0, 增加未命中权重，降低命中权重
+          let mon = msTemp[inRange];
+          if (inRange < 0 || inRange >= msTemp.length || mon.isDead) { // 超出范围 或 死亡目标
+            rank += unreachableWeight;
             continue;
           }
-          // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
-          rank += cew;
-          // 强制使用顺序而非权重时，全部使用统一的权重而非怪物状态
-          rank += forceUseIndex ? -1 : mon.finWeight;
+          if (excludeWeightRatio) {
+            // 特殊排除(ratio === 1则直接排除，0<ratio<1则优先于溢出的情况, ratio === 0 则不排除, ratio < 0 相当于增加权重?)
+            const ratio = excludeWeightRatio(mon);
+            rank += ratio * unreachableWeight;
+            if (ratio>0) {
+              continue;
+            }
+          }
+          rank += cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
+          rank += forceUseIndex ? -1 : mon.finWeight; // 强制使用顺序而非权重时，全部使用统一的权重而非怪物状态
         }
         if (rank < minRank) {
-          newOrder = i;
+          newOrder = center;
           minRank = rank;
+          break;
         }
       }
       return { id: getMonsterID(newOrder), rank: minRank };
@@ -3495,12 +4103,13 @@
           await waitPause();
           if (g('monsterAlive') > 0) { // Defeat
             setExitBattleTimeout('Defeat');
+            clearBattleUnresponsive();
           } else if (g('battle').roundNow === g('battle').roundAll) { // Victory
             setExitBattleTimeout('Victory');
+            clearBattleUnresponsive();
           } else { // Next Round
             setTimeoutOrExecute(onNewRound, option.NewRoundWaitTime * _1s);
           }
-          clearBattleUnresponsive();
 
           async function onNewRound() { try {
             await waitPause();
@@ -3508,7 +4117,7 @@
               goto();
               return;
             }
-            const html = await $ajax.fetch(window.location.href);
+            const html = await $ajax.insert(window.location.href);
             gE('#pane_completion').removeChild(gE('#btcp'));
             clearBattleUnresponsive();
             const doc = $doc(html)
@@ -3598,6 +4207,9 @@
 
     function newRound(isNew) { // New Round
       let battle = isNew ? {} : getValue('battle', true);
+      if (isNew) {
+        setValue('skillOTOS', {});
+      }
       if (!battle) {
         battle = JSON.parse(JSON.stringify(g('battle') ?? {}));
         battle.monsterStatus?.sort(objArrSort('order'));
@@ -3651,19 +4263,19 @@
           setEncounter(encounter);
         }
       }
-      if (/You lose \d+ Stamina/.test(battleLog[0].textContent)) {
-        const staminaLostLog = getValue('staminaLostLog', true) || {};
-        staminaLostLog[time(3)] = battleLog[0].textContent.match(/You lose (\d+) Stamina/)[1] * 1;
-        setValue('staminaLostLog', staminaLostLog);
-        const losedStamina = battleLog[0].textContent.match(/\d+/)[0] * 1;
-        if (losedStamina >= g('option').staminaLose) {
-          setAlarm('Error');
-          if (!_alert(1, '当前Stamina过低\n或Stamina损失过多\n是否继续？', '當前Stamina過低\n或Stamina損失過多\n是否繼續？', 'Continue?\nYou either have too little Stamina or have lost too much')) {
-            pauseChange();
-            return;
-          }
-        }
-      }
+      // if (/You lose \d+ Stamina/.test(battleLog[0].textContent)) {
+      //   const staminaLostLog = getValue('staminaLostLog', true) || {};
+      //   staminaLostLog[time(3)] = battleLog[0].textContent.match(/You lose (\d+) Stamina/)[1] * 1;
+      //   setValue('staminaLostLog', staminaLostLog);
+      //   const losedStamina = battleLog[0].textContent.match(/\d+/)[0] * 1;
+      //   if (losedStamina >= g('option').staminaLose) {
+      //     setAlarm('Error');
+      //     if (!_alert(1, '当前Stamina过低\n或Stamina损失过多\n是否继续？', '當前Stamina過低\n或Stamina損失過多\n是否繼續？', 'Continue?\nYou either have too little Stamina or have lost too much')) {
+      //       pauseChange();
+      //       return;
+      //     }
+      //   }
+      // }
 
       const roundPrev = battle.roundNow;
 
@@ -3722,17 +4334,10 @@
 
       if (roundPrev !== battle.roundNow) {
         battle.turn = 0;
+        setValue('skillOTOS', {});
       }
       battle.roundLeft = battle.roundAll - battle.roundNow;
       setValue('battle', battle);
-
-      g('skillOTOS', {
-        OFC: 0,
-        FRD: 0,
-        T3: 0,
-        T2: 0,
-        T1: 0,
-      });
     }
 
     function killBug() { // 在 HentaiVerse 发生导致 turn 损失的 bug 时发出警告并移除问题元素: https://ehwiki.org/wiki/HentaiVerse_Bugs_%26_Errors#Combat
@@ -3933,18 +4538,20 @@
       g('battle', battle);
     }
 
-    function autoRecover() { // 自动回血回魔
-      if (!g('option').item) {
+    function autoRecover(isCureOnly) { // 自动回血回魔
+      const option = g('option');
+      if (!option.item) {
         return false;
       }
-      if (!g('option').itemOrderValue) {
-        return false;
-      }
-      const name = g('option').itemOrderName.split(',');
-      const order = g('option').itemOrderValue.split(',');
+      const name = splitOrders(option.itemOrderName, ['FC', 'HE', 'LE', 'HG', 'HP', 'Cure', 'MG', 'MP', 'ME', 'SG', 'SP', 'SE', 'Mystic', 'CC', 'ED']);
+      const order = splitOrders(option.itemOrderValue, [313, 11199, 11501, 10005, 11195, 311, 10006, 11295, 11299, 10007, 11395, 11399, 10008, 11402, 11401]);
+      const cures = [313, 11199, 11501, 10005, 11195, 311];
       for (let i = 0; i < name.length; i++) {
         let id = order[i];
-        if (g('option').item[name[i]] && checkCondition(g('option')[`item${name[i]}Condition`]) && isOn(id)) {
+        if (isCureOnly && !cures.includes(id)){
+          continue;
+        }
+        if (option.item[name[i]] && checkCondition(option[`item${name[i]}Condition`]) && isOn(id)) {
           (gE(`.bti3>div[onmouseover*="(${id})"]`) ?? gE(id)).click();
           return true;
         }
@@ -3953,19 +4560,20 @@
     }
 
     function useScroll() { // 自动使用卷轴
-      if (!g('option').scrollSwitch) {
+      const option = g('option');
+      if (!option.scrollSwitch) {
         return false;
       }
-      if (!g('option').scroll) {
+      if (!option.scroll) {
         return false;
       }
-      if (!g('option').scrollRoundType) {
+      if (!option.scrollRoundType) {
         return false;
       }
-      if (!g('option').scrollRoundType[g('battle').roundType]) {
+      if (!option.scrollRoundType[g('battle').roundType]) {
         return false;
       }
-      if (!checkCondition(g('option').scrollCondition)) {
+      if (!checkCondition(option.scrollCondition)) {
         return false;
       }
       const scrollLib = {
@@ -4015,15 +4623,15 @@
           img1: 'absorb',
         },
       };
-      const scrollFirst = (g('option').scrollFirst) ? '_scroll' : '';
+      const scrollFirst = (option.scrollFirst) ? '_scroll' : '';
       for (const i in scrollLib) {
-        if (!g('option').scroll[i]) {
+        if (!option.scroll[i]) {
           continue;
         }
         if (!gE(`.bti3>div[onmouseover*="(${scrollLib[i].id})"]`)) {
           continue;
         }
-        if (!checkCondition(g('option')[`scroll${i}Condition`])) {
+        if (!checkCondition(option[`scroll${i}Condition`])) {
           continue;
         }
         for (let j = 1; j <= scrollLib[i].mult; j++) {
@@ -4038,108 +4646,111 @@
     }
 
     function useChannelSkill() { // 自动施法Channel技能
-      if (!g('option').channelSkillSwitch) {
-        return false;
-      }
-      if (!g('option').channelSkill) {
+      const option = g('option');
+      if (!option.channelSkillSwitch) {
         return false;
       }
       if (!getPlayerBuff('channeling')) {
         return false;
       }
       const skillLib = {
-        Pr: {
-          name: 'Protection',
-          id: '411',
-          img: 'protection',
+        SS: {
+          name: 'Spirit Shield',
+          id: '423',
+          img: 'spiritshield',
         },
         SL: {
           name: 'Spark of Life',
           id: '422',
           img: 'sparklife',
         },
-        SS: {
-          name: 'Spirit Shield',
-          id: '423',
-          img: 'spiritshield',
-        },
-        Ha: {
-          name: 'Haste',
-          id: '412',
-          img: 'haste',
-        },
-        AF: {
-          name: 'Arcane Focus',
-          id: '432',
-          img: 'arcanemeditation',
-        },
-        He: {
-          name: 'Heartseeker',
-          id: '431',
-          img: 'heartseeker',
-        },
-        Re: {
-          name: 'Regen',
-          id: '312',
-          img: 'regen',
-        },
-        SV: {
-          name: 'Shadow Veil',
-          id: '413',
-          img: 'shadowveil',
+        Pr: {
+          name: 'Protection',
+          id: '411',
+          img: 'protection',
         },
         Ab: {
           name: 'Absorb',
           id: '421',
           img: 'absorb',
         },
+        SV: {
+          name: 'Shadow Veil',
+          id: '413',
+          img: 'shadowveil',
+        },
+        Re: {
+          name: 'Regen',
+          id: '312',
+          img: 'regen',
+        },
+        Ha: {
+          name: 'Haste',
+          id: '412',
+          img: 'haste',
+        },
+        He: {
+          name: 'Heartseeker',
+          id: '431',
+          img: 'heartseeker',
+        },
+        AF: {
+          name: 'Arcane Focus',
+          id: '432',
+          img: 'arcanemeditation',
+        },
+
+        'Cloak of the Fallen': {
+          id: getPlayerBuff('sparklife') ? undefined : 422,
+        }
       };
-      let i, j;
-      const skillPack = g('option').buffSkillOrderValue.split(',');
-      if (g('option').channelSkill) {
-        for (i = 0; i < skillPack.length; i++) {
-          j = skillPack[i];
-          if (g('option').channelSkill[j] && !getPlayerBuff(skillLib[j].img) && isOn(skillLib[j].id)) {
-            gE(skillLib[j].id).click();
-            return true;
-          }
+      if (option.channelSkill) {
+        const skillPack = splitOrders(option.buffSkillOrderValue, ['SS', 'SL', 'Pr', 'Ab', 'SV', 'Re', 'Ha', 'He', 'AF']);
+        for (const buff of skillPack) {
+          const current = getBuffTurnFromImg(getPlayerBuff(skillLib[buff].img));
+          const threshold = option.channelThreshold ? option.channelThreshold[buff] ?? 0 : 0;
+          if (threshold > 0 && current >= threshold) continue;
+          if (!option.channelSkill[buff] || getPlayerBuff(skillLib[buff].img)) continue;
+          if (!isOn(skillLib[buff].id)) continue;
+          gE(skillLib[buff].id).click();
+          return true;
         }
       }
-      if (g('option').channelSkill2 && g('option').channelSkill2OrderValue) {
-        const order = g('option').channelSkill2OrderValue.split(',');
-        for (i = 0; i < order.length; i++) {
-          if (isOn(order[i])) {
-            gE(order[i]).click();
-            return true;
+      if (option.channelSkill2) {
+        const order = splitOrders(option.channelSkill2OrderValue);
+        for (const id of order) {
+          const buff = Object.keys(skillLib).find(s => skillLib[s].id * 1 === 1 * id);
+          if (buff) {
+            const current = getBuffTurnFromImg(getPlayerBuff(skillLib[buff].img));
+            const threshold = option.channelThreshold ? option.channelThreshold[buff] ?? 0 : 0;
+            if (threshold > 0 && current > threshold) continue;
           }
+          if (!isOn(id)) continue;
+          gE(id).click();
+          return true;
         }
       }
-      const buff = gE('#pane_effects>img', 'all');
-      if (buff.length > 0) {
-        const name2Skill = {
-          'Protection': 'Pr',
-          'Spark of Life': 'SL',
-          'Spirit Shield': 'SS',
-          'Hastened': 'Ha',
-          'Arcane Focus': 'AF',
-          'Heartseeker': 'He',
-          'Regen': 'Re',
-          'Shadow Veil': 'SV',
-        };
-        for (i = 0; i < buff.length; i++) {
-          const spellName = buff[i].getAttribute('onmouseover').match(/'(.*?)'/)[1];
-          const buffLastTime = getBuffTurnFromImg(buff[i]);
-          if (isNaN(buffLastTime) || buff[i].src.match(/_scroll.png$/)) {
+      if (option.channelRebuff) {
+        let minBuff, minTime;
+        for (const buff in skillLib) {
+          let current = getBuffTurnFromImg(getPlayerBuff(skillLib[buff].img));
+          const threshold = option.channelThreshold ? option.channelThreshold[buff] ?? 0 : 0;
+          if (threshold > 0 && current > threshold) continue;
+
+          current = isNaN(current) ? 0 : current;
+          if (getPlayerBuff(skillLib[buff].img)?.src.match(/_scroll.png$/) || (minTime && current >= minTime)) {
             continue;
-          } else {
-            if (spellName === 'Cloak of the Fallen' && !getPlayerBuff('sparklife') && isOn('422')) {
-              gE('422').click();
-              return true;
-            } if (spellName in name2Skill && isOn(skillLib[name2Skill[spellName]].id)) {
-              gE(skillLib[name2Skill[spellName]].id).click();
-              return true;
-            }
           }
+          const id = skillLib[buff].id;
+          if (!current && (!option.buffSkillSwitch || !option.buffSkill[buff])) continue;
+
+          if (!isOn(id)) continue;
+          minBuff = id;
+          minTime = current;
+        }
+        if (minBuff) {
+          gE(minBuff).click();
+          return true;
         }
       }
       return false;
@@ -4147,50 +4758,50 @@
 
     function useBuffSkill() { // 自动施法BUFF技能
       const skillLib = {
-        Pr: {
-          name: 'Protection',
-          id: '411',
-          img: 'protection',
+        SS: {
+          name: 'Spirit Shield',
+          id: '423',
+          img: 'spiritshield',
         },
         SL: {
           name: 'Spark of Life',
           id: '422',
           img: 'sparklife',
         },
-        SS: {
-          name: 'Spirit Shield',
-          id: '423',
-          img: 'spiritshield',
+        Pr: {
+          name: 'Protection',
+          id: '411',
+          img: 'protection',
         },
-        Ha: {
-          name: 'Haste',
-          id: '412',
-          img: 'haste',
-        },
-        AF: {
-          name: 'Arcane Focus',
-          id: '432',
-          img: 'arcanemeditation',
-        },
-        He: {
-          name: 'Heartseeker',
-          id: '431',
-          img: 'heartseeker',
-        },
-        Re: {
-          name: 'Regen',
-          id: '312',
-          img: 'regen',
+        Ab: {
+          name: 'Absorb',
+          id: '421',
+          img: 'absorb',
         },
         SV: {
           name: 'Shadow Veil',
           id: '413',
           img: 'shadowveil',
         },
-        Ab: {
-          name: 'Absorb',
-          id: '421',
-          img: 'absorb',
+        Re: {
+          name: 'Regen',
+          id: '312',
+          img: 'regen',
+        },
+        Ha: {
+          name: 'Haste',
+          id: '412',
+          img: 'haste',
+        },
+        He: {
+          name: 'Heartseeker',
+          id: '431',
+          img: 'heartseeker',
+        },
+        AF: {
+          name: 'Arcane Focus',
+          id: '432',
+          img: 'arcanemeditation',
         },
       };
       const option = g('option');
@@ -4204,7 +4815,7 @@
         return false;
       }
       let i;
-      const skillPack = option.buffSkillOrderValue.split(',');
+      const skillPack = splitOrders(option.buffSkillOrderValue, ['SS', 'SL', 'Pr', 'Ab', 'SV', 'Re', 'Ha', 'He', 'AF']);
       for (i = 0; i < skillPack.length; i++) {
         let buff = skillPack[i];
         if (!option.buffSkill[buff]) continue;
@@ -4239,7 +4850,7 @@
         },
       };
       for (i in draughtPack) {
-        if (!getPlayerBuff(draughtPack[i].img) && g('option').buffSkill && g('option').buffSkill[i] && checkCondition(g('option')[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`)) {
+        if (!getPlayerBuff(draughtPack[i].img) && option.buffSkill && option.buffSkill[i] && checkCondition(option[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`)) {
           gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`).click();
           return true;
         }
@@ -4251,10 +4862,11 @@
       if (g('attackStatus') === 0) {
         return false;
       }
-      if (!g('option').infusionSwitch) {
+      const option = g('option');
+      if (!option.infusionSwitch) {
         return false;
       }
-      if (!checkCondition(g('option').infusionCondition)) {
+      if (!checkCondition(option.infusionCondition)) {
         return false;
       }
 
@@ -4285,20 +4897,27 @@
     }
 
     function autoFocus() {
-      if (g('option').focus && !gE(`#pane_effects>img[src*="focus"]`) && checkCondition(g('option').focusCondition) && !checkEtherTap()) {
+      const option = g('option');
+      if (option.focus && checkCondition(option.focusCondition)) {
         gE('#ckey_focus').click();
         return true;
       }
       return false;
     }
 
-    function autoSS() {
+    function autoSS(isDisableOnly) {
       const textSP = gE('#vrs') ?? gE('#dvrs');
       const spValue = textSP.childNodes[0].textContent * 1;
       if (spValue <= 1) {
         return false;
       }
-      if ((g('option').turnOnSS && checkCondition(g('option').turnOnSSCondition) && !gE('#ckey_spirit[src*="spirit_a"]')) || (g('option').turnOffSS && checkCondition(g('option').turnOffSSCondition) && gE('#ckey_spirit[src*="spirit_a"]'))) {
+      const option = g('option');
+      const enabled = gE('#ckey_spirit[src*="spirit_a"]');
+      if (
+        (!isDisableOnly && option.turnOnSS && checkCondition(option.turnOnSSCondition) && !enabled)
+        ||
+        (option.turnOffSS && checkCondition(option.turnOffSSCondition) && enabled)
+      ) {
         gE('#ckey_spirit').click();
         return true;
       }
@@ -4319,15 +4938,16 @@
          * 优先释放先天和武器技能
          */
     function autoSkill() {
-      if (!g('option').skillSwitch) {
+      const option = g('option');
+      if (!option.skillSwitch) {
         return false;
       }
       if (!gE('#ckey_spirit[src*="spirit_a"]')) {
         return false;
       }
 
-      const skillOrder = (g('option').skillOrderValue || 'OFC,FRD,T3,T2,T1').split(',');
-      const fightStyle = g('fightingStyle');
+      const skillOrder = splitOrders(option.skillOrderValue, ['OFC', 'FRD', 'T3', 'T2', 'T1']);
+      const fightStyle = g('fightingStyle'); // 1二天 2单手 3双手 4双持 5法杖
       const skillLib = {
         OFC: '1111',
         FRD: '1101',
@@ -4344,11 +4964,14 @@
         '2403': 3
       }
       const rangeSkills = {
-        2101: 2,
-        2403: 2,
-        1111: 4,
+        2101: 5,
+        2302: 5,
+        2303: 5,
+        2403: 5,
+        // 1101: 20, 全体
+        // 1111: 20,
       }
-      const optionSkills = g('option').skill;
+      const optionSkills = option.skill;
       if (!optionSkills) {
         return;
       }
@@ -4364,17 +4987,19 @@
         if (g('oc') / 25 < (id in skillOC ? skillOC[id] : 2)) {
           continue;
         }
-        if (g('option').skillOTOS && g('option').skillOTOS[skill] && g('skillOTOS')[skill] >= 1) {
+        const skillOTOS = getValue('skillOTOS', true) ?? {};
+        skillOTOS[skill] ??= 0;
+        if (option.skillOTOS && option.skillOTOS[skill] && skillOTOS[skill] >= 1) {
           continue;
         }
-        g('skillOTOS')[skill]++;
-        let target = checkCondition(g('option')[`skill${skill}Condition`], g('battle').monsterStatus);
+        skillOTOS[skill]++;
+        setValue('skillOTOS', skillOTOS);
+        let target = checkCondition(option[`skill${skill}Condition`], g('battle').monsterStatus);
         if (!target) {
           continue;
         }
         gE(id).click();
-        const range = id in rangeSkills ? rangeSkills[id] : 0;
-        clickMonster(getRangeCenter(target, range).id);
+        clickMonster(getRangeCenter(target, rangeSkills[id] ?? 1).id);
         return true;
       }
       return false;
@@ -4392,8 +5017,11 @@
       let skillPack = g('option').debuffSkillOrderValue.split(',');
       for (let i in skillPack) {
         let buff = skillPack[i];
-        if (!buff || !checkCondition(g('option')[`debuffSkill${buff}Condition`], g('battle').monsterStatus)) { // 检查条件
-          continue;
+        const isToAll = i < toAllCount;
+        if (!isToAll) { // 非先全体
+          if (!buff || !option.debuffSkill[buff] || !checkCondition(option[`debuffSkill${buff}Condition`], monsterStatus)) { // 检查条件
+            continue;
+          }
         }
         if (buff === 'Sle' || buff === 'Co' || buff === 'Si') buff = 'We'
         let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
@@ -4411,37 +5039,37 @@
           name: 'Sleep',
           id: '222',
           img: 'sleep',
-          range: { 4207: [0, 0, 1] },
+          range: { 4207: [1, 1, 2, 3] },
         },
         Bl: {
           name: 'Blind',
           id: '231',
           img: 'blind',
-          range: { 4206: [0, 0, 1] },
+          range: { 4206: [1, 1, 2, 3] },
         },
         Slo: {
           name: 'Slow',
           id: '221',
           img: 'slow',
-          range: { 4211: [0, 0, 0, 1, 1] },
+          range: { 4213: [1, 1, 2, 2, 2, 3] },
         },
         Im: {
           name: 'Imperil',
           id: '213',
           img: 'imperil',
-          range: { 4204: [0, 0, 0, 1] },
+          range: { 4204: [1, 1, 2, 3] },
         },
         MN: {
           name: 'MagNet',
           id: '233',
           img: 'magnet',
-          range: { 4211: [0, 0, 0, 0, 1] },
+          range: { 4212: [1, 1, 1, 2, 2, 3] },
         },
         Si: {
           name: 'Silence',
           id: '232',
           img: 'silence',
-          range: { 4211: [0, 0, 0, 1] },
+          range: { 4211: [1, 1, 2, 3] },
         },
         Dr: {
           name: 'Drain',
@@ -4452,13 +5080,13 @@
           name: 'Weaken',
           id: '212',
           img: 'weaken',
-          range: { 4202: [0, 0, 0, 1] },
+          range: { 4202: [1, 1, 2, 3] },
         },
         Co: {
           name: 'Confuse',
           id: '223',
           img: 'confuse',
-          range: { 4207: [0, 0, 1] },
+          range: { 4207: [1, 1, 2, 3] },
         },
       };
       if (!isOn(skillLib[buff].id)) { // 技能不可用
@@ -4468,7 +5096,7 @@
         return
       }
       // 获取范围
-      let range = 0;
+      let range = 1;
       let ab;
       const ability = getValue('ability', true);
       for (ab in skillLib[buff].range) {
@@ -4476,28 +5104,34 @@
         if (!ranges) {
           continue;
         }
-        if (ability) {
-          range = ranges[ability[ab]];
-        }
+        range = ranges[ability ? ability[ab] ?? 0 : 0];
         break;
       }
-
       // 获取目标
       const option = g('option');
-
-      let isDebuffed = (target) => getMonsterBuff(getMonsterID(target), skillLib[buff].img) || getMonsterBuff(getMonsterID(target), skillLib['Sle'].img) || getMonsterBuff(getMonsterID(target), skillLib['Co'].img);
-      if (buff === 'Im') {
-        isDebuffed = (target) => getMonsterBuff(getMonsterID(target), skillLib[buff].img)
+      let exclusiveBuffs;
+      if (isAll && option.debuffAllExclusive) {
+        exclusiveBuffs = Object.keys(option.debuffAllExclusive);
+        exclusiveBuffs = exclusiveBuffs?.includes(buff) ? exclusiveBuffs : undefined
       }
+      let isDebuffed = (target, b) => {
+        if (b || !exclusiveBuffs) {
+          const current = getBuffTurnFromImg(getMonsterBuff(getMonsterID(target), skillLib[b ?? buff].img));
+          const threshold = option.debuffSkillThreshold ? option.debuffSkillThreshold[b ?? buff] ?? 0 : 0;
+          return threshold >= 0 && current > threshold;
+        }
+        for (const exclusive of exclusiveBuffs) {
+          if (isDebuffed(target, exclusive)) return 0.9;
+        }
+      };
+      let debuffByIndex = isAll && option[`debuffSkill${buff}AllByIndex`];
+      let monsterStatus = g('battle').monsterStatus;
       let holdDrain = (target) => g('attackStatus') === 5 && !getMonsterBuff(getMonsterID(target), 'soulfire') || g('attackStatus') === 6 && !getMonsterBuff(getMonsterID(target), 'ripesoul');
-      let debuffByIndex = isAll && g('option')[`debuffSkill${buff}AllByIndex`];
-      let monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
       if (debuffByIndex) {
         monsterStatus = JSON.parse(JSON.stringify(monsterStatus));
         monsterStatus.sort(objArrSort('order'));
       }
       let max = isAll ? ((buff === 'Sle' || buff === 'Co') ? monsterStatus.length - 3 : monsterStatus.length) : 1;
-
       let id;
       let minRank = Number.MAX_SAFE_INTEGER;
       for (let i = 0; i < max; i++) {
@@ -4537,7 +5171,69 @@
       return true;
     }
 
-    function attack() { // 自动打怪
+    function getCurrentAttackStatus() {
+      if (g('attackStatusCurrent') === undefined) {
+        attack(true);
+      }
+      const current = g('attackStatusCurrent');
+      g('attackStatusCurrent', undefined);
+      return current;
+    }
+
+    function attack(selectStatusOnly=false) { // 自动打怪
+      let range = g('fightingStyle') === '1' ? 3 : 1;
+      const option = g('option');
+      const monsters = g('battle').monsterStatus;
+      let attackStatusOrder = option.attackStatusOrderValue?.split(',').map(x=>x*1) ?? [];
+      attackStatusOrder = attackStatusOrder.concat([0,1,2,3,4,5,6].filter(x=> !(attackStatusOrder.includes(x))));
+      if (option.attackStatusSwitch) {
+        for (const status of attackStatusOrder) {
+          const condition = option[`attackStatusSwitchCondition${status}`] ?? {};
+          if (!option.attackStatusSwitch[status]) continue;
+          const current = g('attackStatusCurrent');
+          g('attackStatusCurrent', status);
+          if (checkCondition(condition, monsters) && onAttack(range, status, selectStatusOnly)) {
+            return true;
+          }
+          g('attackStatusCurrent', current);
+        }
+      }
+      g('attackStatusCurrent', 0);
+      return onAttack(range, g('attackStatus'), selectStatusOnly);
+    }
+
+    function onAttack(range, attackStatus, selectStatusOnly=false) {
+      const updateAbility = {
+        4301: { //火
+          111: [3, 4, 4, 5, 5, 5, 5, 5],
+          112: [4, 4, 6, 6, 6, 6, 7, 7],
+          113: [7, 7, 7, 7, 8, 9, 9, 10]
+        },
+        4302: { //冰
+          121: [3, 4, 4, 5, 5, 5, 5, 5],
+          122: [4, 4, 6, 6, 6, 6, 7, 7],
+          123: [7, 7, 7, 7, 8, 9, 9, 10]
+        },
+        4303: { //雷
+          131: [3, 4, 4, 5, 5, 5, 5, 5],
+          132: [4, 4, 6, 6, 6, 6, 7, 7],
+          133: [7, 7, 7, 7, 8, 9, 9, 10]
+        },
+        4304: { //雷
+          141: [3, 4, 4, 5, 5, 5, 5, 5],
+          142: [4, 4, 6, 6, 6, 6, 7, 7],
+          143: [7, 7, 7, 7, 8, 9, 9, 10]
+        },
+        //暗
+        4401: { 161: [3, 4, 5] },
+        4402: { 162: [5, 6, 7] },
+        4403: { 163: [7, 8, 9, 10] },
+        //圣
+        4501: { 151: [3, 4, 5] },
+        4502: { 152: [5, 6, 7] },
+        4503: { 153: [7, 8, 9, 10] },
+      }
+
       // 如果
       // 1. 开启了自动以太水龙头
       // 2. 目标怪在魔力合流状态中
@@ -4546,76 +5242,65 @@
       // 使用物理普通攻击，跳过Offensive Magic
       // 否则按照属性攻击模式释放Spell > Offensive Magic
 
-      const updateAbility = {
-        4301: { //火
-          111: [0, 1, 1, 2, 2, 2, 2, 2],
-          112: [0, 0, 2, 2, 2, 2, 3, 3],
-          113: [0, 0, 0, 0, 3, 4, 4, 4]
-        },
-        4302: { //冰
-          121: [0, 1, 1, 2, 2, 2, 2, 2],
-          122: [0, 0, 2, 2, 2, 2, 3, 3],
-          123: [0, 0, 0, 0, 3, 4, 4, 4]
-        },
-        4303: { //雷
-          131: [0, 1, 1, 2, 2, 2, 2, 2],
-          132: [0, 0, 2, 2, 2, 2, 3, 3],
-          133: [0, 0, 0, 0, 3, 4, 4, 4]
-        },
-        4304: { //雷
-          141: [0, 1, 1, 2, 2, 2, 2, 2],
-          142: [0, 0, 2, 2, 2, 2, 3, 3],
-          143: [0, 0, 0, 0, 3, 4, 4, 4]
-        },
-        //暗
-        4401: { 161: [0, 1, 2] },
-        4402: { 162: [0, 2, 3] },
-        4403: { 163: [0, 3, 4, 4] },
-        //圣
-        4501: { 151: [0, 1, 2] },
-        4502: { 152: [0, 2, 3] },
-        4503: { 153: [0, 3, 4, 4] },
-      }
-      let range = 0;
-      // Spell > Offensive Magic
-      const attackStatus = g('attackStatus');
-      let target = g('battle').monsterStatus[0];
-      if (attackStatus === 0) {
-        if (g('fightingStyle') === '1') { // 二天一流
-          range = 1;
+      const option = g('option');
+      const monsters = g('battle').monsterStatus;
+      let target = monsters[0];
+      const tryAttack = (skill) => {
+        if (!target || target.isDead) {
+          return false;
         }
-      } else {
-        if (checkEtherTap()) {
-          `pass`
-        } else {
-          const skill = 1 * (() => {
-            let lv = 3;
-            for (let condition of [g('option').highSkillCondition, g('option').middleSkillCondition, undefined]) {
-              let id = `1${attackStatus}${lv--}`;
-              target = checkCondition(condition, g('battle').monsterStatus);
-              if (target && isOn(id)) {
-                return id;
-              }
-            }
-          })();
+        if (selectStatusOnly) {
+          return true;
+        }
+        if (skill) {
           gE(skill)?.click();
-          for (let ab in updateAbility) {
-            const ranges = updateAbility[ab][skill];
-            if (!ranges) {
-              continue;
-            }
-            const ability = getValue('ability', true);
-            if (ability) {
-              range = ranges[ability[ab]];
-            }
-            break;
+        }
+        clickMonster(getRangeCenter(target, range, !attackStatus).id);
+        return true;
+      };
+      // 1. physical
+      if (attackStatus === 0) {
+        return tryAttack();
+      }
+
+      // 2. etherTap
+      if (option.etherTap && getMonsterBuff(getMonsterID(target), 'coalescemana')
+          && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || getPlayerBuff(`wpn_et"][id*="effect_expire`))
+          && checkCondition(option.etherTapCondition)) {
+        return tryAttack();
+      }
+      // 2.5 try check skill condition
+      const skill = 1 * (() => {
+        let lv = 3;
+        for (let condition of [option.highSkillCondition, option.middleSkillCondition, option.lowSkillCondition]) {
+          let id = `1${attackStatus}${lv--}`;
+          target = checkCondition(condition, monsters);
+          if (target && isOn(id)) {
+            return id;
           }
         }
+      })();
+      // 3. no skill available
+      if (!skill) {
+        return tryAttack();
       }
-      if (!target || target.isDead) {
+      // 4. cast skill
+      for (let ab in updateAbility) {
+        const ranges = updateAbility[ab][skill];
+        if (!ranges) {
+          continue;
+        }
+        const ability = getValue('ability', true);
+        range = ranges[ability ? ability[ab] ?? 0 : 0];
+        break;
+      }
+      if (!tryAttack(skill)) {
         return false;
       }
-      clickMonster(getRangeCenter(target, range, !attackStatus).id);
+      const skillOTOS = getValue('skillOTOS', true) ?? {};
+      skillOTOS[skill] ??= 0;
+      skillOTOS[skill]++;
+      setValue('skillOTOS', skillOTOS);
       return true;
     }
 
@@ -4782,7 +5467,7 @@
       const battle = g('battle');
       if (g('option').recordEach && battle.roundNow === battle.roundAll) {
         const old = getValue('dropOld', true) || [];
-        drop.__name = getValue('battleCode');
+        drop.__name = getValue('battleCode', true).name;
         drop['#endTime'] = time(3);
         old.push(drop);
         setValue('dropOld', old);
@@ -5021,7 +5706,7 @@
       const battle = g('battle');
       if (g('option').recordEach && battle.roundNow === battle.roundAll) {
         const old = getValue('statsOld', true) || [];
-        stats.__name = getValue('battleCode');
+        stats.__name = getValue('battleCode', true).name;
         stats.self._endTime = time(3);
         old.push(stats);
         setValue('statsOld', old);

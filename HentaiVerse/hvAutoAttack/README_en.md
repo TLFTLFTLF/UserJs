@@ -49,6 +49,8 @@ Scripts get information through text, and if you have not yet modified the font,
 
 Each area with a red dotted border can be set to a customize condition.
 
+Customizable Formula is support now, such as `hp > mp` or `2 * ( hp + mp ) > sp`, supported operators: `+` `-` `*` `/` `%` `&&` `||` `!` `>` `<` `>=`(`≥`) `<=`(`≤`) `==`(`=`,`===`) `!=`(`≠`,`~=`,`<>`), logical operators returns 0 or 1 (as false or true)
+
 * If these areas are left blank (a condition is not set), then it's equivalent to true.
 
 When the mouse moves in these areas, a box is displayed in the upper right corner. (When the mouse out, the box disappears)
@@ -59,9 +61,11 @@ Four drop down lists and one button are visible in the box
 
 * Drop-down List 2/4: comparison value A / comparison value B
 
-* Drop-down List 3: only support comparison operator (`1`: >, `2`: <, `3`: ≥, `4`: ≤, `5`: =, `6`: ≠)
+* Drop-down List 3: operator
 
-* Button ADD: Generates an input box with a value of `A,Comparison-Operator,B`
+* Button ADD: Generates an input box with a value of `A Operator B` 
+
+* Legacy version condition such as `A,Comparison-Operator,B` is still supported, Comparison-Operator: (`1`: >, `2`: <, `3`: ≥, `4`: ≤, `5`: =, `6`: ≠)
 
 #### Comparison Value
 
@@ -69,28 +73,35 @@ Four drop down lists and one button are visible in the box
 2. `oc`: Overcharge, 0-250
 3. `monsterAll`/`monsterAlive`/`bossAll`/`bossAlive`: amount of all monster/boss (alive)
 4. `roundNow`/`roundAll`/`roundLeft`
-5. `roundType`: Battle Type (`ar`: The Arena, `rb`: Ring of Blood, `gr`: GrindFest, `iw`: Item World, `ba`: Random Encounter)
+5. `isRoundType`、`ar`、`ba`、`iw`、`tw`、`gr`、`rb`: is current round type as the target type, such as: both `_isRoundType_ar` and `_ar` returns `is currently in The Arena`
+6. `roundType`: Battle Type (`ar`: The Arena, `rb`: Ring of Blood, `gr`: GrindFest, `iw`: Item World, `ba`: Random Encounter, `tw`: The Tower)
 
-  (**Note**: Because comparison between strings, please add quotation, such as `"ar"`/`'ar'`)
+  (**Note**: Because comparison between strings, please add quotation while using legacy version condition `A,Comparison-Operator,B` , such as `"ar"`/`'ar'`)
 
-6. `attackStatus`: Attack Mode (`0`: Physical, `1`: Fire, `2`: Cold, `3`: Elec, `4`: Wind, `5`: Divine, `6`: Forbidden)
-7. `isCd`: whether the skill/item is cooldowning, format: `_isCd_id`
+7. `attackStatus`: Attack Mode (`0`: Physical, `1`: Fire, `2`: Cold, `3`: Elec, `4`: Wind, `5`: Divine, `6`: Forbidden). Or use `_phys`, `_fire`, `_cold`, `_elec`, `_wind`, `_divi`, `_forb` as `if current attack mode is ...`, such as `_phys` equals `attackStatus == 0`。
+   - Value acquired above is the default Attack Mode, to get current Attack Mode after calculating Secondary Attack Mode, use suffix `Cur` ( and prefix `_` for `attackStatus`), such as：`_attackStatusCur`,`_physCur`, `_fireCur`, `_coldCur`, `_elecCur`, `_windCur`, `_diviCur`, `_forbCur`
+     - current value getting by:
+       - During `Secondary Attack`, return `current attempting mode` 
+         - If configed any current condition in `Secondary Attack Mode`, returns `mode that the condition is in`. Such as: In conditions of `Attack mode Fire`, `_fireCur` is as `true`，`_windCur` is as `false`
+       - In other options, attack will be simulated until the spell is callable ( cache the successfully simulated mode into a temp variable and returns it)
+8. `fightingStyle`: Fighting Style (`1`: Niten, `2`: 1H, `3`: 2H, `4`: DW, `5`: Staff). Or use `_nt`, `_1h`, `_2h`, `_dw`, `_staff` as `if current fighting style is ...`, such as `_nt` equals `fightStyle == 1`
+9. `isCd`: whether the skill/item is cooldowning, format: `_isCd_id`
 
-  **example 1**: the id of Protection is 411 , `_isCd_411,5,0` means Protection can't be casted or `_isCd_411,5,1` means Protection can be casted
+  **example 1**: the id of Protection is 411 , `!_isCd_411` means Protection can't be casted or `_isCd_411` means Protection can be casted
 
-  **example 2**: the id of ManaElixir is 11295, `_isCd_11295,5,0` means ManaElixir can't be used or `_isCd_11295,5,1` means ManaElixir can be used
+  **example 2**: the id of ManaElixir is 11295, `!_isCd_11295` means ManaElixir can't be used or `_isCd_11295` means ManaElixir can be used
 
-8. `buffTurn`: time the buff last in person, format`_buffTurn_img`
+10. `buffTurn`: time the buff last in person, format`_buffTurn_img`
 
-  **example**: the image of Protection is protection, `_buffTurn_protection,5,0` means you don't have the buff of Protection or `_buffTurn_protection,3,10` means the buff of Protection on you last at least 10 turns
+  **example**: the image of Protection is protection, `_buffTurn_protection == 0` means you don't have the buff of Protection or `_buffTurn_protection >= 10` means the buff of Protection on you last at least 10 turns
 
-9. `targetHp`、`targetMp`、`targetSp`、`targetBuffTurn`: HP%、SP%、MP%、buffRemainTime of target monster,  suffix of `_targetBuffTurn_` is same as 8.`buffTurn`（such as：`_targetBuffTurn_bleed,6,0` means remain turns of bleed buff on target monster is not equal to 0. Target that is calculating is chosen by following rules:
+11. `targetHp`、`targetMp`、`targetSp`、`targetBuffTurn`: HP%、SP%、MP%、buffRemainTime of target monster,  suffix of `_targetBuffTurn_` is same as 8.`buffTurn`（such as：`_targetBuffTurn_bleed != 0` means remain turns of bleed buff on target monster is not equal to 0. Target that is calculating is chosen by following rules:
     1. The highest priority monster by rank in default situations.
     2. Weapon skills (OFC, T1~T3, etc.), Offensive Spell skills (Tire2, Tire3): by each condition > for each ranked target > find the target fit all sub-condition in the condition and cast to it. Such as the pic below: condition for Merciful Blow: only cast to targets which with hp below 25% and a bleed buff.
     
     ![example](https://github.com/user-attachments/assets/da181eac-e634-41ad-97a7-ff59a7b28b6d)
 
-10. blank: the value you want to put in
+12. blank: the value you want to put in
 
 #### Example
 
@@ -162,6 +173,14 @@ The following is a schematic diagram of the circuit diagram
 | Infusion of Storms / windinfusion | Infusion of Divinity / holyinfusion | Infusion of Darkness / darkinfusion |
 | Scroll of Swiftness / haste_scroll | - | - |
 | Flower Vase / flowers | Bubble-Gum / gum | - |
+| Sleep / sleep | Blind / blind | Slow / slow |
+| Imperil / imperil | MagNet / magnet | Silence / silence |
+| Drain / drainhp | Weaken / weaken | Confuse / confuse |
+| Coalesced Mana / coalescemana | Stunned / stun / wpn_stun | Penetrated Armor / ap / wpn_ap |
+| Bleeding Wound / bleed / wpn_bleed | Absorbing Ward / absorb | Fury of the Sisters / trio_furyofthesisters |
+| Lamentations of the Future / trio_skuld | Screams of the Past / trio_urd | Wailings of the Present / trio_verdandi | Searing Skin / firedot | Freezing Limbs / coldslow |
+| Turbulent Air / windmiss | Deep Burns / elecweak | Breached Defense / holybreach |
+| Blunted Attack / darknerf | Burning Soul / soulfire | Ripened Soul / ripesoul |
 
 ***
 
@@ -194,4 +213,11 @@ In this example, the script will attack enemy 1 next.
 
 * Old
 1. see [README_Chinese#更新历史](https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README.md#更新历史)
+
+
+
+
+
+
+
 

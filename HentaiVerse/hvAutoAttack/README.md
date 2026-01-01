@@ -50,8 +50,9 @@
 ***
 
 ### 自定义判断条件
-
 每一个拥有红色虚线边框的区域，都可以设置自定义判断条件。
+
+现已支持自定义的条件公式，例如`hp > mp` 或 `2 * ( hp + mp ) > sp`，支持运算符: `+` `-` `*` `/` `%` `**` `&&` `||` `!` `>` `<` `>=`(`≥`) `<=`(`≤`) `==`(`=`,`===`) `!=`(`≠`,`~=`,`<>`)，逻辑运算符返回`0`或`1` （表示false或true）
 
 * 注意：如果这些区域留空（一个条件也没设置），那么就相当于真。
 
@@ -63,9 +64,11 @@
 
 * 下拉列表2/4: 比较值A/比较值B
 
-* 下拉列表3: 只支持比较运算符（`1`:大于, `2`:小于, `3`: 大于等于, `4`: 小于等于, `5`:等于, `6`:不等于）
+* 下拉列表3: 运算符
 
-* ADD按钮: 生成一个值为`比较值A,比较值,比较值B`的输入框
+* ADD按钮: 生成一个值为 `比较值A 运算符 比较值B` 的输入框
+
+* 仍兼容旧版本 `比较值A,比较运算符,比较值B` 的条件，其中比较运算符:（`1`:大于, `2`:小于, `3`: 大于等于, `4`: 小于等于, `5`:等于, `6`:不等于）
 
 #### 比较值
 
@@ -73,28 +76,35 @@
 2. `oc`: Overcharge, 250==>250%
 3. `monsterAll`/`monsterAlive`/`bossAll`/`bossAlive`: 怪兽/Boss的总数目/存活数目
 4. `roundNow`/`roundAll`/`roundLeft`: 当前回合数/总回合数/剩余回合数
-5. `roundType`: 战役模式 (`ar`: The Arena, `rb`: Ring of Blood, `gr`: GrindFest, `iw`: Item World, `ba`: Random Encounter)
+5. `isRoundType`、`ar`、`ba`、`iw`、`tw`、`gr`、`rb`: 当前是否是某战役模式，例如`_isRoundType_ar`或`_ar`均返回 `当前是否是The Arena`
+6. `roundType`: 战役模式 (`ar`: The Arena, `rb`: Ring of Blood, `gr`: GrindFest, `iw`: Item World, `ba`: Random Encounter, `tw`: The Tower)
 
-  **注意**: 由于是字符串之间的比较，所以请加上引号，如"ar"/'ar'
+  **注意**: 由于是字符串之间的比较，所以用旧版本格式`比较值A,比较运算符,比较值B`时请加上引号，如"ar"/'ar'
 
-6. `attackStatus`: 攻击模式 (`0`: Physical, `1`: Fire, `2`: Cold, `3`: Elec, `4`: Wind, `5`: Divine, `6`: Forbidden)
-7. `isCd`: 技能/物品是否cd，格式`_isCd_id`
+7. `attackStatus`: 攻击模式 (`0`: Physical, `1`: Fire, `2`: Cold, `3`: Elec, `4`: Wind, `5`: Divine, `6`: Forbidden)。 或使用 `_phys`, `_fire`, `_cold`, `_elec`, `_wind`, `_divi`, `_forb` 表示 `当前 attack mode 是否为 ...`，例如 `_phys` 等价于 `attackStatus == 0`。
+   - 获取到的是默认攻击模式，可加后缀`Cur`来表示判断次要模式后的攻击模式（直接获取当前`attackStatus`需要加`_`前缀），即：`_attackStatusCur`,`_physCur`, `_fireCur`, `_coldCur`, `_elecCur`, `_windCur`, `_diviCur`, `_forbCur`
+     - 具体流程：
+       - 尝试次要模式攻击的流程中，会直接用尝试中的模式
+         - 如果在`次要模式`的条件中配置了这些条件，都会按照`条件所在模式`来获取值，例如：切换火属性的条件中配置了`_fireCur`，会直接判定为`true`，配置了`_windCur`则是会判定为`false`
+       - 其他地方则会模拟一遍攻击，然后判断能放出来的时候 给`临时变量`赋值`模拟尝试成功的模式`，然后返回临时变量
+8. `fightingStyle`: 战斗风格 (`1`: 二天, `2`: 单手, `3`: 双手, `4`: 双持, `5`: 法杖)。 或使用 `_nt`, `_1h`, `_2h`, `_dw`, `_staff` 表示 `当前 fighting style 是否为 ...`，例如 `_nt` 等价于 `fightStyle == 1`
+9. `isCd`: 技能/物品是否cd，格式`_isCd_id`
 
-  **示例1**: Protection的id为411，则`_isCd_411,5,0`表示不可施放，`_isCd_411,5,1`表示可以施放
+  **示例1**: Protection的id为411，则`!_isCd_411`表示不可施放，`_isCd_411`表示可以施放
 
-  **示例2**: ManaElixir的id为11295，则`_isCd_11295,5,0`表示不可使用，`_isCd_11295,5,1`表示可以使用
+  **示例2**: ManaElixir的id为11295，则`!_isCd_11295`表示不可使用，`_isCd_11295`表示可以使用
 
-8. `buffTurn`: 人物Buff剩余时间，格式`_buffTurn_img`
+10. `buffTurn`: 人物Buff剩余时间，格式`_buffTurn_img`
 
-  **示例**: Protection的img为protection，则`_buffTurn_protection,5,0`表示不存在Protection的buff，`_buffTurn_protection,3,10`表示Protection的buff至少剩余10回合
+  **示例**: Protection的img为protection，则`_buffTurn_protection == 0`表示不存在Protection的buff，`_buffTurn_protection >= 10`表示Protection的buff至少剩余10回合
 
-9. `targetHp`、`targetMp`、`targetSp`、`targetBuffTurn`: 目标怪物的HP%、SP%、MP%、buff剩余时间，`_targetBuffTurn_`后缀参照8.`buffTurn`（如：`_targetBuffTurn_bleed,6,0`表示目标bleed的buff剩余回合不等于0）。target的目标怪物遵循以下规则
+11. `targetHp`、`targetMp`、`targetSp`、`targetBuffTurn`: 目标怪物的HP%、SP%、MP%、buff剩余时间，`_targetBuffTurn_`后缀参照8.`buffTurn`（如：`_targetBuffTurn_bleed != 0`表示目标bleed的buff剩余回合不等于0）。target的目标怪物遵循以下规则
     1. 默认情况的target均为权重优先级最高的目标
     2. 武器技能（马炮、T1~T3等）、法术技能（中阶、高阶）：按照 逐条条件判断>按权重逐个目标>满足任意一条条件内的所有子条目，则对该目标释放。例如下图最后的慈悲的条件：仅释放hp小于25%、拥有流血buff
   
     ![示例](https://github.com/user-attachments/assets/b4d0c57d-fdb1-464b-88d6-107643809339)   
 
-10. 空白(blank): 自己输入 (the value you want to put in)
+12. 空白(blank): 自己输入 (the value you want to put in)
 
 #### 示例
 
@@ -168,6 +178,14 @@
 | Infusion of Storms / windinfusion | Infusion of Divinity / holyinfusion | Infusion of Darkness / darkinfusion |
 | Scroll of Swiftness / haste_scroll | - | - |
 | Flower Vase / flowers | Bubble-Gum / gum | - |
+| Sleep / sleep | Blind / blind | Slow / slow |
+| Imperil / imperil | MagNet / magnet | Silence / silence |
+| Drain / drainhp | Weaken / weaken | Confuse / confuse |
+| Coalesced Mana / coalescemana | Stunned / stun / wpn_stun | Penetrated Armor / ap / wpn_ap |
+| Bleeding Wound / bleed / wpn_bleed | Absorbing Ward / absorb | Fury of the Sisters / trio_furyofthesisters |
+| Lamentations of the Future / trio_skuld | Screams of the Past / trio_urd | Wailings of the Present / trio_verdandi | Searing Skin / firedot | Freezing Limbs / coldslow |
+| Turbulent Air / windmiss | Deep Burns / elecweak | Breached Defense / holybreach |
+| Blunted Attack / darknerf | Burning Soul / soulfire | Ripened Soul / ripesoul |
 
 ***
 
@@ -388,6 +406,13 @@
 灵感来自hoverplay，刚开始接触js，初步完成代码
 功能有：答题警报、其他警报、快捷键、自动前进、自动使用宝石、自动回复、自动使用增益技能、自动打怪
 很可惜，玩游戏不走心，一直搞不懂HVSTAT是怎么知道每个怪的血量的，直到[版本2.0](#20)
+
+
+
+
+
+
+
 
 
 
