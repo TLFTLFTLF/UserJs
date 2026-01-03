@@ -2766,7 +2766,7 @@
       let i, j, k, target;
       targets ??= [g('battle').monsterStatus[0]];
       if (typeof parms === 'undefined') {
-        return targets?.[0] || g('battle').monsterStatus[0];
+        return targets[0];
       }
       const returnValue = function (str) {
         if (str.match(/^_/) && !str.match(/\./)) {
@@ -3907,7 +3907,7 @@
       buff = buff.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2];
       if (!buff) {
         buff = 0;
-      } else if (buff ==='permanent') {
+      } else if (buff === "'permanent'") {
         buff = Infinity;
       } else {
         buff *= 1;
@@ -5011,10 +5011,23 @@
       if (!option.debuffSkillSwitch || !checkCondition(option.debuffSkillCondition, monsterStatus)) { // 总开关是否开启
         return false;
       }
-      if (!g('option').debuffSkill) { // 是否有启用的buff(不算两个特殊的)
-        return false;
+
+      // 先处理特殊的 “先给全体上buff”
+      let skillPack = splitOrders(option.debuffSkillOrderAllValue, ['Sle', 'Bl', 'We', 'Si', 'Slo', 'Dr', 'Im', 'MN', 'Co']);
+      for (let i = 0; i < skillPack.length; i++) {
+        if (option[`debuffSkill${skillPack[i]}All`]) { // 是否启用
+          if (checkCondition(option[`debuffSkill${skillPack[i]}AllCondition`], monsterStatus)) { // 检查条件
+            continue;
+          }
+        }
+        skillPack.splice(i, 1);
+        i--;
       }
-      let skillPack = g('option').debuffSkillOrderValue.split(',');
+      const toAllCount = skillPack.length;
+
+      if (option.debuffSkill) { // 是否有启用的buff(不算两个特殊的)
+        skillPack = skillPack.concat(splitOrders(option.debuffSkillOrderValue, ['Sle', 'Bl', 'We', 'Si', 'Slo', 'Dr', 'Im', 'MN', 'Co']));
+      }
       for (let i in skillPack) {
         let buff = skillPack[i];
         const isToAll = i < toAllCount;
@@ -5023,8 +5036,7 @@
             continue;
           }
         }
-        if (buff === 'Sle' || buff === 'Co' || buff === 'Si') buff = 'We'
-        let succeed = useDebuffSkill(skillPack[i], g('option')[`debuffSkill${buff}All`] && checkCondition(g('option')[`debuffSkill${buff}AllCondition`], g('battle').monsterStatus));
+        let succeed = useDebuffSkill(buff, isToAll);
         // 前 toAllCount 个都是先给全体上的
         if (succeed) {
           return true;
@@ -5093,7 +5105,7 @@
         return false;
       }
       if (!g('option').debuffSkill[buff]) {
-        return
+        return false;
       }
       // 获取范围
       let range = 1;
@@ -5112,7 +5124,7 @@
       let exclusiveBuffs;
       if (isAll && option.debuffAllExclusive) {
         exclusiveBuffs = Object.keys(option.debuffAllExclusive);
-        exclusiveBuffs = exclusiveBuffs?.includes(buff) ? exclusiveBuffs : undefined
+        exclusiveBuffs = exclusiveBuffs?.includes(buff) ? exclusiveBuffs.slice(0, exclusiveBuffs.indexOf(buff) + 1) : undefined
       }
       let isDebuffed = (target, b) => {
         if (b || !exclusiveBuffs) {
@@ -5125,13 +5137,13 @@
         }
       };
       let debuffByIndex = isAll && option[`debuffSkill${buff}AllByIndex`];
-      let monsterStatus = g('battle').monsterStatus;
+      let monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
       let holdDrain = (target) => g('attackStatus') === 5 && !getMonsterBuff(getMonsterID(target), 'soulfire') || g('attackStatus') === 6 && !getMonsterBuff(getMonsterID(target), 'ripesoul');
       if (debuffByIndex) {
         monsterStatus = JSON.parse(JSON.stringify(monsterStatus));
         monsterStatus.sort(objArrSort('order'));
       }
-      let max = isAll ? ((buff === 'Sle' || buff === 'Co') ? monsterStatus.length - 3 : monsterStatus.length) : 1;
+      let max = isAll ? monsterStatus.length : 1;
       let id;
       let minRank = Number.MAX_SAFE_INTEGER;
       for (let i = 0; i < max; i++) {
@@ -5140,35 +5152,34 @@
         if (!target || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
           continue;
         }
-        id = getMonsterID(target)
-        const imgs = gE('img', 'all', gE(monsterStateKeys.buffs, getMonster(id)));
-        // 已有buff小于6个
-        // 未开启debuff失败警告
-        // buff剩余持续时间大于等于警报时间
-        if (imgs.length < 6 || !g('option').debuffSkillTurnAlert || (g('option').debuffSkillTurn && imgs[imgs.length - 1].getAttribute('onmouseover').match(/\(.*,.*,(.*?)\)$/)[1] * 1 >= g('option').debuffSkillTurn[buff])) {
-          const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
-          if (!id || center.rank < minRank) {
-            minRank = center.rank;
-            id = center.id;
-            if (!isAll) {
-              // 只有覆盖全体才需要遍历全部
-              break;
-            }
+        const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
+        if (!id || center.rank < minRank) {
+          minRank = center.rank;
+          id = center.id;
+          if (!isAll) {
+            // 只有覆盖全体才需要遍历全部
+            break;
           }
-        } else {
-          return false;
         }
       }
       if (id === undefined) {
         return false;
       }
-      gE(skillLib[buff].id).click();
-      clickMonster(id);
-      return true;
+      const imgs = gE('img', 'all', gE(monsterStateKeys.buffs, getMonster(id)));
+      // 已有buff小于6个
+      // 未开启debuff失败警告
+      // buff剩余持续时间大于等于警报时间
+      if (imgs.length < 6) {
+        gE(skillLib[buff].id).click();
+        clickMonster(id);
+        return true;
+      } else if (!option.debuffSkillTurnAlert || (option.debuffSkillTurn && getBuffTurnFromImg(imgs[imgs.length - 1]) >= option.debuffSkillTurn[buff])){
+        return false;
+      }
 
-      _alert(0, '无法正常施放DEBUFF技能，请尝试手动打怪', '無法正常施放DEBUFF技能，請嘗試手動打怪', 'Can not cast de-skills normally, continue the script?\nPlease try attack manually.');
-      pauseChange();
-      return true;
+      // _alert(0, '无法正常施放DEBUFF技能，请尝试手动打怪', '無法正常施放DEBUFF技能，請嘗試手動打怪', 'Can not cast de-skills normally, continue the script?\nPlease try attack manually.');
+      // pauseChange();
+      return false;
     }
 
     function getCurrentAttackStatus() {
@@ -5302,11 +5313,6 @@
       skillOTOS[skill]++;
       setValue('skillOTOS', skillOTOS);
       return true;
-    }
-
-    function checkEtherTap() {
-      const monsterStatus = g('battle').monsterStatus;
-      return g('option').etherTap && checkCondition(g('option').etherTapCondition) && getMonsterBuff(getMonsterID(monsterStatus[0]), 'coalescemana');
     }
 
     function getHPFromMonsterDB(mdb, name, lv) {
