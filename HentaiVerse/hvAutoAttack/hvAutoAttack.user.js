@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.128
+// @version      2.90.139
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -32,7 +32,7 @@
 (function () {
   try {
     'use strict';
-    const standalone = ['option', 'arena', 'drop', 'stats', 'staminaLostLog', 'battleCode', 'disabled', 'stamina', 'lastHref', 'battle', 'monsterDB', 'monsterMID', 'ability'];
+    const standalone = ['option', 'arena', 'drop', 'stats', 'staminaLostLog', 'battleCode', 'disabled', 'stepIn', 'stamina', 'lastHref', 'battle', 'monsterDB', 'monsterMID', 'ability'];
     const sharable = ['option'];
     const excludeStandalone = { 'option': ['optionStandalone', 'version', 'lang'] };
     const href = window.location.href;
@@ -79,8 +79,8 @@
           '!=': { precedence : 0, func: (a, b) => a !== b ? 1 : 0 },
           '&&': { precedence : -1, func: (a, b) => a && b ? 1 : 0 },
           '||': { precedence : -1, func: (a, b) => a || b ? 1 : 0 },
-          '**': { precedence:3, func: (a,b) => Math.pow(a, b)},
-          '!': { precedence : -1, func: (a) => a ? 0 : 1 },
+          '**': { precedence:3, func: (a, b) => Math.pow(a, b)},
+          '!': { precedence : -2, func: (a) => a ? 0 : 1 },
           '+': { precedence : 1, func: (a, b) => a + b },
           '-': { precedence : 1, func: (a, b) => a - b },
           '*': { precedence : 2, func: (a, b) => a * b },
@@ -168,29 +168,36 @@
         infixToPostfix(infixTokens) {
           const output = [];
           const stack = [];
-
           for (const token of infixTokens) {
-            if (typeof token === 'number' || /[a-zA-Z_'"]/.test(token[0])) {
-              output.push(token);
+            switch(true) {
+              case typeof token === 'number' || /[a-zA-Z_'"]/.test(token[0]):
+                output.push(token);
+                break;
+              case token === '(':
+                stack.push(token);
+                break;
+              case token === ')':
+                while (stack.length && stack[stack.length - 1] !== '(') {
+                  output.push(stack.pop());
+                }
+                stack.pop();
+                break;
+              case $RPN.isOperator(token):
+                while (
+                  stack.length &&
+                  stack[stack.length - 1] !== '(' &&
+                  $RPN.hasHigherPrecedence(stack[stack.length - 1], token) &&
+                  $RPN.operators[token].func.length !== 1
+                ) {
+                  output.push(stack.pop());
+                }
+                stack.push(token);
+                break;
+              default:
+                break;
             }
-            else if (token === '(') {
-              stack.push(token);
-            }
-            else if (token === ')') {
-              while (stack.length && stack[stack.length - 1] !== '(') {
-                output.push(stack.pop());
-              }
-              stack.pop();
-            }
-            else if ($RPN.isOperator(token)) {
-              while (
-                stack.length &&
-                stack[stack.length - 1] !== '(' &&
-                $RPN.hasHigherPrecedence(stack[stack.length - 1], token)
-              ) {
-                output.push(stack.pop());
-              }
-              stack.push(token);
+            if (!$RPN.isOperator(token) && stack.length && $RPN.isOperator(stack[stack.length - 1]) && $RPN.operators[stack[stack.length - 1]].func.length === 1) {
+              output.push(stack.pop());
             }
           }
 
@@ -206,37 +213,38 @@
           for (const token of postfixTokens) {
             if (typeof token === 'number') {
               stack.push(token);
+              continue;
             }
-            else if (typeof token === 'string' && /[a-zA-Z_.'"]/.test(token[0])) {
+            if (typeof token === 'string' && /[a-zA-Z_.'"]/.test(token[0])) {
               let value = resolver ? resolver(token) : token;
               if (typeof value === 'string' && value[0] !== "'" && value[0] != '"') value = `'${value}'`;
               stack.push(value);
+              continue;
             }
-            else {
-              let a, b;
-              if (stack.length < 2) {
-                if (token === '-') {
-                  b = stack.pop();
-                  a = 0;
-                } else if (token === '!') {
-                  a = stack.pop();
-                  b = undefined;
-                } else {
-                  throw new Error('Wrong Expression.');
-                }
-              } else {
+            let a, b;
+            if ($RPN.operators[token].func.length === 1) {
+              a = stack.pop();
+              b = undefined;
+            }
+            else if (stack.length < 2) {
+              if (token === '-') {
                 b = stack.pop();
-                a = stack.pop();
-              }
-
-              let result;
-              if (token in $RPN.operators) {
-                result = $RPN.operators[token].func(a, b);
+                a = 0;
               } else {
-                throw new Error(`Unknow operator: ${token}`);
+                throw new Error('Wrong Expression.');
               }
-              stack.push(result);
+            } else {
+              b = stack.pop();
+              a = stack.pop();
             }
+
+            let result;
+            if (token in $RPN.operators) {
+              result = $RPN.operators[token].func(a, b);
+            } else {
+              throw new Error(`Unknow operator: ${token}`);
+            }
+            stack.push(result);
           }
 
           if (stack.length !== 1) {
@@ -416,7 +424,7 @@
             r.context.onerror?.();
           } else if (text === 'state lock limiter in effect') {
             if ($ajax.error !== text) {
-              // popup(`<p style="color: #f00; font-weight: bold;">${text}</p><p>Your connection speed is so fast that <br>you have reached the maximum connection limit.</p><p>Try again later.</p>`);
+              popup(`<p style="color: #f00; font-weight: bold;">${text}</p><p>Your connection speed is so fast that <br>you have reached the maximum connection limit.</p><p>Try again later.</p>`);
               console.error(`${text}\nYour connection speed is so fast that you have reached the maximum connection limit. Try again later.`)
             }
             $ajax.error = text;
@@ -835,6 +843,34 @@
       return doc;
     }
 
+    function popup(text) {
+      if (!g('option').popup) return;
+      const popupWindow = cE('div');
+      popupWindow.style.cssText += 'position:fixed;top:0;left:0;width:100%;height:100%;background-color:#0006;z-index:1001;cursor:pointer;display:flex;justify-content:center;align-items:center;'
+      popupWindow.addEventListener('click', r);
+      document.body.appendChild(popupWindow);
+      const display = cE('div');
+      display.innerText = text;
+      display.style.cssText += 'min-width:400px;min-height:100px;max-width:100%;max-height:100%;padding:10px;background-color:#fff;border:1px solid;display:flex;flex-direction:column;justify-content:center;font-size:10pt;color:#333;';
+      popupWindow.appendChild(display);
+      document.addEventListener('keydown', r);
+      return display;
+
+      function r(e) {
+        switch(true) {
+            case e.key?.length >=2 && e.key?.includes('F'): return;
+            case e.ctrlKey: return;
+            default: break;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (e.button !== 0 && !['Enter', ' ', 'Escape'].includes(e.key)) {
+          return;
+        }
+        popupWindow.remove();
+        document.removeEventListener('keydown', r);
+      }
+    }
     function setArenaDisplay() {
       if (!g('option').obscureNotIdleArena) {
         return;
@@ -1369,12 +1405,12 @@
         '    <div class="attackStatusOrder"><input name="attackStatusOrderName" style="width:80%;" type="text" disabled="true"><input name="attackStatusOrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
         '      <div class="hvAATable" style="display:grid; grid-template-columns:repeat(7, 1fr);">',
         '        <div><input id="attackStatusOrder_0" value="Phys,0" type="checkbox"><label for="attackStatusOrder_0"><l0>物理</l0><l1>物理</l1><l2>Physical</l2></label></div>',
-        '        <div><input id="attackStatusOrder_1" value="Fire,1" type="checkbox"><label for="attackStatusOrder_1"><l0>火</l0><l1>火</l1><l2>Fire</l2></label></div>',
-        '        <div><input id="attackStatusOrder_2" value="Cold,2" type="checkbox"><label for="attackStatusOrder_2"><l0>冰</l0><l1>冰</l1><l2>Cold</l2></label></div>',
-        '        <div><input id="attackStatusOrder_3" value="Elec,3" type="checkbox"><label for="attackStatusOrder_3"><l0>雷</l0><l1>雷</l1><l2>Elec</l2></label></div>',
-        '        <div><input id="attackStatusOrder_4" value="Wind,4" type="checkbox"><label for="attackStatusOrder_4"><l0>风</l0><l1>風</l1><l2>Wind</l2></label></div>',
         '        <div><input id="attackStatusOrder_5" value="Divi,5" type="checkbox"><label for="attackStatusOrder_5"><l0>圣</l0><l1>聖</l1><l2>Divine</l2></label></div>',
         '        <div><input id="attackStatusOrder_6" value="Forb,6" type="checkbox"><label for="attackStatusOrder_6"><l0>暗</l0><l1>暗</l1><l2>Forbidden</l2></label></div>',
+        '        <div><input id="attackStatusOrder_1" value="Fire,1" type="checkbox"><label for="attackStatusOrder_1"><l0>火</l0><l1>火</l1><l2>Fire</l2></label></div>',
+        '        <div><input id="attackStatusOrder_2" value="Cold,2" type="checkbox"><label for="attackStatusOrder_2"><l0>冰</l0><l1>冰</l1><l2>Cold</l2></label></div>',
+        '        <div><input id="attackStatusOrder_4" value="Wind,4" type="checkbox"><label for="attackStatusOrder_4"><l0>风</l0><l1>風</l1><l2>Wind</l2></label></div>',
+        '        <div><input id="attackStatusOrder_3" value="Elec,3" type="checkbox"><label for="attackStatusOrder_3"><l0>雷</l0><l1>雷</l1><l2>Elec</l2></label></div>',
         '    </div></div></div>',
 
         '    <div><input id="attackStatusSwitch_0" type="checkbox"><label for="attackStatusSwitch_0"><b><l0>攻击模式 物理</l0><l1>攻擊模式 物理</l1><l2>Attack Mode: Physical</l2></b>: {{attackStatusSwitchCondition0}}</label></div>',
@@ -1409,6 +1445,7 @@
         '  </div>',
 
         '<div class="hvAATab" id="hvAATab-BattleStarter">',
+        ' <div><input id="popup" type="checkbox"><label for="popup"><l0>进入失败时窗口内弹窗提示</l0><l1>進入失敗時窗口內彈窗提示</l1><l2>In-window popup while failed start</l2></label>; </div>',
         ' <div><input id="altBattleFirst" type="checkbox"><label for="altBattleFirst"><b><l0>优先使用alt进入</l0><l1>優先使用alt進入</l1><l2>Use alt.hentaiverse as default while auto start.</l2></b></label></div>',
         ' <div><input id="encounter" type="checkbox"><label for="encounter"><b><l0>自动遭遇战</l0><l1>自動遭遇戰</l1><l2>Auto Encounter</l2></b></label><br>',
         '  <input id="encounterQuickCheck" type="checkbox"><label for="encounterQuickCheck"><l0>精准倒计时(影响性能)</l0><l1>精準(影響性能)</l1><l2>Precise encounter cd(might reduced performsance)</l2></label><br>',
@@ -2541,6 +2578,7 @@
         '<option value="_targetHp">targetHp</option>',
         '<option value="_targetMp">targetMp</option>',
         '<option value="_targetSp">targetSp</option>',
+        '<option value="_targetRank">targetRank</option>',
         '<option value=""></option>',
       ].join('');
       customizeBox.style.cssText += 'display: none;';
@@ -2882,6 +2920,9 @@
         },
         targetBuffTurn(img) {
           return getBuffTurnFromImg(getMonsterBuff(getMonsterID(target), img));
+        },
+        targetRank() {
+          return Object.entries(g('battle').monsterStatus).find(([k, v]) => v.order === target.order)[0] * 1;
         },
         targetHp() {
           return target.hpNow / target.hp;
@@ -3302,12 +3343,13 @@
     } catch (e) { console.error(e) } }
 
     function checkSupply(isGFStandalone) {
-      if (!g('option').checkSupply) {
+      const option = g('option');
+      if (!option.checkSupply) {
         return true;
       }
       const items = g('items');
-      const thresholdList = isGFStandalone ? g('option').checkItemGF : g('option').checkItem;
-      const checkList = isGFStandalone ? g('option').isCheckGF : g('option').isCheck;
+      const thresholdList = isGFStandalone ? option.checkItemGF : option.checkItem;
+      const checkList = isGFStandalone ? option.isCheckGF : option.isCheck;
       const needs = [];
       for (let id in checkList) {
         const item = items[id];
@@ -3324,18 +3366,31 @@
       if (needs.length) {
         console.log(`Needs supply:${needs}`);
         document.title = `[C!${isGFStandalone ? '!' : ''}]` + document.title;
+        switch(option.lang * 1) {
+            case 0:
+            popup(`消耗品${isGFStandalone ? '(压榨届独立配置)' : ''}不足:\n${needs}`);
+            break
+            case 1:
+            popup(`消耗品${isGFStandalone ? '(壓榨屆獨立配置)' : ''}不足:\n${needs}`);
+            break
+            case 2:
+            default:
+            popup(`Failed supply check${isGFStandalone ? ' for Grindfest standalone' : ''}:\n${needs}`);
+            break
+        }
       }
       return !needs.length;
     }
 
     async function asyncCheckRepair(isGrindFestStandalone) { try {
-      if (!g('option').repair) {
+      const option = g('option');
+      if (!option.repair) {
         return true;
       }
       await waitPause();
       $async.logSwitch(arguments);
       let eqps;
-      const threshold = isGrindFestStandalone ? g('option').repairValueGF : g('option').repairValue;
+      const threshold = isGrindFestStandalone ? option.repairValueGF : option.repairValue;
       if (!threshold) { // skip because default repair has been checked before idleArena>GF
         $async.logSwitch(arguments);
         return true;
@@ -3369,7 +3424,19 @@
       }
       eqps = eqps.filter(e=>e);
       if (eqps.length) {
-        console.log('eqps need repair:\n', eqps.join('\n '));
+        console.log('equips need repair:\n', eqps.join('\n '));
+        switch(option.lang * 1) {
+            case 0:
+            popup(`装备需要修理:\n${eqps.join('\n ')}`);
+            break
+            case 1:
+            popup(`裝備需要修理:\n${eqps.join('\n ')}`);
+            break
+            case 2:
+            default:
+            popup(`Equips need repair:\n${eqps.join('\n ')}`);
+            break
+        }
         document.title = `[R!]` + document.title;
       }
       $async.logSwitch(arguments);
@@ -3415,8 +3482,21 @@
       if (staminaChecked === 0) { // failed currently
         const now = time(0);
         setTimeout(method, Math.floor(now / _1h + 1) * _1h - now);
+        // popup('Failed stamina check for now.');
         document.title = `[S!]` + document.title;
       } else { // case -1: // failed with nature recover
+        switch(option.lang * 1) {
+            case 0:
+            popup('当日精力不足(含自然恢复)');
+            break
+            case 1:
+            popup('當日精力不足(含自然恢復)');
+            break
+            case 2:
+            default:
+            popup('Failed stamina check with nature recover.');
+            break
+        }
         document.title = `[S!!]` + document.title;
       }
     }
@@ -3951,9 +4031,10 @@
     function getRangeCenter(target, range, isWeaponAttack, excludeWeightRatio, forceUseIndex) {
       let msTemp = JSON.parse(JSON.stringify(g('battle').monsterStatus));
       msTemp.sort(objArrSort('order'));
+      let minWeight = Number.MAX_SAFE_INTEGER;
       // 0. 范围大于等于全体时，直接释放全体
-      if (!range || range <= msTemp.length) {
-        return { id: getMonsterID(target), rank: Number.MAX_SAFE_INTEGER };
+      if (!range || range >= msTemp.length) {
+        return { id: getMonsterID(target), weight: minWeight };
       }
       const option = g('option');
       const centralExtraWeight = -1 * Math.log10(1 + (isWeaponAttack ? (option.centralExtraRatio / 100) ?? 0 : 0));
@@ -3961,45 +4042,44 @@
       let newOrder = order;
       // sort by order to fix id
       let unreachableWeight = option.unreachableWeight;
-      let minRank = Number.MAX_SAFE_INTEGER;
       // 1. 以选中目标为中心，优先向上
       // 2. 超过顶部则向下找
       // 3. 死亡、超过底下的将被溢出抛弃
       const up = Math.floor(range / 2);
       const down = range - up - 1;
-      const top = order <= range ? 0 : Math.max(order - down, 0);
+      const top = order < range ? 0 : Math.max(order - down, 0);
       const bottom = Math.min(order + up, msTemp.length-1);
       for (let i = top; i <= bottom; i++) {
         let center = i;
         if (msTemp[center].isDead) continue;
-        let rank = 0;
+        let weight = 0;
         let overflow = Math.max(up-center,0);
         const [min, max] = [center - up + overflow, center + down + overflow];
         for (let inRange = min; inRange <= max; inRange++) {
           let cew = inRange === center ? centralExtraWeight : 0; // cew <= 0, 增加未命中权重，降低命中权重
           let mon = msTemp[inRange];
           if (inRange < 0 || inRange >= msTemp.length || mon.isDead) { // 超出范围 或 死亡目标
-            rank += unreachableWeight;
+            weight += unreachableWeight;
             continue;
           }
           if (excludeWeightRatio) {
             // 特殊排除(ratio === 1则直接排除，0<ratio<1则优先于溢出的情况, ratio === 0 则不排除, ratio < 0 相当于增加权重?)
             const ratio = excludeWeightRatio(mon);
-            rank += ratio * unreachableWeight;
+            weight += ratio * unreachableWeight;
             if (ratio>0) {
               continue;
             }
           }
-          rank += cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
-          rank += forceUseIndex ? -1 : mon.finWeight; // 强制使用顺序而非权重时，全部使用统一的权重而非怪物状态
+          weight += cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
+          weight += forceUseIndex ? -1 : mon.finWeight; // 强制使用顺序而非权重时，全部使用统一的权重而非怪物状态
         }
-        if (rank < minRank) {
+        if (weight < minWeight) {
           newOrder = center;
-          minRank = rank;
+          minWeight = weight;
           break;
         }
       }
-      return { id: getMonsterID(newOrder), rank: minRank };
+      return { id: getMonsterID(newOrder), weight: minWeight };
     }
 
     function autoPause() {
@@ -5121,6 +5201,7 @@
       }
       // 获取目标
       const option = g('option');
+      const excludedRatio = 0.9
       let exclusiveBuffs;
       if (isAll && option.debuffAllExclusive) {
         exclusiveBuffs = Object.keys(option.debuffAllExclusive);
@@ -5133,8 +5214,9 @@
           return threshold >= 0 && current > threshold;
         }
         for (const exclusive of exclusiveBuffs) {
-          if (isDebuffed(target, exclusive)) return 0.9;
+          if (isDebuffed(target, exclusive)) return excludedRatio;
         }
+        return 0;
       };
       let debuffByIndex = isAll && option[`debuffSkill${buff}AllByIndex`];
       let monsterStatus = g('battle').monsterStatus.filter(monster => !monster.isDead);
@@ -5145,21 +5227,20 @@
       }
       let max = isAll ? monsterStatus.length : 1;
       let id;
-      let minRank = Number.MAX_SAFE_INTEGER;
+      let minWeight = Number.MAX_SAFE_INTEGER;
+      const condition = option[`debuffSkill${buff}${isAll ? 'All' : ''}Condition`];target => checkCondition(condition, [target]);
+      const excludeCondition = target => checkCondition(condition, [target]) ? isDebuffed(target) : excludedRatio;
       for (let i = 0; i < max; i++) {
         let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || buff === 'Si' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
-        target = checkCondition(option[`debuffSkill${buff}${isAll ? 'all' : ''}Condition`], [target]);
+        target = checkCondition(condition, [target]);
         if (!target || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) {
           continue;
         }
-        const center = getRangeCenter(target, range, false, isDebuffed, debuffByIndex);
-        if (!id || center.rank < minRank) {
-          minRank = center.rank;
+        const center = getRangeCenter(target, range, false, excludeCondition, debuffByIndex);
+        if (!id || center.weight < minWeight) {
+          minWeight = center.weight;
           id = center.id;
-          if (!isAll) {
-            // 只有覆盖全体才需要遍历全部
-            break;
-          }
+          if (!isAll) break; // 只有覆盖全体才需要遍历全部
         }
       }
       if (id === undefined) {
@@ -5196,7 +5277,7 @@
       const option = g('option');
       const monsters = g('battle').monsterStatus;
       let attackStatusOrder = option.attackStatusOrderValue?.split(',').map(x=>x*1) ?? [];
-      attackStatusOrder = attackStatusOrder.concat([0,1,2,3,4,5,6].filter(x=> !(attackStatusOrder.includes(x))));
+      attackStatusOrder = attackStatusOrder.concat([0,6,5,1,2,4,3].filter(x=> !(attackStatusOrder.includes(x))));
       if (option.attackStatusSwitch) {
         for (const status of attackStatusOrder) {
           const condition = option[`attackStatusSwitchCondition${status}`] ?? {};
