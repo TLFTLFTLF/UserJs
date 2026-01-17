@@ -5225,7 +5225,7 @@
         monsterStatus = JSON.parse(JSON.stringify(monsterStatus));
         monsterStatus.sort(objArrSort('order'));
       }
-      let max = isAll ? monsterStatus.length : 1;
+      let max = isAll ? ((buff === 'Sle' || buff === 'Co') ? monsterStatus.length - 1 : monsterStatus.length) : 1;
       let id;
       let minWeight = Number.MAX_SAFE_INTEGER;
       const condition = option[`debuffSkill${buff}${isAll ? 'All' : ''}Condition`];target => checkCondition(condition, [target]);
