@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.139
+// @version      2.90.147
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -32,7 +32,8 @@
 (function () {
   try {
     'use strict';
-    const standalone = ['option', 'arena', 'drop', 'stats', 'staminaLostLog', 'battleCode', 'disabled', 'stepIn', 'stamina', 'lastHref', 'battle', 'monsterDB', 'monsterMID', 'ability'];
+    const standalone = ['option', 'arena', 'stamina', 'lastHref', 'ability', 'drop', 'stats', 'battleCode', 'disabled', 'stepIn', 'battle', 'monsterDB', 'monsterMID', 'skillOTOS'];
+    const localStorage = ['drop', 'stats', 'battleCode', 'disabled', 'stepIn', 'battle', 'monsterDB', 'monsterMID', 'skillOTOS'];
     const sharable = ['option'];
     const excludeStandalone = { 'option': ['optionStandalone', 'version', 'lang'] };
     const href = window.location.href;
@@ -217,7 +218,12 @@
             }
             if (typeof token === 'string' && /[a-zA-Z_.'"]/.test(token[0])) {
               let value = resolver ? resolver(token) : token;
-              if (typeof value === 'string' && value[0] !== "'" && value[0] != '"') value = `'${value}'`;
+              if (typeof value === 'string') {
+                if (value[0] !== `"` && value[0] != `'`) value = `'${value}'`;
+                else if (value[0] === `"` && value[value.length-1] === `"`) {
+                  value = `'${value.slice(1,value.length-1)}'`;
+                }
+              }
               stack.push(value);
               continue;
             }
@@ -1091,45 +1097,57 @@
       }
     }
 
-    function setLocal(item, value) {
-      if (JSON.stringify(getLocal(item)) === JSON.stringify(value)) {
+    function setLocal(key, value, isLocalStroage) {
+      if (JSON.stringify(getLocal(key)) === JSON.stringify(value)) {
         return;
       }
-      if (typeof GM_setValue === 'undefined') {
-        window.localStorage[`hvAA-${item}`] = (typeof value === 'string') ? value : JSON.stringify(value);
+      if (typeof GM_setValue === 'undefined' || isLocalStroage) {
+        window.localStorage[`hvAA-${key}`] = (typeof value === 'string') ? value : JSON.stringify(value);
       } else {
-        GM_setValue(item, value);
+        GM_setValue(key, value);
       }
     }
 
-    function setValue(item, value) { // 储存数据
-      if (!standalone.includes(item)) {
-        setLocal(item, value);
+    function setValue(key, value) { // 储存数据
+      const isLocalStorage = localStorage.includes(key);
+      if (!standalone.includes(key)) {
+        setLocal(key, value, isLocalStorage);
         return value;
       }
-      setLocal(`${current}_${item}`, value);
-      if (sharable.includes(item) && !getValue('option').optionStandalone) {
-        setLocal(`${other}_${item}`, value);
+      setLocal(`${current}_${key}`, value, isLocalStorage);
+      if (sharable.includes(key) && !getValue('option').optionStandalone) {
+        setLocal(`${other}_${key}`, value, isLocalStorage);
       }
       return value;
     }
 
-    function getLocal(item, toJSON) {
-      if (typeof GM_getValue === 'undefined' || !GM_getValue(item, null)) {
-        item = `hvAA-${item}`;
-        return (item in window.localStorage) ? ((toJSON) ? JSON.parse(window.localStorage[item]) : window.localStorage[item]) : null;
+    function getLocal(key, isLocalStorage, toJSON) {
+      if (typeof GM_getValue === 'undefined' || !GM_getValue(key, null)) {
+        key = `hvAA-${key}`;
+        return (key in window.localStorage) ? (toJSON ? JSON.parse(window.localStorage[key]) : window.localStorage[key]) : null;
       }
-      return GM_getValue(item, null);
+      let value = GM_getValue(key, null);
+      if (!isLocalStorage) {
+        return value;
+      }
+      key = `hvAA-${key}`;
+      if (!(key in window.localStorage)) {
+        return value;
+      }
+      value = window.localStorage[key];
+      value = toJSON ? JSON.parse(value) : value;
+      return value
     }
 
     function getValue(key, toJSON) { // 读取数据
+      const isLocalStorage = localStorage.includes(key);
       if (!standalone.includes(key)) {
-        return getLocal(key, toJSON);
+        return getLocal(key, isLocalStorage, toJSON);
       }
-      let otherWorldItem = getLocal(`${other}_${key}`);
+      let otherWorldItem = getLocal(`${other}_${key}`, isLocalStorage);
       // 将旧的数据迁移到新的数据
-      if (!getLocal(`${current}_${key}`)) {
-        let itemExisted = getLocal(key);
+      if (!getLocal(`${current}_${key}`, isLocalStorage)) {
+        let itemExisted = getLocal(key, isLocalStorage);
         if (!itemExisted && sharable.includes(key)) {
           itemExisted = otherWorldItem;
         }
@@ -1138,32 +1156,36 @@
         }
         itemExisted = JSON.parse(JSON.stringify(itemExisted));
         setLocal(`${current}_${key}`, itemExisted);
-        delLocal(key);
+        delLocal(key, isLocalStorage);
       }
       if (Object.keys(excludeStandalone).includes(key)) {
-        otherWorldItem ??= getLocal(`${current}_${key}`) ?? {};
+        otherWorldItem ??= getLocal(`${current}_${key}`, isLocalStorage) ?? {};
         for (let i of excludeStandalone[key]) {
-          otherWorldItem[i] = getLocal(`${current}_${key}`)[i];
+          otherWorldItem[i] = getLocal(`${current}_${key}`, isLocalStorage)[i];
         }
       }
       setLocal(`${other}_${key}`, otherWorldItem);
-      return getLocal(`${current}_${key}`);
+      return getLocal(`${current}_${key}`, isLocalStorage, toJSON);
     }
 
-    function delLocal(key) {
+    function delLocal(key, isLocalStorage) {
       if (typeof GM_deleteValue === 'undefined') {
         window.localStorage.removeItem(`hvAA-${key}`);
         return;
       }
+      if (isLocalStorage) {
+        window.localStorage.removeItem(`hvAA-${key}`);
+      }
       GM_deleteValue(key);
     }
 
-    function delValue(key) { // 删除数据
+    function delValue(key, isLocalStorage) { // 删除数据
+      isLocalStorage ||= localStorage.includes(key);
       if (standalone.includes(key)) {
         key = `${current}_${key}`;
       }
       if (typeof key === 'string') {
-        delLocal(key);
+        delLocal(key, isLocalStorage);
         return;
       }
       if (typeof key !== 'number') {
@@ -1174,7 +1196,7 @@
         1: ['battle', 'battleCode'],
       }
       for (let item of itemMap[key]) {
-        delValue(item);
+        delValue(item, isLocalStorage);
       }
     }
 
@@ -1431,13 +1453,9 @@
         '    <div><input id="autoPause" type="checkbox"><label for="autoPause"><b><l0>自动暂停</l0><l1>自動暫停</l1><l2>Pause</l2></b></label>: {{pauseCondition}}</div>',
         '    <div><input id="autoFlee" type="checkbox"><label for="autoFlee"><b><l0>自动逃跑</l0><l1>自動逃跑</l1><l2>Flee</l2></b></label>: {{fleeCondition}}</div>',
         '    <div><input id="autoSkipDefeated" type="checkbox"><label for="autoSkipDefeated"><b><l0>战败自动退出战斗</l0><l1>戰敗自動退出戰鬥</l1><l2>Exit battle when defeated.</l2></b></label></div>',
+        '    <div><input id="nativeNewRound" type="checkbox"><label for="nativeNewRound"><b><l0>使用原生方式进入新回合</l0><l1>使用原生方式進入新回合</l1><l2>Native new round</l2></b></label></div>',
         '    <div><b><l0>继续新回合延时</l0><l1>繼續新回合延時</l1><l2>New round wait time</l2></b>: <input class="hvAANumber" name="NewRoundWaitTime" placeholder="0" type="text"> <l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
         '    <div><b><l0>战斗结束退出延时</l0><l1>戰鬥結束退出延時</l1><l2>Exit battle wait time</l2></b>: <input class="hvAANumber" name="ExitBattleWaitTime" placeholder="3" type="text"> <l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
-        // '    <div style="display: flex; flex-flow: wrap;"><b><l0>当损失精力</l0><l1>當損失精力</l1><l2>If it lost Stamina</l2></b> ≥ <input class="hvAANumber" name="staminaLose" placeholder="5" type="text">: ',
-        // '    <input id="staminaPause" type="checkbox"><label for="staminaPause"><l0>脚本暂停</l0><l1>腳本暫停</l1><l2>pause script</l2></label>;',
-        // '    <input id="staminaWarn" type="checkbox"><label for="staminaWarn"><l01>警告</l01><l2>warn</l2></label>; ',
-        // '    <input id="staminaFlee" type="checkbox"><label for="staminaFlee"><l01>逃跑</l01><l2>flee</l2></label>',
-        // '    <button class="staminaLostLog"><l0>精力损失日志</l0><l1>精力損失日誌</l1><l2>staminaLostLog</l2></button></div>',
         '    <div><b><l0>战斗页面停留</l0><l1>戰鬥頁面停留</l1><l2>If not active for </l2></b>: ',
         '      <br><input id="battleUnresponsive_Alert" type="checkbox"><label for="battleUnresponsive_Alert"><input class="hvAANumber" name="battleUnresponsiveTime_Alert" type="text"> <l0>秒，警报</l0><l1>秒，警報</l1><l2>(s), alarm</l2></label>; ',
         '      <br><input id="battleUnresponsive_Reload" type="checkbox"><label for="battleUnresponsive_Reload"><input class="hvAANumber" name="battleUnresponsiveTime_Reload" type="text"> <l0>秒，刷新页面</l0><l1>秒，刷新頁面</l1><l2>(s), reload page</l2></label>',
@@ -1472,66 +1490,71 @@
         '  <div><input id="repair" type="checkbox"><label for="repair"><b>[R!]<l0>修复装备</l0><l1>修復裝備</l1><l2>Repair Equipment</l2></b></label>: ',
         '    <l0>耐久度</l0><l1>耐久度</l1><l2>Durability</l2> ≤ <input class="hvAANumber" name="repairValue" type="text">% <l0>或 压榨届耐久度</l0><l1>或 壓榨屆耐久度</l1><l2>OR Grind Fest Durability</l2> ≤ <input class="hvAANumber" name="repairValueGF" type="text">%</br><input id="encounterRepair" type="checkbox"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></div>',
         '  <div><input id="equStorage" type="checkbox"><label for="equStorage"><b>[E!]<l0>装备库存</l0><l1>裝備庫存</l1><l2>Equipment Storage</l2></b></label> ≤ <input class="hvAANumber" style="width: 32px;" name="equStorageValue" placeholder="2000" type="text">; <input id="encounterEquStorage" type="checkbox"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></div>',
-        '  <div><input id="checkSupply" type="checkbox"><b>[C!]<l0>检查物品库存</l0><l1>檢查物品庫存</l1><l2>Check is item needs supply</l2>;</b><input id="encounterSupply" type="checkbox"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2>',
-        '  <div class="hvAAcheckItems hvAATable">',
-        '    <div><input id="isCheck_11191" type="checkbox"><input class="hvAANumber" name="checkItem_11191" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
-        '    <div><input id="isCheck_11195" type="checkbox"><input class="hvAANumber" name="checkItem_11195" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
-        '    <div><input id="isCheck_11199" type="checkbox"><input class="hvAANumber" name="checkItem_11199" placeholder="0" type="text"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></div>',
-        '    <div><input id="isCheck_11291" type="checkbox"><input class="hvAANumber" name="checkItem_11291" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
-        '    <div><input id="isCheck_11295" type="checkbox"><input class="hvAANumber" name="checkItem_11295" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
-        '    <div><input id="isCheck_11299" type="checkbox"><input class="hvAANumber" name="checkItem_11299" placeholder="0" type="text"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></div>',
-        '    <div><input id="isCheck_11391" type="checkbox"><input class="hvAANumber" name="checkItem_11391" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
-        '    <div><input id="isCheck_11395" type="checkbox"><input class="hvAANumber" name="checkItem_11395" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
-        '    <div><input id="isCheck_11399" type="checkbox"><input class="hvAANumber" name="checkItem_11399" placeholder="0" type="text"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></div>',
-        '    <div><input id="isCheck_19111" type="checkbox"><input class="hvAANumber" name="checkItem_19111" placeholder="0" type="text"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></div>',
-        '    <div><input id="isCheck_19131" type="checkbox"><input class="hvAANumber" name="checkItem_19131" placeholder="0" type="text"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></div>',
-        '    <div><input id="isCheck_11501" type="checkbox"><input class="hvAANumber" name="checkItem_11501" placeholder="0" type="text"><l0>终极秘药</l0><l1>終極秘藥</l1><l2>Last Elixir</l2></div>',
-        '    <div><input id="isCheck_13101" type="checkbox"><input class="hvAANumber" name="checkItem_13101" placeholder="0" type="text"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2><br>Scroll of Swiftness</l2></div>',
-        '    <div><input id="isCheck_13111" type="checkbox"><input class="hvAANumber" name="checkItem_13111" placeholder="0" type="text"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2><br>Scroll of Protection</l2></div>',
-        '    <div><input id="isCheck_13199" type="checkbox"><input class="hvAANumber" name="checkItem_13199" placeholder="0" type="text"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2><br>Scroll of the Avatar</l2></div>',
-        '    <div><input id="isCheck_13201" type="checkbox"><input class="hvAANumber" name="checkItem_13201" placeholder="0" type="text"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2><br>Scroll of Absorption</l2></div>',
-        '    <div><input id="isCheck_13211" type="checkbox"><input class="hvAANumber" name="checkItem_13211" placeholder="0" type="text"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2><br>Scroll of Shadows</l2></div>',
-        '    <div><input id="isCheck_13221" type="checkbox"><input class="hvAANumber" name="checkItem_13221" placeholder="0" type="text"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2><br>Scroll of Life</l2></div>',
-        '    <div><input id="isCheck_13299" type="checkbox"><input class="hvAANumber" name="checkItem_13299" placeholder="0" type="text"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2><br>Scroll of the Gods</l2></div>',
-        '    <div><input id="isCheck_12101" type="checkbox"><input class="hvAANumber" name="checkItem_12101" placeholder="0" type="text"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2><br>Infusion of Flames</l2></div>',
-        '    <div><input id="isCheck_12201" type="checkbox"><input class="hvAANumber" name="checkItem_12201" placeholder="0" type="text"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2><br>Infusion of Frost</l2></div>',
-        '    <div><input id="isCheck_12301" type="checkbox"><input class="hvAANumber" name="checkItem_12301" placeholder="0" type="text"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2><br>Infusion of Lightning</l2></div>',
-        '    <div><input id="isCheck_12401" type="checkbox"><input class="hvAANumber" name="checkItem_12401" placeholder="0" type="text"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2><br>Infusion of Storms</l2></div>',
-        '    <div><input id="isCheck_12501" type="checkbox"><input class="hvAANumber" name="checkItem_12501" placeholder="0" type="text"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2><br>Infusion of Divinity</l2></div>',
-        '    <div><input id="isCheck_12601" type="checkbox"><input class="hvAANumber" name="checkItem_12601" placeholder="0" type="text"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2><br>Infusion of Darkness</l2></div>',
-        '    <div><input id="isCheck_11401" type="checkbox"><input class="hvAANumber" name="checkItem_11401" placeholder="0" type="text"><l0>能量饮料</l0><l1>能量飲料</l1><l2><br>Energy Drink</l2></div>',
-        '    <div><input id="isCheck_11402" type="checkbox"><input class="hvAANumber" name="checkItem_11402" placeholder="0" type="text"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2><br>Caffeinated Candy</l2></div>',
-        '</div></div>',
-        '  <div><input id="checkSupplyGF" type="checkbox"><b>[C!!]<l0>压榨届使用额外的库存检查</l0><l1>壓榨屆使用額外的庫存檢查</l1><l2>Extra supply check for Grind Fest</l2></b>',
-        '  <div class="hvAAcheckItems hvAATable">',
-        '    <div><input id="isCheckGF_11195" type="checkbox"><input class="hvAANumber" name="checkItemGF_11195" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
-        '    <div><input id="isCheckGF_11191" type="checkbox"><input class="hvAANumber" name="checkItemGF_11191" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
-        '    <div><input id="isCheckGF_11199" type="checkbox"><input class="hvAANumber" name="checkItemGF_11199" placeholder="0" type="text"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></div>',
-        '    <div><input id="isCheckGF_11295" type="checkbox"><input class="hvAANumber" name="checkItemGF_11295" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
-        '    <div><input id="isCheckGF_11291" type="checkbox"><input class="hvAANumber" name="checkItemGF_11291" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
-        '    <div><input id="isCheckGF_11299" type="checkbox"><input class="hvAANumber" name="checkItemGF_11299" placeholder="0" type="text"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></div>',
-        '    <div><input id="isCheckGF_11395" type="checkbox"><input class="hvAANumber" name="checkItemGF_11395" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
-        '    <div><input id="isCheckGF_11391" type="checkbox"><input class="hvAANumber" name="checkItemGF_11391" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
-        '    <div><input id="isCheckGF_11399" type="checkbox"><input class="hvAANumber" name="checkItemGF_11399" placeholder="0" type="text"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></div>',
-        '    <div><input id="isCheckGF_19111" type="checkbox"><input class="hvAANumber" name="checkItemGF_19111" placeholder="0" type="text"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></div>',
-        '    <div><input id="isCheckGF_19131" type="checkbox"><input class="hvAANumber" name="checkItemGF_19131" placeholder="0" type="text"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></div>',
-        '    <div><input id="isCheckGF_11501" type="checkbox"><input class="hvAANumber" name="checkItemGF_11501" placeholder="0" type="text"><l0>终极秘药</l0><l1>終極秘藥</l1><l2>Last Elixir</l2></div>',
-        '    <div><input id="isCheckGF_13101" type="checkbox"><input class="hvAANumber" name="checkItemGF_13101" placeholder="0" type="text"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2><br>Scroll of Swiftness</l2></div>',
-        '    <div><input id="isCheckGF_13111" type="checkbox"><input class="hvAANumber" name="checkItemGF_13111" placeholder="0" type="text"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2><br>Scroll of Protection</l2></div>',
-        '    <div><input id="isCheckGF_13199" type="checkbox"><input class="hvAANumber" name="checkItemGF_13199" placeholder="0" type="text"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2><br>Scroll of the Avatar</l2></div>',
-        '    <div><input id="isCheckGF_13201" type="checkbox"><input class="hvAANumber" name="checkItemGF_13201" placeholder="0" type="text"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2><br>Scroll of Absorption</l2></div>',
-        '    <div><input id="isCheckGF_13211" type="checkbox"><input class="hvAANumber" name="checkItemGF_13211" placeholder="0" type="text"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2><br>Scroll of Shadows</l2></div>',
-        '    <div><input id="isCheckGF_13221" type="checkbox"><input class="hvAANumber" name="checkItemGF_13221" placeholder="0" type="text"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2><br>Scroll of Life</l2></div>',
-        '    <div><input id="isCheckGF_13299" type="checkbox"><input class="hvAANumber" name="checkItemGF_13299" placeholder="0" type="text"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2><br>Scroll of the Gods</l2></div>',
-        '    <div><input id="isCheckGF_12101" type="checkbox"><input class="hvAANumber" name="checkItemGF_12101" placeholder="0" type="text"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2><br>Infusion of Flames</l2></div>',
-        '    <div><input id="isCheckGF_12201" type="checkbox"><input class="hvAANumber" name="checkItemGF_12201" placeholder="0" type="text"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2><br>Infusion of Frost</l2></div>',
-        '    <div><input id="isCheckGF_12301" type="checkbox"><input class="hvAANumber" name="checkItemGF_12301" placeholder="0" type="text"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2><br>Infusion of Lightning</l2></div>',
-        '    <div><input id="isCheckGF_12401" type="checkbox"><input class="hvAANumber" name="checkItemGF_12401" placeholder="0" type="text"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2><br>Infusion of Storms</l2></div>',
-        '    <div><input id="isCheckGF_12501" type="checkbox"><input class="hvAANumber" name="checkItemGF_12501" placeholder="0" type="text"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2><br>Infusion of Divinity</l2></div>',
-        '    <div><input id="isCheckGF_12601" type="checkbox"><input class="hvAANumber" name="checkItemGF_12601" placeholder="0" type="text"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2><br>Infusion of Darkness</l2></div>',
-        '    <div><input id="isCheckGF_11401" type="checkbox"><input class="hvAANumber" name="checkItemGF_11401" placeholder="0" type="text"><l0>能量饮料</l0><l1>能量飲料</l1><l2><br>Energy Drink</l2></div>',
-        '    <div><input id="isCheckGF_11402" type="checkbox"><input class="hvAANumber" name="checkItemGF_11402" placeholder="0" type="text"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2><br>Caffeinated Candy</l2></div>',
-        '</div></div>',
+        '  <div><input id="checkSupply" type="checkbox"><b>[C!]<l0>检查物品库存</l0><l1>檢查物品庫存</l1><l2>Check is item needs supply</l2></b>;',
+        '    <l0>库存</l0><l1>庫存</l1><l2>Warn if supply</l2>&lt;max(100%,<input id="checkSupplyWarn" class="hvAANumber" name="checkSupplyWarn" placeholder="100" type="text">%)<l0>时提示</l0><l1>時提示</l1>;',
+        '    <input id="encounterSupply" type="checkbox"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2>',
+        '    <div class="hvAAcheckItems hvAATable">',
+        '      <div><input id="isCheck_11191" type="checkbox"><input class="hvAANumber" name="checkItem_11191" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
+        '      <div><input id="isCheck_11195" type="checkbox"><input class="hvAANumber" name="checkItem_11195" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
+        '      <div><input id="isCheck_11199" type="checkbox"><input class="hvAANumber" name="checkItem_11199" placeholder="0" type="text"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></div>',
+        '      <div><input id="isCheck_11291" type="checkbox"><input class="hvAANumber" name="checkItem_11291" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
+        '      <div><input id="isCheck_11295" type="checkbox"><input class="hvAANumber" name="checkItem_11295" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
+        '      <div><input id="isCheck_11299" type="checkbox"><input class="hvAANumber" name="checkItem_11299" placeholder="0" type="text"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></div>',
+        '      <div><input id="isCheck_11391" type="checkbox"><input class="hvAANumber" name="checkItem_11391" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
+        '      <div><input id="isCheck_11395" type="checkbox"><input class="hvAANumber" name="checkItem_11395" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
+        '      <div><input id="isCheck_11399" type="checkbox"><input class="hvAANumber" name="checkItem_11399" placeholder="0" type="text"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></div>',
+        '      <div><input id="isCheck_19111" type="checkbox"><input class="hvAANumber" name="checkItem_19111" placeholder="0" type="text"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></div>',
+        '      <div><input id="isCheck_19131" type="checkbox"><input class="hvAANumber" name="checkItem_19131" placeholder="0" type="text"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></div>',
+        '      <div><input id="isCheck_11501" type="checkbox"><input class="hvAANumber" name="checkItem_11501" placeholder="0" type="text"><l0>终极秘药</l0><l1>終極秘藥</l1><l2>Last Elixir</l2></div>',
+        '      <div><input id="isCheck_13101" type="checkbox"><input class="hvAANumber" name="checkItem_13101" placeholder="0" type="text"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2><br>Scroll of Swiftness</l2></div>',
+        '      <div><input id="isCheck_13111" type="checkbox"><input class="hvAANumber" name="checkItem_13111" placeholder="0" type="text"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2><br>Scroll of Protection</l2></div>',
+        '      <div><input id="isCheck_13199" type="checkbox"><input class="hvAANumber" name="checkItem_13199" placeholder="0" type="text"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2><br>Scroll of the Avatar</l2></div>',
+        '      <div><input id="isCheck_13201" type="checkbox"><input class="hvAANumber" name="checkItem_13201" placeholder="0" type="text"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2><br>Scroll of Absorption</l2></div>',
+        '      <div><input id="isCheck_13211" type="checkbox"><input class="hvAANumber" name="checkItem_13211" placeholder="0" type="text"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2><br>Scroll of Shadows</l2></div>',
+        '      <div><input id="isCheck_13221" type="checkbox"><input class="hvAANumber" name="checkItem_13221" placeholder="0" type="text"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2><br>Scroll of Life</l2></div>',
+        '      <div><input id="isCheck_13299" type="checkbox"><input class="hvAANumber" name="checkItem_13299" placeholder="0" type="text"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2><br>Scroll of the Gods</l2></div>',
+        '      <div><input id="isCheck_12101" type="checkbox"><input class="hvAANumber" name="checkItem_12101" placeholder="0" type="text"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2><br>Infusion of Flames</l2></div>',
+        '      <div><input id="isCheck_12201" type="checkbox"><input class="hvAANumber" name="checkItem_12201" placeholder="0" type="text"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2><br>Infusion of Frost</l2></div>',
+        '      <div><input id="isCheck_12301" type="checkbox"><input class="hvAANumber" name="checkItem_12301" placeholder="0" type="text"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2><br>Infusion of Lightning</l2></div>',
+        '      <div><input id="isCheck_12401" type="checkbox"><input class="hvAANumber" name="checkItem_12401" placeholder="0" type="text"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2><br>Infusion of Storms</l2></div>',
+        '      <div><input id="isCheck_12501" type="checkbox"><input class="hvAANumber" name="checkItem_12501" placeholder="0" type="text"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2><br>Infusion of Divinity</l2></div>',
+        '      <div><input id="isCheck_12601" type="checkbox"><input class="hvAANumber" name="checkItem_12601" placeholder="0" type="text"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2><br>Infusion of Darkness</l2></div>',
+        '      <div><input id="isCheck_11401" type="checkbox"><input class="hvAANumber" name="checkItem_11401" placeholder="0" type="text"><l0>能量饮料</l0><l1>能量飲料</l1><l2><br>Energy Drink</l2></div>',
+        '      <div><input id="isCheck_11402" type="checkbox"><input class="hvAANumber" name="checkItem_11402" placeholder="0" type="text"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2><br>Caffeinated Candy</l2></div>',
+        '    </div>',
+        '  </div>',
+        '  <div><input id="checkSupplyGF" type="checkbox"><b>[C!!]<l0>压榨届使用额外的库存检查</l0><l1>壓榨屆使用額外的庫存檢查</l1><l2>Extra supply check for Grind Fest</l2></b>;',
+        '    <l0>库存</l0><l1>庫存</l1><l2>Warn if supply</l2>&lt;max(100%,<input id="checkSupplyWarnGF" class="hvAANumber" name="checkSupplyWarnGF" placeholder="100" type="text">%)<l0>时提示</l0><l1>時提示</l1>;',
+        '    <div class="hvAAcheckItems hvAATable">',
+        '      <div><input id="isCheckGF_11195" type="checkbox"><input class="hvAANumber" name="checkItemGF_11195" placeholder="0" type="text"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></div>',
+        '      <div><input id="isCheckGF_11191" type="checkbox"><input class="hvAANumber" name="checkItemGF_11191" placeholder="0" type="text"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></div>',
+        '      <div><input id="isCheckGF_11199" type="checkbox"><input class="hvAANumber" name="checkItemGF_11199" placeholder="0" type="text"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></div>',
+        '      <div><input id="isCheckGF_11295" type="checkbox"><input class="hvAANumber" name="checkItemGF_11295" placeholder="0" type="text"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></div>',
+        '      <div><input id="isCheckGF_11291" type="checkbox"><input class="hvAANumber" name="checkItemGF_11291" placeholder="0" type="text"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></div>',
+        '      <div><input id="isCheckGF_11299" type="checkbox"><input class="hvAANumber" name="checkItemGF_11299" placeholder="0" type="text"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></div>',
+        '      <div><input id="isCheckGF_11395" type="checkbox"><input class="hvAANumber" name="checkItemGF_11395" placeholder="0" type="text"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></div>',
+        '      <div><input id="isCheckGF_11391" type="checkbox"><input class="hvAANumber" name="checkItemGF_11391" placeholder="0" type="text"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></div>',
+        '      <div><input id="isCheckGF_11399" type="checkbox"><input class="hvAANumber" name="checkItemGF_11399" placeholder="0" type="text"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></div>',
+        '      <div><input id="isCheckGF_19111" type="checkbox"><input class="hvAANumber" name="checkItemGF_19111" placeholder="0" type="text"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></div>',
+        '      <div><input id="isCheckGF_19131" type="checkbox"><input class="hvAANumber" name="checkItemGF_19131" placeholder="0" type="text"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></div>',
+        '      <div><input id="isCheckGF_11501" type="checkbox"><input class="hvAANumber" name="checkItemGF_11501" placeholder="0" type="text"><l0>终极秘药</l0><l1>終極秘藥</l1><l2>Last Elixir</l2></div>',
+        '      <div><input id="isCheckGF_13101" type="checkbox"><input class="hvAANumber" name="checkItemGF_13101" placeholder="0" type="text"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2><br>Scroll of Swiftness</l2></div>',
+        '      <div><input id="isCheckGF_13111" type="checkbox"><input class="hvAANumber" name="checkItemGF_13111" placeholder="0" type="text"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2><br>Scroll of Protection</l2></div>',
+        '      <div><input id="isCheckGF_13199" type="checkbox"><input class="hvAANumber" name="checkItemGF_13199" placeholder="0" type="text"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2><br>Scroll of the Avatar</l2></div>',
+        '      <div><input id="isCheckGF_13201" type="checkbox"><input class="hvAANumber" name="checkItemGF_13201" placeholder="0" type="text"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2><br>Scroll of Absorption</l2></div>',
+        '      <div><input id="isCheckGF_13211" type="checkbox"><input class="hvAANumber" name="checkItemGF_13211" placeholder="0" type="text"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2><br>Scroll of Shadows</l2></div>',
+        '      <div><input id="isCheckGF_13221" type="checkbox"><input class="hvAANumber" name="checkItemGF_13221" placeholder="0" type="text"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2><br>Scroll of Life</l2></div>',
+        '      <div><input id="isCheckGF_13299" type="checkbox"><input class="hvAANumber" name="checkItemGF_13299" placeholder="0" type="text"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2><br>Scroll of the Gods</l2></div>',
+        '      <div><input id="isCheckGF_12101" type="checkbox"><input class="hvAANumber" name="checkItemGF_12101" placeholder="0" type="text"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2><br>Infusion of Flames</l2></div>',
+        '      <div><input id="isCheckGF_12201" type="checkbox"><input class="hvAANumber" name="checkItemGF_12201" placeholder="0" type="text"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2><br>Infusion of Frost</l2></div>',
+        '      <div><input id="isCheckGF_12301" type="checkbox"><input class="hvAANumber" name="checkItemGF_12301" placeholder="0" type="text"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2><br>Infusion of Lightning</l2></div>',
+        '      <div><input id="isCheckGF_12401" type="checkbox"><input class="hvAANumber" name="checkItemGF_12401" placeholder="0" type="text"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2><br>Infusion of Storms</l2></div>',
+        '      <div><input id="isCheckGF_12501" type="checkbox"><input class="hvAANumber" name="checkItemGF_12501" placeholder="0" type="text"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2><br>Infusion of Divinity</l2></div>',
+        '      <div><input id="isCheckGF_12601" type="checkbox"><input class="hvAANumber" name="checkItemGF_12601" placeholder="0" type="text"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2><br>Infusion of Darkness</l2></div>',
+        '      <div><input id="isCheckGF_11401" type="checkbox"><input class="hvAANumber" name="checkItemGF_11401" placeholder="0" type="text"><l0>能量饮料</l0><l1>能量飲料</l1><l2><br>Energy Drink</l2></div>',
+        '      <div><input id="isCheckGF_11402" type="checkbox"><input class="hvAANumber" name="checkItemGF_11402" placeholder="0" type="text"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2><br>Caffeinated Candy</l2></div>',
+        '    </div>',
+        '  </div>',
         '  </div>',
 
         '<div class="hvAATab" id="hvAATab-Recovery">',
@@ -1676,7 +1699,7 @@
         '    <input id="debuffAllExclusive_Slo" type="checkbox"><label for="debuffAllExclusive_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
         '    <input id="debuffAllExclusive_Dr" type="checkbox"><label for="debuffAllExclusive_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
         '    <input id="debuffAllExclusive_Im" type="checkbox"><label for="debuffAllExclusive_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
-        '    <input id="debuffAllExclusive_MN" type="checkbox"><label for="debuffAllExclusive_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2></label>',
+        '    <input id="debuffAllExclusive_MN" type="checkbox"><label for="debuffAllExclusive_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label>',
         '    <input id="debuffAllExclusive_Co" type="checkbox"><label for="debuffAllExclusive_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
         '  </div>',
 
@@ -1689,18 +1712,18 @@
         '    <input id="debuffSkillOrder_Slo" type="checkbox"><label for="debuffSkillOrder_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
         '    <input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
         '    <input id="debuffSkillOrder_Im" type="checkbox"><label for="debuffSkillOrder_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
-        '    <input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2></label>',
+        '    <input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label>',
         '    <input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
         '  </div>',
         '  <div><l0>特殊先给全体施放和单体施放使用共享的阈值和各自独立的条件</l0><l1>特殊先給全體施放和單體施放使用共享的閾值和各自獨立的條件</l1><l2>Using sharing threshold and standalone conditions between special cast for debuff all enemies first and cast for debuff each enemy</l2></div>',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSleAll" type="checkbox"><label for="debuffSkillSleAll"><l0>先给全体上沉眠(Sl)</l0><l1>先給全體上沉眠(Sl)</l1><l2>Sleep all enemies first.</l2></label><input id="debuffSkillSleAllByIndex" type="checkbox"><label for="debuffSkillSleAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSleAllCondition}}',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillBlAll" type="checkbox"><label for="debuffSkillBlAll"><l0>先给全体上致盲(Bl)</l0><l1>先給全體上致盲(Bl)</l1><l2>Blind all enemies first.</l2></label><input id="debuffSkillBlAllByIndex" type="checkbox"><label for="debuffSkillBlAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillBlAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给全体上虚弱(We)</l0><l1>先給全體上虛弱(We)</l1><l2>Weakened all enemies first.</l2></label><input id="debuffSkillWeAllByIndex" type="checkbox"><label for="debuffSkillWeAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillWeAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给全体上虚弱(We)</l0><l1>先給全體上虛弱(We)</l1><l2>Weaken all enemies first.</l2></label><input id="debuffSkillWeAllByIndex" type="checkbox"><label for="debuffSkillWeAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillWeAllCondition}}',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSiAll" type="checkbox"><label for="debuffSkillSiAll"><l0>先给全体上沉默(Si)</l0><l1>先給全體上沉默(Si)</l1><l2>Silence all enemies first.</l2></label><input id="debuffSkillSiAllByIndex" type="checkbox"><label for="debuffSkillSiAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSiAllCondition}}',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSloAll" type="checkbox"><label for="debuffSkillSloAll"><l0>先给全体上缓慢(Slo)</l0><l1>先給全體上緩慢(Slo)</l1><l2>Slow all enemies first.</l2></label><input id="debuffSkillSloAllByIndex" type="checkbox"><label for="debuffSkillSloAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSloAllCondition}}',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillDrAll" type="checkbox"><label for="debuffSkillDrAll"><l0>先给全体上枯竭(Dr)</l0><l1>先給全體上枯竭(Dr)</l1><l2>Drain all enemies first.</l2></label><input id="debuffSkillDrAllByIndex" type="checkbox"><label for="debuffSkillDrAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillDrAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给全体上陷危(Im)</l0><l1>先給全體上陷危(Im)</l1><l2>Imperiled all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillImAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillMNAll" type="checkbox"><label for="debuffSkillMNAll"><l0>先给全体上魔磁网(MN)</l0><l1>先給全體上魔磁網(MN)</l1><l2>MagNet all enemies first.</l2></label><input id="debuffSkillMNAllByIndex" type="checkbox"><label for="debuffSkillMNAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillMNAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给全体上陷危(Im)</l0><l1>先給全體上陷危(Im)</l1><l2>Imperil all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillImAllCondition}}',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillMNAll" type="checkbox"><label for="debuffSkillMNAll"><l0>先给全体上魔磁网/固定(MN)</l0><l1>先給全體上魔磁網/固定(MN)</l1><l2>MagNet/Immobilize all enemies first.</l2></label><input id="debuffSkillMNAllByIndex" type="checkbox"><label for="debuffSkillMNAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillMNAllCondition}}',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillCoAll" type="checkbox"><label for="debuffSkillCoAll"><l0>先给全体上混乱(Co)</l0><l1>先給全體上混亂(Co)</l1><l2>Confuse all enemies first.</l2></label><input id="debuffSkillCoAllByIndex" type="checkbox"><label for="debuffSkillCoAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillCoAllCondition}}',
 
         '    <div><input id="debuffSkill_Sle" type="checkbox"><label for="debuffSkill_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Sle" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSleCondition}}</div>',
@@ -1710,7 +1733,7 @@
         '    <div><input id="debuffSkill_Slo" type="checkbox"><label for="debuffSkill_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Slo" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSloCondition}}</div>',
         '    <div><input id="debuffSkill_Dr" type="checkbox"><label for="debuffSkill_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Dr" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillDrCondition}}</div>',
         '    <div><input id="debuffSkill_Im" type="checkbox"><label for="debuffSkill_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Im" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillImCondition}}</div>',
-        '    <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_MN" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillMNCondition}}</div>',
+        '    <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_MN" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillMNCondition}}</div>',
         '    <div><input id="debuffSkill_Co" type="checkbox"><label for="debuffSkill_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Co" type="text"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></label>{{debuffSkillCoCondition}}</div>',
         '  </div>',
 
@@ -1762,7 +1785,7 @@
         '      <div><input class="hvAANumber" name="weight_BW" placeholder="-10" type="text" style="width: 40px;"> <l0>流血(Bl)</l0><l1>流血(Bl)</l1><l2>Bleeding Wound</l2></div>',
         '      <div><input class="hvAANumber" name="weight_Co" placeholder="300" type="text" style="width: 40px;"> <l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></div>',
         '      <div><input class="hvAANumber" name="weight_Dr" placeholder="2" type="text" style="width: 40px;"> <l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></div>',
-        '      <div><input class="hvAANumber" name="weight_MN" placeholder="7" type="text" style="width: 40px;"> <l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2></div>',
+        '      <div><input class="hvAANumber" name="weight_MN" placeholder="7" type="text" style="width: 40px;"> <l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></div>',
         '      <div><input class="hvAANumber" name="weight_Stun" placeholder="290" type="text" style="width: 40px;"> <l0>眩晕(St)</l0><l1>眩暈(St)</l1><l2>Stunned</l2></div>',
         '      <div><input class="hvAANumber" name="weight_CM" placeholder="-20" type="text" style="width: 40px;"> <l0>魔力合流()</l0><l1>魔力合流(CM)</l1><l2>Coalesced Mana</l2></div>',
         '      <div><input class="hvAANumber" name="weight_BS" placeholder="0" type="text" style="width: 40px;"> <l0>焚燒的靈魂(BS)</l0><l1>焚燒的靈魂(BS)</l1><l2>Burning Soul</l2></div>',
@@ -2092,16 +2115,6 @@
           }
         }, 3000);
       };
-      // gE('.staminaLostLog', optionBox).onclick = function () {
-      //   const out = [];
-      //   const staminaLostLog = getValue('staminaLostLog', true);
-      //   for (const i in staminaLostLog) {
-      //     out.push(`${i}: ${staminaLostLog[i]}`);
-      //   }
-      //   if (window.confirm(`总共${out.length}条记录 (There are ${out.length} logs): \n${out.reverse().join('\n')}\n是否重置 (Whether to reset)?`)) {
-      //     setValue('staminaLostLog', {});
-      //   }
-      // };
       gE('.idleArenaReset', optionBox).onclick = function () {
         if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
           delValue('arena');
@@ -2579,6 +2592,8 @@
         '<option value="_targetMp">targetMp</option>',
         '<option value="_targetSp">targetSp</option>',
         '<option value="_targetRank">targetRank</option>',
+        '<option value="_targetName">targetName</option>',
+        '<option value="_targetBossType">targetBossType</option>',
         '<option value=""></option>',
       ].join('');
       customizeBox.style.cssText += 'display: none;';
@@ -2819,6 +2834,9 @@
               isInData = result;
               continue;
             }
+            if (typeof result === 'string') {
+              result = JSON.parse(result)
+            }
             result = result[key]
           }
           result ??= isInData ? 0 : result;
@@ -2923,6 +2941,40 @@
         },
         targetRank() {
           return Object.entries(g('battle').monsterStatus).find(([k, v]) => v.order === target.order)[0] * 1;
+        },
+        targetName() {
+          const mon = getMonster(getMonsterID(target))
+          return gE(`.btm3>div>div`, mon).innerText.replace(' ', '_');
+        },
+        targetBossType() {
+          const name = func.targetName();
+          switch(name.replace('_', ' ')) {
+            case 'Manbearpig':
+            case 'White Bunneh':
+            case 'Mithra':
+            case 'Dalek':
+              return 1; // BOSS
+            case 'Konata':
+            case 'Mikuru Asahina':
+            case 'Ryouko Asakura':
+            case 'Yuki Nagato':
+              return 2; // Legendaries
+            case 'Skuld':
+            case 'Urd':
+            case 'Verdandi':
+            case 'Yggdrasil':
+              return 3; // Trio and the Tree
+            case 'Rhaegal':
+            case 'Viserion':
+            case 'Drogon':
+              return 4; // A Dance with Dragons
+            case 'Real Life':
+            case 'Invisible Pink Unicorn':
+            case 'Flying Spaghetti Monster':
+              return 5; // Gods
+            default:
+              return 0;
+          }
         },
         targetHp() {
           return target.hpNow / target.hp;
@@ -3350,15 +3402,20 @@
       const items = g('items');
       const thresholdList = isGFStandalone ? option.checkItemGF : option.checkItem;
       const checkList = isGFStandalone ? option.isCheckGF : option.isCheck;
+      const percentage = ((isGFStandalone ? option.checkSupplyWarnGF : option.checkSupplyWarn) ?? 100);
       const needs = [];
+      const warns = [];
       for (let id in checkList) {
         const item = items[id];
-        if (!item) {
-          continue;
-        }
-        const [name, count] = item;
+        if (!item) continue;
+        let [name, count] = item;
         const threshold = thresholdList[id] ?? 0;
-        if ((count ?? 0) >= threshold) {
+        const warnThreshold = threshold * percentage / 100;
+        count ??= 0;
+        if (count < warnThreshold) {
+          warns.push(`\n${name}(${count}<${warnThreshold}(${threshold}*${percentage}%))`);
+        }
+        if (count >= threshold) {
           continue;
         }
         needs.push(`\n${name}(${count}<${threshold})`);
@@ -3376,6 +3433,21 @@
             case 2:
             default:
             popup(`Failed supply check${isGFStandalone ? ' for Grindfest standalone' : ''}:\n${needs}`);
+            break
+        }
+      } else if (warns.length) {
+        console.log(`Warn supply:${warns}`);
+        document.title = `[C!${isGFStandalone ? '!' : ''}]` + document.title;
+        switch(option.lang * 1) {
+            case 0:
+            popup(`消耗品${isGFStandalone ? '(压榨届独立配置)' : ''} < ${percentage}%:\n${warns}`);
+            break
+            case 1:
+            popup(`消耗品${isGFStandalone ? '(壓榨屆獨立配置)' : ''} < ${percentage}%:\n${warns}`);
+            break
+            case 2:
+            default:
+            popup(`Supplys ${isGFStandalone ? ' for Grindfest standalone' : ''} < ${percentage}%:\n${warns}`);
             break
         }
       }
@@ -3477,13 +3549,16 @@
       const option = g('option');
       console.log(`stamina check done:\nlow: ${condition.staminaLow ?? option.staminaLow}\n${condition.staminaCost ? `cost: ${condition.staminaCost}\n` : ''}status: ${staminaChecked === 1 ? 'succeed' : staminaChecked === 0 ? 'failed' : `failed with nature recover ${option.staminaLowWithReNat}`}`);
       if (staminaChecked === 1) { // succeed
+        document.title = document.title.replace(`[S!]`, '');
         return true;
       }
       if (staminaChecked === 0) { // failed currently
         const now = time(0);
         setTimeout(method, Math.floor(now / _1h + 1) * _1h - now);
         // popup('Failed stamina check for now.');
-        document.title = `[S!]` + document.title;
+        if (!document.title.includes(`[S!]`)) {
+          document.title = `[S!]` + document.title;
+        }
       } else { // case -1: // failed with nature recover
         switch(option.lang * 1) {
             case 0:
@@ -4007,7 +4082,7 @@
     }
 
     function getMonster(id) {
-      return gE(`#mkey_${id}`);
+      return gE(`#mkey_${id % 10}`);
     }
 
     function getMonsterBuff(id, buff) {
@@ -4198,7 +4273,6 @@
               return;
             }
             const html = await $ajax.insert(window.location.href);
-            gE('#pane_completion').removeChild(gE('#btcp'));
             clearBattleUnresponsive();
             const doc = $doc(html)
             if (gE('#riddlecounter', doc)) {
@@ -4209,6 +4283,12 @@
               goto();
               return;
             }
+            if (option.nativeNewRound) {
+              onStepInDone();
+              gE('#btcp').click();
+              return;
+            }
+            gE('#pane_completion').removeChild(gE('#btcp'));
             ['#battle_right', '#battle_left'].forEach(selector => { gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); })
             unsafeWindow.battle = undefined;
             await loadUnsafeWindowBattle();
@@ -4257,22 +4337,22 @@
       gE('head').appendChild(fakeApiCall);
       const fakeApiResponse = cE('script');
       fakeApiResponse.textContent = `api_response = ${function (b) {
-        if (b.readyState === 4) {
-          if (b.status === 200) {
-            const a = JSON.parse(b.responseText);
-            if (a.login !== undefined) {
-              top.window.location.href = login_url;
-            } else {
-              if (a.error || a.reload) {
-                window.location.href = window.location.search;
-              }
-              return a;
-            }
-          } else {
-            window.location.href = window.location.search;
-          }
+        if (b.readyState !== 4) {
+          return false;
         }
-        return false;
+        if (b.status !== 200) {
+          window.location.href = window.location.search;
+          return false;
+        }
+        const a = JSON.parse(b.responseText);
+        if (a.login !== undefined) {
+          top.window.location.href = login_url;
+          return false;
+        }
+        if (a.error || a.reload) {
+          window.location.href = window.location.search;
+        }
+        return a;
       }.toString()}`;
       gE('head').appendChild(fakeApiResponse);
     }
@@ -4343,19 +4423,6 @@
           setEncounter(encounter);
         }
       }
-      // if (/You lose \d+ Stamina/.test(battleLog[0].textContent)) {
-      //   const staminaLostLog = getValue('staminaLostLog', true) || {};
-      //   staminaLostLog[time(3)] = battleLog[0].textContent.match(/You lose (\d+) Stamina/)[1] * 1;
-      //   setValue('staminaLostLog', staminaLostLog);
-      //   const losedStamina = battleLog[0].textContent.match(/\d+/)[0] * 1;
-      //   if (losedStamina >= g('option').staminaLose) {
-      //     setAlarm('Error');
-      //     if (!_alert(1, '当前Stamina过低\n或Stamina损失过多\n是否继续？', '當前Stamina過低\n或Stamina損失過多\n是否繼續？', 'Continue?\nYou either have too little Stamina or have lost too much')) {
-      //       pauseChange();
-      //       return;
-      //     }
-      //   }
-      // }
 
       const roundPrev = battle.roundNow;
 
