@@ -385,11 +385,11 @@
           }
         },
         getLast: function () {
-          const v = window.localStorage.getItem((isIsekai ? 'hvuti' : 'hvut') + '_last_post');
+          const v = localStorage.getItem((isIsekai ? 'hvuti' : 'hvut') + '_last_post');
           return v === null ? undefined : JSON.parse(v);
         },
         setLast: function (last) {
-          window.localStorage.setItem((isIsekai ? 'hvuti' : 'hvut') + '_last_post', JSON.stringify(last));
+          localStorage.setItem((isIsekai ? 'hvuti' : 'hvut') + '_last_post', JSON.stringify(last));
         },
         timer: function () {
           function ontimer() {
