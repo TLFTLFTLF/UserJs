@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.158
+// @version      2.90.163
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -291,7 +291,7 @@
         },
         log: function () {
           if ($debug.realtime) {
-            console.log(...arguments, `\n`, (new $debug.Stack()).stack);
+            console.trace(...arguments);
             return;
           }
           $debug.logList.push({
@@ -666,7 +666,7 @@
     } catch (e) { console.error('Opener reload or popup close failed:', e) } }
 
     function checkOption() {
-      g('version', GM_info ? GM_info.script.version.substr(0, 4) : scriptVersion);
+      g('version', GM_info ? GM_info.script.version : scriptVersion);
       if (!getValue('option')) {
         g('lang', window.prompt('请输入以下语言代码对应的数字\nPlease put in the number of your preferred language (0, 1 or 2)\n0.简体中文\n1.繁體中文\n2.English', 0) || 2);
         addStyle();
@@ -678,7 +678,7 @@
       const option = g('option');
       g('lang', option.lang || '0');
       addStyle();
-      if (option.version !== g('version')) {
+      if (option.version.substr(0, 4) !== g('version').substr(0, 4)) {
         gE('.hvAAButton').click();
         if (_alert(1, 'hvAutoAttack版本更新，请重新设置\n强烈推荐【重置设置】后再设置。\n是否查看更新说明？', 'hvAutoAttack版本更新，請重新設置\n強烈推薦【重置設置】後再設置。\n是否查看更新說明？', 'hvAutoAttack version update, please reset\nIt\'s recommended to reset all configuration.\nDo you want to read the changelog?')) {
           $ajax.openNoFetch('https://github.com/dodying/UserJs/commits/master/HentaiVerse/hvAutoAttack/hvAutoAttack.user.js', true);
@@ -870,9 +870,9 @@
 
       function r(e) {
         switch(true) {
-            case e.key?.length >=2 && e.key?.includes('F'): return;
-            case e.ctrlKey: return;
-            default: break;
+          case e.key?.length >=2 && e.key?.includes('F'): return;
+          case e.ctrlKey: return;
+          default: break;
         }
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -919,6 +919,15 @@
 
     function loadOption() {
       let option = getValue('option', true);
+
+      // 迁移2.90.162及之前的targetHp等到targetHpDecimal等
+      const version = option.version.split('.').map(v=>isNaN(v*1) ? v : v*1)
+      if (version[0] < 2 || version[1] < 90 || isNaN(1*version[2]) || version[2]<=162) {
+        option = JSON.parse(JSON.stringify(option).replace('targetHp', 'targetHpDecimal').replace('targetMp', 'targetMpDecimal').replace('targetSp', 'targetSpDecimal'));
+        option.version = '2.90.163'
+        g('version', option.version)
+      }
+
       const aliasDict = {
         'debuffSkillImAll': 'debuffSkillAllIm',
         'debuffSkillWeAll': 'debuffSkillAllWk',
@@ -963,12 +972,11 @@
           newCondition[(id * 1 + size).toString()] = [...condition];
           newCondition[(id * 1 + size).toString()].push("fightingStyle,6,2");
           condition.push("fightingStyle,5,2");
-          condition.push("targetHp,2,0.25");
+          condition.push("_targetHp,2,0.25");
           condition.push("_targetBuffTurn_bleed,1,0");
         }
         option.skillT3Condition = newCondition;
       }
-
       if (isFrame) {
         g('option', option);
       } else {
@@ -1410,8 +1418,8 @@
         '  <div><b><l0>战斗执行顺序(未配置的按照下面的顺序)</l0><l1>戰鬥執行順序(未配置的按照下面的順序)</l1><l2>Battal Order(Using order below as default if not configed)</l2></b>: <input id="battleOrderDefaultOnly" type="checkbox"><label for="battleOrderDefaultOnly">(<l0>只使用默认顺序</l0><l1>只使用默認順序</l1><l2>Default order only</l2>)</label>',
         '    <div class="battleOrder"><input name="battleOrderName" style="width:80%;" type="text" disabled="true"><br>',
         '      <div class="hvAATable" style="display:grid; grid-template-columns:repeat(4, 1fr);">',
-        '        <div><input id="battleOrder_autoPause" value="Pause" type="checkbox"><label for="battleOrder_autoPause"><l0>自动暂停</l0><l1>自動暫停</l1><l2>Auto Pause</l2></label></div>',
         '        <div><input id="battleOrder_autoCure" value="Cure" type="checkbox"><label for="battleOrder_autoCure"><l0>使用治疗</l0><l1>使用治療</l1><l2>Cure</l2></label></div>',
+        '        <div><input id="battleOrder_autoPause" value="Pause" type="checkbox"><label for="battleOrder_autoPause"><l0>自动暂停</l0><l1>自動暫停</l1><l2>Auto Pause</l2></label></div>',
         '        <div><input id="battleOrder_autoSSDisable" value="SSDisable" type="checkbox"><label for="battleOrder_autoSSDisable"><l0>关闭灵动架式</l0><l1>關閉靈動架式</l1><l2>Disable Sprite</l2></label></div>',
         '        <div><input id="battleOrder_autoRecover" value="Rec" type="checkbox"><label for="battleOrder_autoRecover"><l0>恢复(含治疗)</l0><l1>恢復(含治療)</l1><l2>Recover(& cure)</l2></label></div>',
         '        <div><input id="battleOrder_useScroll" value="Scroll" type="checkbox"><label for="battleOrder_useScroll"><l0>使用卷轴</l0><l1>使用捲軸</l1><l2>Use Scroll</l2></label><br></div>',
@@ -2392,11 +2400,16 @@
       };
       gE('.hvAAReset', optionBox).onclick = function () {
         if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-          delValue('option');
+          const option = getValue('option');
+          const newOption = {};
+          setValue('option', Object.fromEntries(excludeStandalone.option.map(ex => [ex, option[ex]])));
+          if (_alert(1, '已重置，是否刷新', '已重置，是否刷新', 'Reseted. Page reload?')) {
+            goto();
+          }
         }
       };
       gE('.hvAAApply', optionBox).onclick = function () {
-        if (gE('select[name="attackStatus"] option[value="-1"]:checked', optionBox)) {
+        if (gE('select[name="attackStatus"] option[value="-1"]:checked', optionBox) || !gE('select[name="attackStatus"] option:checked', optionBox)) {
           _alert(0, '请选择攻击模式', '請選擇攻擊模式', 'Please select the attack mode');
           gE('.hvAATabmenu>span[name="Main"]').click();
           gE('#attackStatus', optionBox).style.border = '1px solid red';
@@ -2624,6 +2637,10 @@
         '<option value="mp">mp</option>',
         '<option value="sp">sp</option>',
         '<option value="oc">oc</option>',
+        '<option value="_hpDecimal">hpDecimal</option>',
+        '<option value="_mpDecimal">mpDecimal</option>',
+        '<option value="_spDecimal">spDecimal</option>',
+        '<option value="_ocDecimal">ocDecimal</option>',
         '<option value="">- - - -</option>',
         '<option value="monsterAll">monsterAll</option>',
         '<option value="monsterAlive">monsterAlive</option>',
@@ -2674,6 +2691,9 @@
         '<option value="_targetHp">targetHp</option>',
         '<option value="_targetMp">targetMp</option>',
         '<option value="_targetSp">targetSp</option>',
+        '<option value="_targetHpDecimal">targetHpDecimal</option>',
+        '<option value="_targetMpDecimal">targetMpDecimal</option>',
+        '<option value="_targetSpDecimal">targetSpDecimal</option>',
         '<option value="_targetRank">targetRank</option>',
         '<option value="_targetName">targetName</option>',
         '<option value="_targetBossType">targetBossType</option>',
@@ -2902,31 +2922,49 @@
     function checkCondition(parms, targets = undefined) {
       let i, j, k, target;
       targets ??= [g('battle').monsterStatus[0]];
-      if (typeof parms === 'undefined') {
+      if (!parms || !Object.keys(parms).length) {
         return targets[0];
       }
       const returnValue = function (str) {
+        // 旧版本/强制使用func
         if (str.match(/^_/) && !str.match(/\./)) {
           const arr = str.split('_');
           return func[arr[1]](...[...arr].splice(2));
-        } if (isNaN(str * 1)) {
-          const paramList = str.split('.');
-          let result, isInData;
-          for (let key of paramList) {
-            if (!result) {
-              result = (g('battle') ?? getValue('battle', true))[key] ?? g(key) ?? getValue(key) ?? g('option')?.[key];
-              isInData = result;
-              continue;
-            }
-            if (typeof result === 'string') {
-              result = JSON.parse(result)
-            }
-            result = result[key]
-          }
-          result ??= isInData ? 0 : result;
-          return isNaN(result * 1) ? result ?? str : (result * 1);
         }
-        return str * 1;
+        if (!isNaN(str * 1)) { // 数字直接返回
+          return str * 1;
+        }
+        const paramList = str.split('.');
+        let result, isInData;
+        for (let key of paramList) {
+          if (typeof result === 'undefined') { // 获取顶层数据
+            result = g('battle') ? g('battle')[key] : undefined;
+            if (typeof result === 'undefined') {
+              result = getValue('battle', true) ? getValue('battle', true)[key] : undefined;
+            }
+            if (typeof result === 'undefined') {
+              result = g(key);
+            }
+            if (typeof result === 'undefined') {
+              result = getValue(key);
+            }
+            if (typeof result === 'undefined') {
+              result = g('option')?.[key];
+            }
+            if (typeof result === 'undefined' && func[key]) {
+              result = func[key]();
+            }
+            if (typeof result === 'undefined') break;
+            isInData = true; // 存在顶层数据
+            continue;
+          }
+          if (typeof result === 'string') {
+            result = JSON.parse(result)
+          }
+          result = result[key]
+        }
+        result ??= isInData ? 0 : result; // 存在顶层数据时默认为0
+        return isNaN(result * 1) ? result ?? str : (result * 1);
       };
       const func = {
         ar() {
@@ -3061,13 +3099,35 @@
           }
         },
         targetHp() {
-          return target.hpNow / target.hp;
+          return Math.floor(func.targetHpDecimal() * 100);
         },
         targetMp() {
-          return target.mpNow;
+          return Math.floor(func.targetMpDecimal() * 100);
         },
         targetSp() {
+          return Math.floor(func.targetSpDecimal() * 100);
           return target.spNow;
+        },
+        targetHpDecimal() {
+          return target.hpNow / target.hp;
+        },
+        targetMpDecimal() {
+          return target.mpNow;
+        },
+        targetSpDecimal() {
+          return target.spNow;
+        },
+        hpDecimal() {
+          return g('hp') / 100;
+        },
+        mpDecimal() {
+          return g('mp') / 100;
+        },
+        spDecimal() {
+          return g('sp') / 100;
+        },
+        ocDecimal() {
+          return g('oc') / 100;
         },
       };
       for (i in parms) {
@@ -3178,7 +3238,7 @@
       for (const cookieObj of cookie) {
         const match = cookieObj.match(/ipb_member_id=(\d+)/);
         if (match) {
-          return match[1];
+          return match[1] * 1;
         }
       }
     }
@@ -3425,12 +3485,18 @@
       [stamina.current, stamina.punish, stamina.perk] = await Promise.all([
         ... (await getCurrentStamina()),
         (async () => { try {
-          const perk = stamina.perk ?? {};
+          let perk = stamina.perk;
+          if (perk && !Array.isArray(perk)) {
+            perk = Object.keys(perk).map(id=>id*1)
+          }
+          if (!perk?.length) {
+            perk = undefined;
+          }
           if (isIsekai || !g('option').restoreStamina) {
             return perk;
           }
           let currentID, html;
-          if (perk[currentID = getCurrentUser()]) {
+          if (perk && perk[currentID = getCurrentUser() * 1]) {
             return perk;
           }
           if (!(html = await $ajax.insert('https://e-hentai.org/hathperks.php'))) {
@@ -3438,38 +3504,49 @@
           }
           const doc = $doc(html);
           const perks = gE('.stuffbox>table>tbody>tr', 'all', doc);
-          if (perks && perks[25].innerHTML.includes('Obtained')) {
-            perk[currentID] = true;
+          if (perks && perks[25].innerHTML.includes('Obtained') && !(perk ??= []).includes(currentID)) {
+            perk.push(currentID);
           }
           return perk;
         } catch(e) {console.error(e) }})()
       ]);
+      if (!stamina.current) {
+        if (!getValue('stamina')) {
+          setValue('stamina', stamina);
+        }
+        $async.logSwitch(arguments);
+        return
+      }
       stamina.time = time(0);
-      if (!stamina.punish && stamina.ratio !== 1) {
-        stamina.ratio = 1;
-        setValue('stamina', stamina);
+      if (!stamina.punish) {
+        [stamina.lastRatio, stamina.lastRatioRaw] = [stamina.ratio, stamina.ratioRaw];
+        [stamina.ratio, stamina.ratioRaw] = [undefined, undefined]
+      }
+      if (stamina.ratio === 1 && (stamina.lastRatio === 1 || !stamina.lastRatio)) {
+        [stamina.ratio, stamina.lastRatio, stamina.lastRatioRaw, stamina.ratioRaw] = Array(4).fill(undefined);
       }
       const lastCost = stamina.lastCost;
-      if (!lastCost) {
+      stamina.lastCost = undefined;
+      if (!lastCost || lastCost <= 0.06 ) {
+        setValue('stamina', stamina);
         $async.logSwitch(arguments);
         return;
       }
       last += Math.floor(stamina.time / _1h) - Math.floor(lastTime / _1h);
       const delta = last - stamina.current;
-      if (delta === 0 || lastCost <= 0.06 ) {
+      if (!delta) {
+        setValue('stamina', stamina);
         $async.logSwitch(arguments);
         return;
       }
       const ratio = stamina.punish ? Math.max(1, Math.round(delta / lastCost / 0.25)*0.25) : 1;
       if (stamina.ratio === ratio) {
+        setValue('stamina', stamina);
         $async.logSwitch(arguments);
         return;
       }
-      stamina.lastCost = undefined;
-      stamina.lastRatio = stamina.ratio;
-      stamina.lastRatioRaw = stamina.ratioRaw
-      stamina.ratio = ratio;
-      stamina.ratioRaw = `${delta} / ${Math.round(lastCost * 100) / 100} = ${delta / lastCost}`
+      [stamina.lastRatio, stamina.lastRatioRaw] = [stamina.ratio ?? 1, stamina.ratioRaw];
+      [stamina.ratio, stamina.ratioRaw] = [ratio, `${delta} / ${Math.round(lastCost * 100) / 100} = ${delta / lastCost}`]
       setValue('stamina', stamina);
       console.log('stamina', stamina, '\n', last, '->', stamina.current, '=', lastCost, '*', ratio);
       $async.logSwitch(arguments);
@@ -3483,7 +3560,13 @@
       $async.logSwitch(arguments);
       const html = await $ajax.insert('?s=Character&ss=it');
       const items = {};
-      for (let each of gE('.nosel.itemlist>tbody', $doc(html)).children) {
+      const doc = $doc(html);
+      if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
+        $async.logSwitch(arguments);
+        g('items', null);
+        return;
+      }
+      for (let each of gE('.nosel.itemlist>tbody', doc).children) {
         const name = each.children[0].children[0].innerText;
         const id = each.children[0].children[0].getAttribute('id').split('_')[1];
         const count = each.children[1].innerText;
@@ -3499,6 +3582,9 @@
         return true;
       }
       const items = g('items');
+      if (!items) {
+        return false;
+      }
       const thresholdList = isGFStandalone ? option.checkItemGF : option.checkItem;
       const checkList = isGFStandalone ? option.isCheckGF : option.isCheck;
       const percentage = isGFStandalone ? option.checkSupplyWarnGF : option.checkSupplyWarn;
@@ -3523,14 +3609,14 @@
         console.log(`Needs supply:${needs}`);
         document.title = `[C!${isGFStandalone ? '!' : ''}]` + document.title;
         switch(option.lang * 1) {
-            case 0:
+          case 0:
             popup(`消耗品${isGFStandalone ? '(压榨届独立配置)' : ''}不足:\n${needs}`);
             break
-            case 1:
+          case 1:
             popup(`消耗品${isGFStandalone ? '(壓榨屆獨立配置)' : ''}不足:\n${needs}`);
             break
-            case 2:
-            default:
+          case 2:
+          default:
             popup(`Failed supply check${isGFStandalone ? ' for Grindfest standalone' : ''}:\n${needs}`);
             break
         }
@@ -3538,14 +3624,14 @@
         console.log(`Warn supply:${warns}`);
         document.title = `[C!${isGFStandalone ? '!' : ''}]` + document.title;
         switch(option.lang * 1) {
-            case 0:
+          case 0:
             popup(`消耗品${isGFStandalone ? '(压榨届独立配置)' : ''} < ${percentage}%:\n${warns}`);
             break
-            case 1:
+          case 1:
             popup(`消耗品${isGFStandalone ? '(壓榨屆獨立配置)' : ''} < ${percentage}%:\n${warns}`);
             break
-            case 2:
-            default:
+          case 2:
+          default:
             popup(`Supplys ${isGFStandalone ? ' for Grindfest standalone' : ''} < ${percentage}%:\n${warns}`);
             break
         }
@@ -3582,6 +3668,10 @@
       } else {
         const href = `?s=Bazaar&ss=am&screen=repair&filter=equipped`;
         const doc = $doc(await $ajax.insert(href));
+        if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
+          $async.logSwitch(arguments);
+          return undefined;
+        }
         const token = gE('#equipform>input[name="postoken"]', doc).value;
         eqps = await Promise.all(Array.from(gE('#equiplist>table>tbody>tr:not(.eqselall):not(.eqtplabel)', 'all', doc)).map(async eqp => { try {
           const id = gE('input', eqp).value;
@@ -3597,14 +3687,14 @@
       if (eqps.length) {
         console.log('equips need repair:\n', eqps.join('\n '));
         switch(option.lang * 1) {
-            case 0:
+          case 0:
             popup(`装备需要修理:\n${eqps.join('\n ')}`);
             break
-            case 1:
+          case 1:
             popup(`裝備需要修理:\n${eqps.join('\n ')}`);
             break
-            case 2:
-            default:
+          case 2:
+          default:
             popup(`Equips need repair:\n${eqps.join('\n ')}`);
             break
         }
@@ -3625,10 +3715,18 @@
       if (hvVersion < 91) {
         const href = `?s=Character&ss=in`;
         const doc = $doc(await $ajax.insert(href));
+        if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
+          $async.logSwitch(arguments);
+          return false;
+        }
         count = gE('#eqinv_bot>div>div>div', doc).innerText.match(/: (\d+) \/ \d+/)[1];
       } else {
         const href = `?s=Bazaar&ss=am`;
         const doc = $doc(await $ajax.insert(href));
+        if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
+          $async.logSwitch(arguments);
+          return false;
+        }
         count = gE('#equipblurb>table>tbody>tr>td:nth-child(2)', doc).innerText;
       }
       $async.logSwitch(arguments);
@@ -3651,8 +3749,8 @@
       const [staminaChecked, stmNR] = [checked.checked, checked.stmNR];
       const [neat, neatNR] = [stamina.current-low, stmNR-lowNR];
       console.log(
-        'stamina check succeed:', staminaChecked === 1, ... staminaChecked === -1 ? ['with nature recover', lowNR, 'stmNR:', stmNR, '(', neatNR>=0 ? '+' : '', neatNR, ')'] : [],
-        '\nlow:', low, ... cost ? ['cost:', cost, ... stamina.punish ? ['*', ratio, '=', cost * ratio] : [], 'current:', stamina.current, '(', neat>=0?'+':'-', neat, ')'] : [],
+        'stamina check succeed:', staminaChecked === 1, ... staminaChecked === -1 ? ['with nature recover', lowNR, 'stmNR:', stmNR, '(', ... neatNR>=0 ? ['+', neatNR] : ['-', -neatNR], ')'] : [],
+        '\nlow:', low, ... cost ? ['cost:', cost, ... stamina.punish ? ['*', ratio, '=', Math.round(cost*ratio*10000)/10000] : [], 'current:', stamina.current, '(', neat>=0?'+':'-', neat, ')'] : [],
         '\nstamina:', stamina,
       );
       if (staminaChecked === 1) { // succeed
@@ -3668,14 +3766,14 @@
         }
       } else { // case -1: // failed with nature recover
         switch(option.lang * 1) {
-            case 0:
+          case 0:
             popup('当日精力不足(含自然恢复)');
             break
-            case 1:
+          case 1:
             popup('當日精力不足(含自然恢復)');
             break
-            case 2:
-            default:
+          case 2:
+          default:
             popup('Failed stamina check with nature recover.');
             break
         }
@@ -3684,13 +3782,22 @@
     }
 
     async function getCurrentStamina() { try {
+      // await waitPause();
+      $async.logSwitch(arguments);
       const doc = $doc(await $ajax.insert(window.location.href));
+      if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
+        $async.logSwitch(arguments);
+        return [ undefined, undefined ];
+      }
       const current = gE('#stamina_readout .fc4.far>div', doc).textContent.match(/\d+/)[0] * 1;
-      const punish = gE('#stamina_readout .fc4.far', doc).parentNode.title ?? 'a';
-      return [current, punish];
+      const punish = !!gE('#stamina_readout .fc4.far', doc).parentNode.title;
+      $async.logSwitch(arguments);
+      return [current, punish ? punish : undefined];
     } catch(e) { console.error(e); }}
 
     async function checkStamina(low, cost) {
+      // await waitPause();
+      $async.logSwitch(arguments);
       const stamina = getValue('stamina', true);
       const option = g('option');
       let now = time(0);
@@ -3703,19 +3810,22 @@
       }
       const stmNRChecked = !cost || stmNR - cost >= option.staminaLowWithReNat;
       const result = { checked: stmNRChecked ? (current - cost >= (low ?? option.staminaLow)) ? 1 : 0 : -1, stmNR: stmNR };
+      $async.logSwitch(arguments);
       if (result.checked === 1 || isIsekai || !option.restoreStamina) return result;
       const items = g('items');
+      $async.logSwitch(arguments);
       if (!items) return result;
       const recoverItems = { 11401: true, 11402: false }
+      const isPerk = stamina.perk?.includes(getCurrentUser());
       for (let id in recoverItems) {
         if (!items[id]) continue;
-        const isPerk = (stamina.perk??{})[getCurrentUser()];
         const recover = recoverItems[id] ? isPerk ? 20 : 10 : 5;
         if (current + recover >= 100) continue; // check if overflow by (20 or 10) -> (5)
         const recovered = gE('#stamina_readout .fc4.far>div', $doc(await $ajax.insert(window.location.href, 'recover=stamina'))).textContent.match(/\d+/)[0] * 1;
         goto();
         break;
       }
+      $async.logSwitch(arguments);
       return result;
     }
 
@@ -3724,6 +3834,8 @@
         console.log("skip encounter check");
         return false;
       }
+      // await waitPause();
+      // $async.logSwitch(arguments);
       const encounter = getEncounter();
       const count = encounter.filter(e => e.href).length;
       const option = g('option');
@@ -3761,17 +3873,20 @@
         if (!cd) {
           await waitPause();
           onEncounter();
+          // $async.logSwitch(arguments);
           return true;
         }
         if (cd < 30 * _1m && encounter[0]?.href && !encounter[0].encountered) {
           await waitPause();
           $ajax.openNoFetch(encounter[0].href);
+          // $async.logSwitch(arguments);
           return true;
         }
       }
       let interval = cd > _1h ? _1m : (!option.encounterQuickCheck || cd > _1m) ? _1s : 80;
       interval = (option.encounterQuickCheck && cd > _1m) ? (interval - cd % interval) / 4 : interval; // 让倒计时显示更平滑
       setTimeout(() => updateEncounter(engage), interval);
+      // $async.logSwitch(arguments);
       return engage && cd <= waitCD;
     } catch (e) { console.error(e) } }
 
@@ -3816,6 +3931,7 @@
 
     async function updateArena(forceUpdateToken = false) { try {
       await waitPause();
+      $async.logSwitch(arguments);
       let arena = getValue('arena', true) ?? {};
       const isToday = arena.date && time(2, arena.date) === time(2);
       if (forceUpdateToken || !isToday || !arena.isOptionUpdated) {
@@ -3837,6 +3953,7 @@
         arena.array.reverse();
       }
       arena.arrayDone = arena.arrayDone.filter(id => id === 'gr' || !Object.keys(arena.token).includes(id.toString()));
+      $async.logSwitch(arguments);
       return setValue('arena', arena);
     } catch (e) { console.error(e) } }
 
@@ -4138,18 +4255,18 @@
         return;
       }
       const taskList = {
-        'Pause': autoPause,
         'Cure': ()=>autoRecover(true),
+        'Pause': autoPause,
+        'SSDisable': ()=>autoSS(true),
         'Rec': ()=>autoRecover(false),
-        'Def': autoDefend,
         'Scroll': useScroll,
+        'Infus': useInfusions,
+        'Def': autoDefend,
         'Channel': useChannelSkill,
         'Buff': useBuffSkill,
-        'Infus': useInfusions,
         'Debuff': useDeSkill,
         'Focus': autoFocus,
         'SS': ()=>autoSS(false),
-        'SSDisable': ()=>autoSS(true),
         'Skill': autoSkill,
         'Atk': attack,
       };
@@ -4374,6 +4491,7 @@
         onRoundEnd();
         async function onRoundEnd() { try {
           await waitPause();
+          // $async.logSwitch(arguments);
           if (g('monsterAlive') > 0) { // Defeat
             setExitBattleTimeout('Defeat');
             clearBattleUnresponsive();
@@ -4386,8 +4504,10 @@
 
           async function onNewRound() { try {
             await waitPause();
+            // $async.logSwitch(arguments);
             if (gE('#btcp')?.innerHTML.includes("finishbattle.png")) {
               goto();
+              // $async.logSwitch(arguments);
               return;
             }
             clearBattleUnresponsive();
@@ -4401,7 +4521,7 @@
                   await pauseAsync(option.checkURLBeforeNewRoundRetry);
                 } finally {
                   if (!!urlChecked) {
-                    console.log('Done url check:', !!urlChecked, option.checkURLBeforeNewRound)
+                    // console.log('Done url check:', !!urlChecked, option.checkURLBeforeNewRound)
                   } else {
                     console.error('Failed connect ', option.checkURLBeforeNewRound);
                   }
@@ -4412,17 +4532,20 @@
             const doc = $doc(html)
             if (gE('#riddlecounter', doc)) {
               console.log('url check:', option.checkURLBeforeNewRound, '\n', urlChecked)
-              console.log(getValue('stamina', true))
               if (option.riddlePopup && !window.opener) {
                 window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
+                // $async.logSwitch(arguments);
                 return;
               }
+              console.log(window.location.href)
               goto();
+              // $async.logSwitch(arguments);
               return;
             }
             if (option.nativeNewRound) {
               onStepInDone();
               gE('#btcp').click();
+              // $async.logSwitch(arguments);
               return;
             }
             gE('#pane_completion').removeChild(gE('#btcp'));
@@ -4434,7 +4557,9 @@
             newRound(true);
             onStepInDone();
             onBattleRound();
+            // $async.logSwitch(arguments);
           } catch (e) { e => console.error(e) } }
+          // $async.logSwitch(arguments);
         } catch (e) { console.error(e) } }
       };
       gE('body').appendChild(eventEnd);
@@ -5489,11 +5614,10 @@
       attackStatusOrder = attackStatusOrder.concat([0,6,5,1,2,4,3].filter(x=> !(attackStatusOrder.includes(x))));
       if (option.attackStatusSwitch) {
         for (const status of attackStatusOrder) {
-          const condition = option[`attackStatusSwitchCondition${status}`] ?? {};
           if (!option.attackStatusSwitch[status]) continue;
           const current = g('attackStatusCurrent');
           g('attackStatusCurrent', status);
-          if (checkCondition(condition, monsters) && onAttack(range, status, selectStatusOnly)) {
+          if (checkCondition(option[`attackStatusSwitchCondition${status}`], monsters) && onAttack(range, status, selectStatusOnly)) {
             return true;
           }
           g('attackStatusCurrent', current);
