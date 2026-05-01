@@ -94,7 +94,7 @@
 
   **示例2**: ManaElixir的id为11295，则`!_isCd_11295`表示不可使用，`_isCd_11295`表示可以使用
 
-10. `buffTurn`: 人物Buff剩余时间，格式`_buffTurn_img`。可使用`_scroll`限定为卷轴buff`_buffTurn_sparklife_scroll`、使用`_png`限定为非卷轴buff`_buffTurn_sparklife_png`
+10. `buffTurn`: 人物Buff剩余时间，格式`_buffTurn_img`。可使用`_scroll`限定为卷轴buff`_buffTurn_sparklife_scroll`、使用`_png`限定为非卷轴buff`_buffTurn_sparklife_png`. 可用 `{buffA,buffB,...}` 表示获取 buffA **或** buffB （**或** 括号 `{ }` 中的任意其他buff，将返回匹配成功的第一个buff），注意内部不要包含空格，例如`_buffTurn_{stun,sleep}`.
 
   **示例**: Protection的img为protection，则`_buffTurn_protection == 0`表示不存在Protection的buff，`_buffTurn_protection >= 10`表示Protection的buff至少剩余10回合
 
@@ -105,6 +105,7 @@
         ![示例](https://github.com/user-attachments/assets/b4d0c57d-fdb1-464b-88d6-107643809339)
 
     2. `_targetRank`和攻击规则给出的顺序值相同（0~9，数字越小，优先级越高）
+    3. `targetBossType`（见12.）、`targetBuffTurn`、`targetHp`、`targetMp`、`targetSp`、`targetHpDecimal`、`targetMpDecimal`、`targetSpDecimal`可使用`max/min`后缀来表示所有**存活**怪物中的最大/最小值，如：`_targetBuffTurn_max_bleed`.
 12. `targetName`、`targetBossType`: 目标怪物的名称、Boss类型。
     1. `_targetName`返回目标的名称字符串（**注意**: 字符串之间的比较会自动去除最外层的引号，且请使用下划线`_`代替空格` `，如`Yugi_Nagato`/`'Yugi_Nagato'`/`"Yugi_Nagato"`）
     2. 其中类Boss型`_targetBossType`根据 名称进行判断:
@@ -182,7 +183,7 @@ PS: 对于需要带下划线`_`开头的func式变量，可以省略`_`开头（
 
 | 1 | 2 | 3 |
 | - | - | - |
-| Channeling / channeling | Regen / regen | - |
+| Channeling / channeling | Regen / regen | Focus / focus |
 | Protection / protection | Haste / haste | Shadow Veil / shadowveil |
 | Absorb / absorb | Spark of Life / sparklife | Spirit Shield / spiritshield |
 | Arcane Focus / arcanemeditation | Heartseeker / heartseeker | Cloak of the Fallen / fallenshield |
