@@ -4906,7 +4906,7 @@
       let duration = buff?.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2];
       if (!duration) {
         duration = 0;
-      } else if (['permanent', '-', "'-'"].includes(duration)) {
+      } else if (["'permanent'", '-', "'-'"].includes(duration)) {
         duration = Infinity;
       } else {
         duration *= 1;
@@ -6326,7 +6326,7 @@
         return 0;
       };
       let debuffByIndex = isAll && option[`debuffSkill${buff}AllByIndex`];
-      let monsterStatus = g().monsterStatus.filter(monster => !monster.isDead);
+      let monsterStatus = g().battle.monsterStatus.filter(monster => !monster.isDead);
       let holdDrain = (target) => g().attackStatus === 5 && !getMonsterBuff(getMonsterID(target), 'soulfire') || g().attackStatus === 6 && !getMonsterBuff(getMonsterID(target), 'ripesoul');
       if (debuffByIndex) {
         monsterStatus = JSON.parse(JSON.stringify(monsterStatus));
