@@ -52,7 +52,7 @@
 ### 自定义判断条件
 每一个拥有红色虚线边框的区域，都可以设置自定义判断条件。
 
-现已支持自定义的条件公式，例如`hp > mp` 或 `2 * ( hp + mp ) > sp`，支持运算符: `+` `-` `*` `/` `%` `**` `&&` `||` `!` `>` `<` `>=`(`≥`) `<=`(`≤`) `==`(`=`,`===`) `!=`(`≠`,`~=`,`<>`)，逻辑运算符返回`0`或`1` （表示false或true）
+现已支持自定义的条件公式，例如`hp > mp` 或 `2 * ( hp + mp ) > sp`，支持运算符: `+` `-` `*` `/` `%` `**`(幂) `^`(异或) `~`(Log10) `&&` `||` `!` `>` `<` `>=`(`≥`) `<=`(`≤`) `==`(`=`,`===`) `!=`(`≠`,`~=`,`<>`)，逻辑运算符返回`0`或`1` （表示false或true）
 
 * 注意：如果这些区域留空（一个条件也没设置），那么就相当于真。
 
@@ -74,7 +74,7 @@
 
 1. `hp`/`mp`/`sp`: hp/mp/sp的*百分比的整数形式 (percent)*；`_hpDecimal`/`_mpDecimal`/`_spDecimal`: hp/mp/sp的*百分比的小数形式 (percent decimal)*
 2. `oc`: Overcharge, 250==>250% *百分比的整数形式 (percent)*；`_ocDecimal`: oc的*百分比的小数形式 (percent decimal)*
-3. `monsterAll`/`monsterAlive`/`bossAll`/`bossAlive`: 怪兽/Boss的总数目/存活数目
+3. `monsterAll`/`monsterAlive`/`bossAll`/`bossAlive`: 怪兽/Boss的总数目/存活数目，boss只按照有序号背景色的。包含`龙、大树、额外游戏内容、小马`的存活boss数可改为使用`_targetBossType_count`（见后11.3和12.）
 4. `roundNow`/`roundAll`/`roundLeft`: 当前回合数/总回合数/剩余回合数
 5. `isRoundType`、`ar`、`ba`、`iw`、`tw`、`gr`、`rb`: 当前是否是某战役模式，例如`_isRoundType_ar`或`_ar`均返回 `当前是否是The Arena`
 6. `roundType`: 战役模式 (`ar`: The Arena, `rb`: Ring of Blood, `gr`: GrindFest, `iw`: Item World, `ba`: Random Encounter, `tw`: The Tower)
@@ -98,25 +98,41 @@
 
   **示例**: Protection的img为protection，则`_buffTurn_protection == 0`表示不存在Protection的buff，`_buffTurn_protection >= 10`表示Protection的buff至少剩余10回合
 
-11. `_targetHp`、`_targetMp`、`_targetSp`、`_targetHpDecimal`、`_targetMpDecimal`、`_targetSpDecimal`、`_targetBuffTurn`、`_targetRank`: 目标怪物的HP%、SP%、MP%、HP%（小数形式）、SP%（小数形式）、MP%（小数形式）、buff剩余时间、优先级
+11. `_targetHp`、`_targetMp`、`_targetSp`、`_targetHpDecimal`、`_targetMpDecimal`、`_targetSpDecimal`、`_targetBuffTurn`、`_targetRank`、`_targetOrder`、`_targetWeight`、`_targetIsAlive`: 目标怪物的HP%、SP%、MP%、HP%（小数形式）、SP%（小数形式）、MP%（小数形式）、buff剩余时间、优先级、位置、当前权重、是否存活
     1. `_targetBuffTurn_`后缀参照8.`buffTurn`（如：`_targetBuffTurn_bleed != 0`表示目标bleed的buff剩余回合不等于0）。target的目标怪物遵循以下规则
        1. 默认情况的target均为权重优先级最高的目标
        2. 武器技能（马炮、T1~T3等）、法术技能（中阶、高阶）：按照 逐条条件判断>按权重逐个目标>满足任意一条条件内的所有子条目，则对该目标释放。例如下图最后的慈悲的条件：仅释放hp小于25%、拥有流血buff
         ![示例](https://github.com/user-attachments/assets/b4d0c57d-fdb1-464b-88d6-107643809339)
 
     2. `_targetRank`和攻击规则给出的顺序值相同（0~9，数字越小，优先级越高）
-    3. `targetBossType`（见12.）、`targetBuffTurn`、`targetHp`、`targetMp`、`targetSp`、`targetHpDecimal`、`targetMpDecimal`、`targetSpDecimal`可使用`max/min`后缀来表示所有**存活**怪物中的最大/最小值，如：`_targetBuffTurn_max_bleed`.
+    3. `targetBossType(见12.)`和除了`targetName`的其他 目标参数可使用`max/min/sum/count`后缀来表示所有**存活**怪物中的最大/最小值/总和/sign和(`sum(sign(value))`)，如：`_targetBuffTurn_max_bleed`.
+       1. `max/min/sum/count`可加前缀`a`/`ag`or`ga`/`g`表示按照`包含死亡目标（仍是全体目标）`/`分组内统计且包含死亡目标`/`分组内统计（仍忽略死亡目标）`. 分组相关见(13. `targetGroup`)
 12. `targetName`、`targetBossType`: 目标怪物的名称、Boss类型。
     1. `_targetName`返回目标的名称字符串（**注意**: 字符串之间的比较会自动去除最外层的引号，且请使用下划线`_`代替空格` `，如`Yugi_Nagato`/`'Yugi_Nagato'`/`"Yugi_Nagato"`）
     2. 其中类Boss型`_targetBossType`根据 名称进行判断:
         1. `Manbearpig`、`White Bunneh`、`Mithra`、`Dalek`: 1 (BOSS)
         2. `Konata`、`Mikuru Asahina`、`Ryouko Asakura`、`Yuki Nagato`: 2 (Legendaries)
-        3. `Skuld`、`Urd`、`Verdandi`、`Yggdrasil`: 3 (Trio and the Tree)
+        3. `Real Life`、`Invisible Pink Unicorn`、`Flying Spaghetti Monster`: 3 (Gods)
         4. `Rhaegal`、`Viserion`、`Drogon`: 4 (A Dance with Dragons)
-        5. `Real Life`、`Invisible Pink Unicorn`、`Flying Spaghetti Monster`: 5 (Gods)
-        6. 其他: 0 (非boss)
-
-13. 空白(blank): 自己输入 (the value you want to put in)
+        5. `Skuld`、`Urd`、`Verdandi`、`Yggdrasil`: 5 (Trio and the Tree)
+        6. `Recycled Boss Rush`、`Bottomless Dungeon`、`New Game +`、`Achievement Grind`、`Time Trial Mode`、`Hardcore Mode`：6 (Post Game Content)
+        7. `Fluttershy`、`Gummy`、`Rainbow Dash`、`Twilight Sparkle`、`Rarity`、`Applejack`、`Pinkie Pie`、`Angel Bunny`、`Spike`：7 (Ponies)
+        8. 其他: 0 (非boss)
+13. `targetGroup`: 获取分组内的目标个数（包含死亡），并更改当前公式内的`目标分组`(见11.3.1). 每次公式计算的初始目标分组为`null`的空分组. 可选模式如下：
+    1. `a`: 选择全体. `targetGroup_a`
+    2. `s`: 按照给定数量从上往下划分，然后选取包含当前目标的一组 `targetGroup_s_2` 相当于每2个1组
+    3. `r`: 按照给定的距离，以当前目标为起点划分
+        1. 只有一个参数时，为对称范围. `targetGroup_r_1` 相当于`当前目标 ± 1`（共3格）
+        2. 两个参数时，分别为 `targetGroup_r_向上_向下`. `targetGroup_r_1_2` 相当于当前 \[`目标 - 1`, `目标 + 2`\]（共4格）
+        3. `距离 >= 10`时，溢出为 `9 - 距离`，例如：`targetGroup_r_4_10` 相当于 \[`目标 - 4`, `目标 - 1`\] （共4格）
+        4. 参数缺省=`-1`/`10`: `targetGroup_r_` 相当于 `targetGroup_r_10`;`targetGroup_r_1_` 相当于 `targetGroup_r_1_10`; `targetGroup_r__1` 相当于 `targetGroup_r_10_1`. 仅在有2个`_`划分参数时会补充第2个参数
+    5. `o`/`oa`: 按照给定的order(0~9)划定区域. `o`需要当前目标在区域内，否则返回0和`null`的空分组；`oa`不需要当前目标在区域内. `targetGroup_o_1_3` 相当于 `order=[1,2,3]` 即第2,3,4格
+        1. 两个参数分别为上下界，缺省分别为`-1`/`10`
+14. `skillOTOS`: 获取对应技能/法术/道具/防御/集中/灵动架势开/关 的**自动使用次数**（不包含手动释放的次数）, `skillOTOS_[类型]` 如 `skillOTOS_FRD`(马炮) /`skillOTOS_T1`(武器T1技能) /`skillOTOS_defend`(防御) 
+    - 技能: `OFC`/`FRD`/`T3`/`T2`/`T1`
+    - 法术/道具: 按 `id`
+    - 防御/集中/SS开关: `defend`/`focus`/`spiriton`/`spiritoff`
+15.  空白(blank): 自己输入 (the value you want to put in)
 
 PS: 对于需要带下划线`_`开头的func式变量，可以省略`_`开头（省略时，获取值会先尝试按照dict式获取，失败时再按照func式获取）
 

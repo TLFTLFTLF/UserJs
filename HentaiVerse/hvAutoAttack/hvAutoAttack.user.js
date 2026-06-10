@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.90.190
+// @version      2.91.3
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -43,10 +43,13 @@
     const isIsekai = location.indexOf('isekai') !== -1;
     const current = isIsekai ? 'isekai' : 'persistent';
     const other = isIsekai ? 'persistent' : 'isekai';
+    const isEquipDetail = window.location.href.includes('/equip/');
+    const isMaintaining = !gE('#csp') && !isEquipDetail;
 
-    let ability = getValue('ability', true);
+    let ability = getValue('ability', true)??{};
+    let lastResponsive = new Date().getTime();
 
-    const scriptVersion = '2.90';
+    const scriptVersion = '2.91';
     let hvVersion;
 
     const _1s = 1000;
@@ -62,7 +65,7 @@
       '<l0>圣</l0><l1>聖</l1><l2>Divine</l2>',
       '<l0>暗</l0><l1>暗</l1><l2>Forbidden</l2>',
     ];
-    const monsterStateKeys = { obj: `div.btm1`, lv: `div.btm2`, name: `div.btm3`, bars: `div.btm4>div.btm5`, buffs: `div.btm6` }
+    const monsterStateKeys = { obj: `div.btm1`, lv: `div.btm2`, name: `div.btm3`, bars: `div.btm4>div.btm5`, buffs: `div.btm6` };
     let monsterBuffSkillLib;
     const setMonsterBuffSkillLib = (hvVersion) => { return {
       // debuff skill ------------
@@ -163,21 +166,21 @@
         id: '211',
         duration: 10,
         channeling: true,
-        description: hvVersion < 91 ? "'Siphons off the target\\'s life essence over time. This causes a damage-over-time effect, and returns a small amount of health to the player.'" : "'Siphons off the target\\'s life essence over time, and gives it to the player.'"
+        description: hvVersion < 91 ? "'Siphons off the target\'s life essence over time. This causes a damage-over-time effect, and returns a small amount of health to the player.'" : "'Siphons off the target\\'s life essence over time, and gives it to the player.'"
       },
       ET: {
         proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 300], // ???
         name: 'Ether Theft',
         img: 'drainmp',
         duration: 10, // ??
-        description: "'Siphons off the target\'s mana over time. This returns a small amount of mana to the player.'"
+        description: hvVersion < 91 ? "'Siphons off the target\'s mana over time. This returns a small amount of mana to the player.'" : "'Siphons off the target\\'s mana over time, and gives it to the player.'"
       },
       ST: {
         proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 300], // ???
         name: 'Spirit Theft',
         img: 'drainsp',
         duration: 10, // ??
-        description: "'Siphons off the target\'s spirit over time. This returns a small amount of spirit to the player.'"
+        description: hvVersion < 91 ? "'Siphons off the target\'s spirit over time. This returns a small amount of spirit to the player.'" : "'Siphons off the target\\'s spirit over time, and gives it to the player.'"
       },
       // elem attack debuff ------------ ??
       SS: {
@@ -315,7 +318,6 @@
         description: "'The destruction the present has increased the attack speed of her allies.'"
       },
     } };
-
     const playerBuffSkillLib = {
       SS: {
         name: 'Spirit Shield',
@@ -392,7 +394,10 @@
           '!=': { precedence : 0, func: (a, b) => a !== b ? 1 : 0 },
           '&&': { precedence : -1, func: (a, b) => a && b ? 1 : 0 },
           '||': { precedence : -1, func: (a, b) => a || b ? 1 : 0 },
+          '^': { precedence : -1, func: (a, b) => ((!a) ^ (!b)) ? 1 : 0 },
           '**': { precedence:3, func: (a, b) => Math.pow(a, b)},
+          '-neg': { precedence: -2, func: (a) => -a },
+          '~': { precedence : -2, func: (a) => Math.log10(a) },
           '!': { precedence : -2, func: (a) => a ? 0 : 1 },
           '+': { precedence : 1, func: (a, b) => a + b },
           '-': { precedence : 1, func: (a, b) => a - b },
@@ -405,21 +410,25 @@
 
         multiCharOperators: ['>=', '<=', '==', '!=', '&&', '||', '**'],
 
-        isOperator(token) {
-          return token in $RPN.operators || $RPN.multiCharOperators.includes(token);
+        test: {
+          isNumber: str=>/[0-9]/.test(str),
+          number: str=>/[.0-9]/.test(str),
+          isParam: str=>/[a-zA-Z_'",{}#]/.test(str),
+          param: str=>/[.a-zA-Z_'",{}#^~0-9]/.test(str),
         },
 
-        isMultiCharOperator(token) {
-          return $RPN.multiCharOperators.includes(token);
+        isOperator: function (token) {
+          return token in $RPN.operators;
         },
 
-        hasHigherPrecedence(op1, op2) {
+        hasHigherPrecedence: function (op1, op2) {
           return $RPN.operators[op1].precedence >= $RPN.operators[op2].precedence;
         },
 
-        tokenize(expression) {
+        tokenize: function (expression) {
           const tokens = [];
           let i = 0;
+          let lastTokenWasOperatorOrLeftParen = true;
 
           while (i < expression.length) {
             const ch = expression[i];
@@ -432,6 +441,29 @@
             if (ch === '(' || ch === ')') {
               tokens.push(ch);
               i++;
+              lastTokenWasOperatorOrLeftParen = (ch === '(');
+              continue;
+            }
+
+            if (ch === "'" || ch === '"') {
+              const quote = ch;
+              let raw = '';
+              let j = i;
+              while (j < expression.length) {
+                const current = expression[j];
+                j++;
+                if (current === '\\' && expression[j] === quote) {
+                  j++;
+                  continue;
+                }
+                if (i !== j-1 && current === quote) break; // 字符串结束
+              }
+              if (j > expression.length) {
+                throw new Error(`Unclosed ${quote} string`);
+              }
+              tokens.push(expression.slice(i, j));
+              i = j+1;
+              lastTokenWasOperatorOrLeftParen = false;
               continue;
             }
 
@@ -440,6 +472,7 @@
               if (expression.startsWith(op, i)) {
                 tokens.push(op);
                 i += op.length;
+                lastTokenWasOperatorOrLeftParen = true;
                 isMultiChar = true;
                 break;
               }
@@ -447,28 +480,35 @@
             if (isMultiChar) continue;
 
             if ($RPN.isOperator(ch)) {
-              tokens.push(ch);
+              if (ch === '-' && lastTokenWasOperatorOrLeftParen) {
+                tokens.push('-neg');
+              } else {
+                tokens.push(ch);
+              }
               i++;
+              lastTokenWasOperatorOrLeftParen = true;
               continue;
             }
 
-            if (/[0-9]/.test(ch)) {
+            if ($RPN.test.isNumber(ch)) {
               let num = '';
-              while (i < expression.length && /[0-9.]/.test(expression[i])) {
+              while (i < expression.length && $RPN.test.number(expression[i])) {
                 num += expression[i];
                 i++;
               }
               tokens.push(parseFloat(num));
+              lastTokenWasOperatorOrLeftParen = false;
               continue;
             }
 
-            if (/[a-zA-Z_.'",{}]/.test(ch)) {
+            if ($RPN.test.isParam(ch)) {
               let varName = '';
-              while (i < expression.length && /[a-zA-Z0-9_.'",{}]/.test(expression[i])) {
+              while (i < expression.length && $RPN.test.param(expression[i])) {
                 varName += expression[i];
                 i++;
               }
               tokens.push(varName);
+              lastTokenWasOperatorOrLeftParen = false;
               continue;
             }
 
@@ -478,12 +518,12 @@
           return tokens;
         },
 
-        infixToPostfix(infixTokens) {
+        infixToPostfix: function (infixTokens) {
           const output = [];
           const stack = [];
           for (const token of infixTokens) {
             switch(true) {
-              case typeof token === 'number' || /[a-zA-Z_'",{}]/.test(token[0]):
+              case typeof token === 'number' || $RPN.test.isParam(token[0]):
                 output.push(token);
                 break;
               case token === '(':
@@ -521,14 +561,14 @@
           return output;
         },
 
-        evaluatePostfix(postfixTokens, resolver) {
+        evaluatePostfix: function (postfixTokens, resolver) {
           const stack = [];
           for (const token of postfixTokens) {
             if (typeof token === 'number') {
               stack.push(token);
               continue;
             }
-            if (typeof token === 'string' && /[a-zA-Z_.'",{}]/.test(token[0])) {
+            if (typeof token === 'string' && $RPN.test.isParam(token[0])) {
               let value = resolver ? resolver(token) : token;
               if (typeof value === 'string') {
                 if (value[0] !== `"` && value[0] != `'`) value = `'${value}'`;
@@ -572,7 +612,7 @@
           return stack[0];
         },
 
-        evaluate(expression, variableHandler = null) {
+        evaluate: function (expression, variableHandler = null) {
           const tokens = $RPN.tokenize(expression);
           const postfix = $RPN.infixToPostfix(tokens);
           return $RPN.evaluatePostfix(postfix, variableHandler);
@@ -643,7 +683,7 @@
           });
         },
         open: function (url, data, method, context = {}, headers = {}) {
-          $ajax.fetch(url, data, method, context, headers).then(goto).catch(e => { console.error(e) });
+          $ajax.fetch(url, data, method, context, headers).then(goto).catch( err => { console.error(err); });
         },
         openNoFetch: function (url, newTab) {
           window.open(url, newTab ? '_blank' : '_self');
@@ -786,6 +826,19 @@
 
     function checkIsHV() {
       if (window.location.host !== 'e-hentai.org') {
+        if (isMaintaining) {
+          // 维护中? 过一个小时再刷新
+          (async function onwait() {
+            let remain = _1h;
+            await until(() => {
+              document.title = `[M]${pad(Math.floor(remain/_1m))}:${pad(Math.floor((remain%_1m)/_1s))}`;
+              remain-=_1s;
+              return remain <= 0;
+            }, _1s);
+            goto();
+          })();
+          return true;
+        }
         setValue('url', window.location.origin);
         const hvver = gE('script[src*="hvc.js"]', document).src.match(/z\/(\d+)(.*)\/hvc.js/);
         hvVersion = hvver[1] * 1;
@@ -869,7 +922,7 @@
         }
       } else { // 战斗外，自动跳转
         checkOption();
-        $ajax.openNoFetch(`${g().option.altBattleFirst ? location.replace('hentaiverse.org', 'alt.hentaiverse.org').replace('alt.alt', 'alt') : location}/${url}`);
+        $ajax.openNoFetch(`${g().option?.altBattleFirst ? location.replace('hentaiverse.org', 'alt.hentaiverse.org').replace('alt.alt', 'alt') : location}/${url}`);
       }
       return false;
     }
@@ -877,7 +930,7 @@
     // 答题//
     async function riddleAlert() { try {
       setAlarm('Riddle');
-      const option = g().option;
+      const option = g().option??{};
       const answerTime = option.riddleAnswerTime;
       let time;
       const timeDiv = gE('#riddlecounter>div>div', 'all');
@@ -909,13 +962,13 @@
         console.error('ERROR: Failed fetch submit.');
       }
       goto();
-    } catch(e) { console.error(e) }}
+    } catch (err) { console.error(err); }}
 
     function checkIsWindowTop() {
       const currentUrl = window.self.location.href;
       if (!isFrame) {
         checkOption();
-        if (!g().option.riddlePopup || gE('#riddlecounter')) { // 未开启使用弹窗或仍处于答题
+        if (!g().option?.riddlePopup || gE('#riddlecounter')) { // 未开启使用弹窗或仍处于答题
           return true;
         }
         if (!window.opener || window.opener === window.self || window.opener.closed) { // 没有仍存在的opener
@@ -925,7 +978,8 @@
           if (!gE('#riddlecounter,#battle_main', window.opener.document)) { // opener不处于战斗或答题中
             return true;
           }
-        } catch(e) {
+        } catch (err) {
+          console.error(err);
           return true;
         }
         try {
@@ -990,18 +1044,19 @@
       loadOption();
       writePortables();
 
-      const option = g().option;
+      const option = g().option??{};
       g('lang', option.lang || '0');
       addStyle();
 
-      if (option.version.substr(0, 4) !== g().version.substr(0, 4)) {
-        gE('.hvAAButton').click();
-        if (_alert(1, 'hvAutoAttack版本更新，请重新设置\n强烈推荐【重置设置】后再设置。\n是否查看更新说明？', 'hvAutoAttack版本更新，請重新設置\n強烈推薦【重置設置】後再設置。\n是否查看更新說明？', 'hvAutoAttack version update, please reset\nIt\'s recommended to reset all configuration.\nDo you want to read the changelog?')) {
-          $ajax.openNoFetch('https://github.com/dodying/UserJs/commits/master/HentaiVerse/hvAutoAttack/hvAutoAttack.user.js', true);
-        }
-        gE('.hvAAReset').focus();
-        return false;
-      }
+      // README等合并到主分支后再取消掉注释
+      // if (option.version.substr(0, 4) !== g().version.substr(0, 4)) {
+      //   gE('.hvAAButton').click();
+      //   if (_alert(1, 'hvAutoAttack版本更新，请重新设置\n强烈推荐【重置设置】后再设置。\n是否查看更新说明？', 'hvAutoAttack版本更新，請重新設置\n強烈推薦【重置設置】後再設置。\n是否查看更新說明？', 'hvAutoAttack version update, please reset\nIt\'s recommended to reset all configuration.\nDo you want to read the changelog?')) {
+      //     $ajax.openNoFetch('https://github.com/dodying/UserJs/commits/master/HentaiVerse/hvAutoAttack/hvAutoAttack.user.js', true);
+      //   }
+      //   gE('.hvAAReset').focus();
+      //   return false;
+      // }
 
       if (gE('[class^="c5"],[class^="c4"]') && _alert(1, '请设置字体\n使用默认字体可能使某些功能失效\n是否查看相关说明？', '請設置字體\n使用默認字體可能使某些功能失效\n是否查看相關說明？', 'Please set the font\nThe default font may make some functions fail to work\nDo you want to see instructions?')) {
         $ajax.openNoFetch(`https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README${g().lang === '2' ? '_en.md#about-font' : '.md#关于字体的说明'}`, true);
@@ -1011,7 +1066,7 @@
     }
 
     function writePortables() {
-      const option = g().option;
+      const option = g().option??{};
       if (!option.portable) return;
       for (const key of portable) {
         if (!(Object.keys(option.portable).includes)) continue;
@@ -1024,7 +1079,7 @@
         return false;
       }
       setValue('onriddle', true);
-      if (!g().option.riddlePopup || window.opener) {
+      if (!g().option?.riddlePopup || window.opener) {
         riddleAlert();
         return true;
       }
@@ -1046,7 +1101,8 @@
         setArenaDisplay();
       }
       delValue(1);
-      if (g().option.showQuickSite && g().option.quickSite) {
+      const option = g().option??{};
+      if (option.showQuickSite && option.quickSite) {
         quickSite();
       }
       const hvAAPauseUI = document.body.appendChild(cE('div'));
@@ -1060,7 +1116,8 @@
       if (!gE('#textlog')) {
         return false;
       }
-      updateMonsterEffects(false);
+      checkResponsive();
+
       if (getValue('onriddle', true)) {
         console.log('onBattle clean onriddle');
         window.history.replaceState(null, '', window.location.href);
@@ -1071,7 +1128,8 @@
       box2.id = 'hvAABox2';
       setPauseUI(box2);
       reloader();
-      g('attackStatus', g().option.attackStatus);
+      const option = g().option??{};
+      g('attackStatus', option.attackStatus);
       // 1二天 2单手 3双手 4双持 5法杖
       for (let fightingStyle = 1; fightingStyle < 6; fightingStyle++) {
         if (gE(`2${fightingStyle}01`)) {
@@ -1080,10 +1138,10 @@
       }
       g('timeNow', time(0));
       g('runSpeed', 1);
-      $debug.log('______________newRound', false);
       newRound(false);
+      updateMonsterEffects(false);
       onBattleRound();
-      if (g().option.recordEach) {
+      if (option.recordEach) {
         const token = document.body.innerHTML.match(`var battle_token = \"(.*)\";`)[1];
         let code = getValue('battleCode', true);
         if (code?.token != token || !code?.r || !code?.rc) {
@@ -1106,7 +1164,6 @@
 
     // ----------methods----------
     // 通用//
-
     function unique(arr) {
       const newArr = [];
       for (let i = 0; i < arr.length; i++) {
@@ -1125,7 +1182,8 @@
     function goto() { // 前进
       window.location.href = window.location.search ? window.location.pathname + window.location.search : window.location.href;
       setTimeout(goto, 5000);
-      setTimeout(()=>{window.location.href = window.location.href}, 10000);
+      setTimeout(()=>{ window.location.href = window.location.href }, 10000);
+      return true;
     }
 
     function gotoAlt(isAltOnly) {
@@ -1139,17 +1197,22 @@
         next = isAltOnly ? current : current.replace(`://${alt}`, `://${hv}`);
       }
       $ajax.openNoFetch(next);
+      return true;
     }
 
     function pauseAsync(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    async function waitPause(ms = _1s) {
-      while (getValue('disabled')) {
-        await pauseAsync(ms);
-      }
-    }
+    async function until(condition, delay){ try {
+      let result;
+      while (!(result = await condition())) await pauseAsync(delay);
+      return result;
+    } catch (err) { console.error(err); }}
+
+    async function waitPause(ms) { try {
+      return await until(()=>!getValue('disabled'), ms);
+    } catch (err) { console.error(err); }}
 
     function setTimeoutOrExecute(resolve, ms) {
       if (ms) {
@@ -1157,6 +1220,10 @@
         return;
       }
       resolve();
+    }
+
+    function pad(num, pad='0', total=2) {
+      return num.toString().padStart(total, pad);
     }
 
     function gE(ele, mode, parent) { // 获取元素
@@ -1182,7 +1249,7 @@
     }
 
     function popup(text) {
-      if (!g().option.popup) return;
+      if (!g().option?.popup) return;
       const popupWindow = cE('div');
       popupWindow.style.cssText += 'position:fixed;top:0;left:0;width:100%;height:100%;background-color:#0006;z-index:1001;cursor:pointer;display:flex;justify-content:center;align-items:center;'
       popupWindow.addEventListener('click', r);
@@ -1211,34 +1278,49 @@
     }
 
     function setArenaDisplay() {
-      if (!g().option.obscureNotIdleArena) {
+      const option = g().option??{};
+      if (!option.obscureNotIdleArena) {
         return;
       }
       if (window.location.href.indexOf(`?s=Battle&ss=ar`) === -1 && window.location.href.indexOf(`?s=Battle&ss=rb`) === -1) {
         return;
       }
-      const ar = g().option.idleArenaValue?.split(',');
+      const ar = option.idleArenaValue?.split(',');
       if (!ar || ar.length === 0) {
         return;
       }
       getStartBattleButtons().forEach(btn => {
-        if (ar.includes(btn.id)) {
+        if (ar.includes(btn.id) && btn.cleared) {
           return;
         }
-        gE('div', 'all', btn.parentNode.parentNode).forEach(div => { div.style.cssText += 'color:grey!important;' });
+        gE('div', 'all', btn.parentNode.parentNode).forEach(div => { div.style.cssText += `color:${btn.cleared?'grey':'red'}!important;` });
       });
     }
 
-    function getStartBattleButtons(doc = undefined) {
-      const buttons = [];
+    function getStartBattleButtons(doc = undefined, site = undefined) {
+      const idMap = {
+        ar: { 1:1, 10:3, 20:5, 30:8, 40:9, 50:11, 60:12, 70:13, 80:15, 90:16, 100:17, 110:19, 120:20, 130:21, 140:23, 150:24, 165:26, 180:27, 200:28, 225:29, 250:32, 300:33, 400:34, 500:35 },
+        rb: [105,106,107,108,109,110,111,112],
+      }
+      const option = g().option??{};
       doc ??= document;
-      gE(`img[src*="startchallenge.png"], img[src*="startgrindfest.png"]`, 'all', doc).forEach((btn) => {
-        const onclick = btn.getAttribute('onclick');
-        const key = btn.getAttribute('src').match(`${unsafeWindow.IMG_URL}(.*)/start(.*).png`)[1] === 'grindfest' ? 'gr' : undefined;
-        let temp = hvVersion < 91 ? onclick.match(/init_battle\((\d+),\s*(\d+,)*'(.*?)'\)/) : onclick.match(/init_battle\((\d+)(,\d+)*\)/);
-        btn.id = key ? key : temp[1] * 1;
-        btn.token = temp[3];
-        buttons.push(btn);
+      site ??= doc.location.href.match(/\?s=Battle\&ss=(.*)/)[1];
+      const buttons = gE(`img[src*="startchallenge.png"], img[src*="startgrindfest.png"], img[src*="startchallenge_d.png"]`, 'all', doc);
+      buttons.forEach(btn => {
+        const tr = btn.parentNode.parentNode;
+        if ('challenge_d' === btn.getAttribute('src').match(`${unsafeWindow.IMG_URL}(.*)/start(.*).png`)[2]) {
+          const key = site === 'ar' ? gE('td:nth-child(3)>div>div', tr).innerText.match(`Lv. (.*)`)[1]*1 : (Array.from(tr.parentNode.children).indexOf(tr)-1);
+          btn.id = idMap[site][key];
+        } else {
+          const onclick = btn.getAttribute('onclick');
+          const match = hvVersion < 91 ? onclick.match(/init_battle\((\d+),\s*(\d+,)*'(.*?)'\)/) : onclick.match(/init_battle\((\d+)(,\d+)*\)/);
+          btn.token = match[3] ?? null;
+          btn.id = site === 'gr' ? 'gr' : match[1] * 1;
+        }
+        btn.cleared = site === 'gr' || gE('td:nth-child(2)>div>div', tr).innerText;
+        if (option.skipUnclearedArena && site !== 'gr') {
+          btn.cleared = btn.cleared !== '-';
+        }
       });
       return buttons;
     }
@@ -1248,11 +1330,13 @@
 
       // 迁移2.90.162及之前的targetHp等到targetHpDecimal等
       const version = option.version.split('.').map(v=>isNaN(v*1) ? v : v*1);
-      if (version[0] < 2 || version[1] < 90 || isNaN(1*version[2]) || version[2]<=162) {
-        option = JSON.parse(JSON.stringify(option).replace('targetHp', 'targetHpDecimal').replace('targetMp', 'targetMpDecimal').replace('targetSp', 'targetSpDecimal'));
-        option.version = '2.90.163'
+      if (version[0] < 2 || version[1] < 90 || (version[1] === 90 && (isNaN(1*version[2]) || version[2]<=162))) {
+        option = JSON.parse(JSON.stringify(option).replace('targetHp', 'targetHpDecimal').replace('targetMp', 'targetMpDecimal').replace('targetSp', 'targetSpDecimal').replace('DecimalDecimal', 'Decimal'));
+        option.version = GM_info ? GM_info.script.version : scriptVersion;
         g('version', option.version);
       }
+      option = JSON.parse(JSON.stringify(option).replace('DecimalDecimal', 'Decimal'));
+
       // 迁移2.90.168及之前的channelSkill2Order_Cure的Name错误
       option.channelSkill2Order_Cure = option.channelSkill2Order_Cu;
       option.channelSkill2Order_Cu = undefined;
@@ -1329,76 +1413,82 @@
     }
 
     function setPauseButton(parent) {
-      if (!g().option.pauseButton) {
+      const option = g().option??{};
+      if (!option.pauseButton) {
         return;
       }
       const button = parent.appendChild(cE('button'));
-      button.innerHTML = `<l0>暂停</l0><l1>暫停</l1><l2>Pause</l2>${(g().option.pauseHotkey && g().option.pauseHotkeyStr) ? `(${g().option.pauseHotkeyStr})` : '' }`;
+      button.innerHTML = `<l0>暂停</l0><l1>暫停</l1><l2>Pause</l2>${(option.pauseHotkey && option.pauseHotkeyStr) ? `(${option.pauseHotkeyStr})` : '' }`;
       if (getValue('disabled')) { // 如果禁用
         document.title = _alert(-1, 'hvAutoAttack暂停中', 'hvAutoAttack暫停中', 'hvAutoAttack Paused');
-        button.innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(g().option.pauseHotkey && g().option.pauseHotkeyStr) ? `(${g().option.pauseHotkeyStr})` : '' }</012>`;
+        button.innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(option.pauseHotkey && option.pauseHotkeyStr) ? `(${option.pauseHotkeyStr})` : '' }</012>`;
       }
       button.className = 'pauseChange';
       button.onclick = pauseChange;
     }
 
     function setPauseHotkey() {
-      if (!g().option.pauseHotkey) {
+      const option = g().option??{};
+      if (!option.pauseHotkey) {
         return;
       }
       document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.target.tagName.toUpperCase() === 'INPUT' || e.target.tagName.toUpperCase() === 'TEXTAREA') {
           return;
         }
-        if (e.keyCode === g().option.pauseHotkeyCode) {
+        if (e.keyCode === option.pauseHotkeyCode) {
           pauseChange();
         }
       }, false);
     }
 
     function setStepInButton(parent) {
-      if (!g().option.stepInButton) {
+      const option = g().option??{};
+      if (!option.stepInButton) {
         return;
       }
       const button = parent.appendChild(cE('button'));
-      button.innerHTML = `<l0>步进</l0><l1>步進</l1><l2>StepIn</l2>${(g().option.stepInHotkey && g().option.stepInHotkeyStr) ? `(${g().option.stepInHotkeyStr})` : '' }`;
+      button.innerHTML = `<l0>步进</l0><l1>步進</l1><l2>StepIn</l2>${(option.stepInHotkey && option.stepInHotkeyStr) ? `(${option.stepInHotkeyStr})` : '' }`;
       button.className = 'stepIn';
       button.onclick = stepIn;
     }
 
     function setStepInHotkey() {
-      if (!g().option.stepInHotkey) {
+      const option = g().option??{};
+      if (!option.stepInHotkey) {
         return;
       }
       document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.target.tagName.toUpperCase() === 'INPUT' || e.target.tagName.toUpperCase() === 'TEXTAREA') {
           return;
         }
-        if (e.keyCode === g().option.stepInHotkeyCode) {
+        if (e.keyCode === option.stepInHotkeyCode) {
           stepIn();
         }
       }, false);
     }
 
     function setAltButton(parent) {
-      if (!g().option.altButton) {
+      const option = g().option??{};
+      if (!option.altButton) {
         return;
       }
       const button = parent.appendChild(cE('button'));
-      button.innerHTML = (window.location.host.includes('alt') ? `<l012>ExitAlt</l012>` : `<l012>ToAlt</l012>`) + `${(g().option.altHotkey && g().option.altHotkeyStr) ? `(${g().option.altHotkeyStr})` : '' }`;
+      button.innerHTML = (window.location.host.includes('alt') ? `<l012>ExitAlt</l012>` : `<l012>ToAlt</l012>`) + `${(option.altHotkey && option.altHotkeyStr) ? `(${option.altHotkeyStr})` : '' }`;
       button.className = 'gotoAlt';
       button.onclick = () => gotoAlt();
     }
 
     function setAltHotkey() {
-      if (!g().option.altHotkey) {
+      const option = g().option??{};
+      if (!option.altHotkey) {
         return;
       }
       document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.target.tagName.toUpperCase() === 'INPUT' || e.target.tagName.toUpperCase() === 'TEXTAREA') {
           return;
         }
-        if (e.keyCode === g().option.altHotkeyCode) {
+        if (e.keyCode === option.altHotkeyCode) {
           gotoAlt();
         }
       }, false);
@@ -1406,7 +1496,8 @@
 
     function formatTime(t, size = 2) {
       t = [t / _1h, (t / _1m) % 60, (t / _1s) % 60, (t % _1s) / 10].map(cdi => Math.floor(cdi));
-      while (t.length > Math.max(size, g().option.encounterQuickCheck ? 2 : 3)) { // remove zero front
+      const option = g().option??{};
+      while (t.length > Math.max(size, option.encounterQuickCheck ? 2 : 3)) { // remove zero front
         const front = t.shift();
         if (!front) {
           continue;
@@ -1472,11 +1563,13 @@
     }
 
     function getLocal(key, isLocalStorage, toJSON) {
+      let value;
       if (isLocalStorage || typeof GM_getValue === 'undefined' || !GM_getValue(key, null)) {
         key = `hvAA-${key}`;
-        return (key in window.localStorage) ? (toJSON ? JSON.parse(window.localStorage[key]) : window.localStorage[key]) : null;
+        value = window.localStorage[key];
+        return toJSON ? JSONParse(value) : value;
       }
-      let value = GM_getValue(key, null);
+      value = GM_getValue(key, null);
       if (!isLocalStorage) {
         return value;
       }
@@ -1485,8 +1578,15 @@
         return value;
       }
       value = window.localStorage[key];
-      value = toJSON ? JSON.parse(value) : value;
-      return value
+      value = toJSON ? JSONParse(value) : value;
+      return value;
+
+      function JSONParse(object) {
+        if (object === undefined || object === '') {
+          return object;
+        }
+        return JSON.parse(object)
+      }
     }
 
     function getValue(key, toJSON) { // 读取数据
@@ -1608,14 +1708,14 @@
         '#hvAABox2{position:absolute;left:1075px;padding-top: 6px;}',
         '.hvAALog{font-size:20px;}',
         '.hvAAPauseUI{top:50px;left:1246px;position:absolute;z-index:9999; width:80px}',
-        '.hvAAButton{top:5px;left:1255px;position:absolute;z-index:9999;cursor:pointer;width:40px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
-        '#hvAABox{left:calc(50% - 350px);top:50px;font-size:16px!important;z-index:4;width:700px;height:538px;position:absolute;text-align:left;background-color:#E3E0D1;border:1px solid #000;border-radius:10px;font-family:"Microsoft Yahei";}',
-        '.hvAATablist{position:relative;left:14px;}',
+        '.hvAAButton{top:5px;left:' + ((isMaintaining||isEquipDetail)?'0':'1255') + 'px;position:absolute;z-index:9999;cursor:pointer;width:40px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
+        '#hvAABox{left:0;top:50px;font-size:16px!important;z-index:4;width:1238px;height:650px;position:absolute;text-align:left;background-color:#E3E0D1;border:1px solid #000;border-radius:10px;font-family:"Microsoft Yahei";}',
+        '.hvAATablist{position:relative;left:14px;width:calc(100% - 55px);height:calc(100% - 85px);}',
         '.hvAATabmenu{position:absolute;left:-9px;}',
         '.hvAATabmenu>span{display:block;padding:5px 10px;margin:0 10px 0 0;border:1px solid #91a7b4;border-radius:5px;background-color:#E3F1F8;color:#000;text-decoration:none;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;cursor:pointer;}',
         '.hvAATabmenu>span:hover{left:-5px;position:relative;color:#0000FF;z-index:2!important;}',
         '.hvAATabmenu>span>input{margin:0 0 0 -8px;}',
-        '.hvAATab{position:absolute;width:605px;height:430px;left:36px;padding:15px;border:1px solid #91A7B4;border-radius:3px;box-shadow:0 2px 3px rgba(0,0,0,0.1);color:#666;background-color:#EDEBDF;overflow:auto;}',
+        '.hvAATab{position:absolute;width:calc(100% - 10px);height:calc(100% - 30px);left:36px;padding:5px;border:1px solid #91A7B4;border-radius:3px;box-shadow:0 2px 3px rgba(0,0,0,0.1);color:#666;background-color:#EDEBDF;overflow:auto;}',
         '.hvAATab>div:nth-child(2n){border:1px solid #EAEAEA;background-color:#FAFAFA;}',
         '.hvAATab>div:nth-child(2n+1){border:1px solid #808080;background-color:#DADADA;}',
         '.hvAATab a{margin:0 2px;}',
@@ -1638,15 +1738,16 @@
         '.customizeInput{min-width:6ch;}',
         '.optionEdited{color:#5C0D11;}',
         '.optionOrigin{color:unset!important;}',
+        '.hvAATable {display: grid;width: fit-content;}',
         '.hvAATable>* {border: 1px solid;}',
         '.hvAANew{width:25px;height:25px;float:left;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAMCAYAAACX8hZLAAAAcElEQVQ4jbVRSQ4AIQjz/59mTiZIF3twmnCwFAq4FkeFXM+5vCzohYxjPMtfxS8CN6iqQ7TfE0wrODxVbzJNgoaTo4CmbBO1ZWICouQ0DHaL259MEzaU+w8pZOdSjcUgaPJDHCbO0A2kuAiuwPGQ+wBms12x8HExTwAAAABJRU5ErkJggg==) center no-repeat transparent;}',
         '#hvAATab-Alarm input[type="text"]{width:512px;}',
         '.testAlarms>div{border:2px solid #000;}',
         '.hvAAArenaLevels{display:none; grid-template-columns:repeat(7, 20px 1fr);}',
-        '.hvAAcheckItems{display:grid; grid-template-columns:repeat(3, 1fr)}',
+        '.hvAAcheckItems{display:grid; grid-template-columns:repeat(5, 1fr)}',
         '.hvAAcheckItems>input.hvAANumber{width:32px}',
         '.hvAAConfig{width:100%;height:16px;}',
-        '.hvAAButtonBox{position:relative;top:468px;}',
+        '.hvAAButtonBox{position:relative;top:0px;}',
         '.hvAAPauseUI>.encounterUI{font-weight:bold;position:unset;font-size:10pt;text-decoration:none;}',
         '.encounterUI{font-weight:bold;font-size:10pt;position:absolute;top:30px;left:1240px;text-decoration:none;}',
         '.quickSiteBar{position:absolute;top:0px;left:1290px;font-size:18px;text-align:left;width:165px;height:calc(100% - 10px);display:flex;flex-direction:column;flex-wrap:wrap;}',
@@ -1694,16 +1795,18 @@
     }
 
     function optionBox() { // 配置界面
+      const option = g().option??{};
       const optionBox = gE('body').appendChild(cE('div'));
       optionBox.id = 'hvAABox';
       optionBox.innerHTML = [
         '<div class="hvAACenter">',
+        '  <a href="https://github.com/dodying/UserJs/commits/master/HentaiVerse/hvAutoAttack/hvAutoAttack.user.js" target="_blank"><l0>更新历史</l0><l1>更新歷史</l1><l2>ChangeLog</l2></a>',
+        '  <l01><a href="https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README.md" target="_blank">使用说明</a></l01><l2><a href="https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README_en.md" target="_blank">README</a></l2>',
+        '  <l012><span style="font-size:small;"><a target="_blank" href="https://greasyfork.org/forum/profile/18194/Koko191" style="color:#E3E0D1;background-color:#E3E0D1;" title="Thanks to Koko191 who give help in the translation">by Koko191</a></span></l012>',
         '  <h1 style="display:inline;">hvAutoAttack</h1>',
         '  <select name="lang"><option value="0">简体中文</option><option value="1">繁體中文</option><option value="2">English</option></select>',
-        (g().option?.optionStandalone ? isIsekai ? '<l0>当前为异世界单独配置</l0><l1>當前為異世界單獨配置</l1><l2>Using Isekai standalone option</l2>' : '<l0>当前为恒定世界单独配置</l0><l1>當前為恆定世界單獨配置</l1><l2>Using Persistent standalone option</l2>' : ''),
-        '  </br><a href="https://github.com/dodying/UserJs/commits/master/HentaiVerse/hvAutoAttack/hvAutoAttack.user.js" target="_blank"><l0>更新历史</l0><l1>更新歷史</l1><l2>ChangeLog</l2></a>',
-        '  <l01><a href="https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README.md" target="_blank">使用说明</a></l01><l2><a href="https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README_en.md" target="_blank">README</a></l2>',
-        '  <l012><span style="font-size:small;"><a target="_blank" href="https://greasyfork.org/forum/profile/18194/Koko191" style="color:#E3E0D1;background-color:#E3E0D1;" title="Thanks to Koko191 who give help in the translation">by Koko191</a></span></l012></div>',
+        (option.optionStandalone ? isIsekai ? '<l0>当前为异世界单独配置</l0><l1>當前為異世界單獨配置</l1><l2>Using Isekai standalone option</l2>' : '<l0>当前为恒定世界单独配置</l0><l1>當前為恆定世界單獨配置</l1><l2>Using Persistent standalone option</l2>' : ''),
+        '</div>',
         '<div class="hvAATablist">',
 
         '<div class="hvAATabmenu">',
@@ -1754,7 +1857,7 @@
 
         '  <div><b><l0>战斗执行顺序(未配置的按照下面的顺序)</l0><l1>戰鬥執行順序(未配置的按照下面的順序)</l1><l2>Battal Order(Using order below as default if not configed)</l2></b>: <input id="battleOrderDefaultOnly" type="checkbox"><label for="battleOrderDefaultOnly">(<l0>只使用默认顺序</l0><l1>只使用默認順序</l1><l2>Default order only</l2>)</label>',
         '    <div class="battleOrder"><input name="battleOrderName" style="width:80%;" type="text" disabled="true"><br>',
-        '      <div class="hvAATable" style="display:grid; grid-template-columns:repeat(4, 1fr);">',
+        '      <div class="hvAATable" style="display:grid; grid-template-columns:repeat(7, 1fr);">',
         '        <div><input id="battleOrder_autoCure" value="Cure" type="checkbox"><label for="battleOrder_autoCure"><l0>使用治疗</l0><l1>使用治療</l1><l2>Cure</l2></label></div>',
         '        <div><input id="battleOrder_autoPause" value="Pause" type="checkbox"><label for="battleOrder_autoPause"><l0>自动暂停</l0><l1>自動暫停</l1><l2>Auto Pause</l2></label></div>',
         '        <div><input id="battleOrder_autoSSDisable" value="SSDisable" type="checkbox"><label for="battleOrder_autoSSDisable"><l0>关闭灵动架式</l0><l1>關閉靈動架式</l1><l2>Disable Sprite</l2></label></div>',
@@ -1804,12 +1907,20 @@
         '    <div><input id="autoSkipDefeated" type="checkbox"><label for="autoSkipDefeated"><b><l0>战败自动退出战斗</l0><l1>戰敗自動退出戰鬥</l1><l2>Exit battle when defeated.</l2></b></label></div>',
         '    <div><input id="nativeNewRound" type="checkbox"><label for="nativeNewRound"><b><l0>使用原生方式进入新回合</l0><l1>使用原生方式進入新回合</l1><l2>Native new round</l2></b></label></div>',
         '    <div><l0>新回合前检查链接：</l0><l1>新回合前檢查連接：</l1><l2>Check url before new round: </l2><input name="checkURLBeforeNewRound" type="text">; <input name="checkURLBeforeNewRoundRetry" placeholder="5" type="number"><l0>秒后重试</l0><l1>秒後重試</l1><l2>(s) to retry</l2></div>',
-        '    <div><b><l0>继续新回合延时</l0><l1>繼續新回合延時</l1><l2>New round wait time</l2></b>: <input class="hvAANumber" name="NewRoundWaitTime" placeholder="0" type="number"> <l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
-        '    <div><b><l0>战斗结束退出延时</l0><l1>戰鬥結束退出延時</l1><l2>Exit battle wait time</l2></b>: <input class="hvAANumber" name="ExitBattleWaitTime" placeholder="3" type="number"> <l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
-        '    <div><b><l0>战斗页面停留</l0><l1>戰鬥頁面停留</l1><l2>If not active for </l2></b>: ',
-        '      <br><input id="battleUnresponsive_Alert" type="checkbox"><label for="battleUnresponsive_Alert"><input class="hvAANumber" name="battleUnresponsiveTime_Alert" type="number"> <l0>秒，警报</l0><l1>秒，警報</l1><l2>(s), alarm</l2></label>; ',
-        '      <br><input id="battleUnresponsive_Reload" type="checkbox"><label for="battleUnresponsive_Reload"><input class="hvAANumber" name="battleUnresponsiveTime_Reload" type="number"> <l0>秒，刷新页面</l0><l1>秒，刷新頁面</l1><l2>(s), reload page</l2></label>',
-        '      <br><input id="battleUnresponsive_Alt" type="checkbox"><label for="battleUnresponsive_Alt"><input class="hvAANumber" name="battleUnresponsiveTime_Alt" type="number"> <l0>秒，切换主服务器与alt服务器</l0><l1>秒，切換主服務器與alt服務器</l1><l2>(s), switch between alt.hentaiverse</l2></label></div>',
+
+        '  <div>',
+        '    <div class="hvAATable" style="grid-template-columns: repeat(3, 1fr);"><div><b><l0>延时</l0><l1>延時</l1><l2>Wait time for</l2></b></div>',
+        '    <div><l0>继续新回合</l0><l1>繼續新回合</l1><l2>New round</l2>: <input class="hvAANumber" name="NewRoundWaitTime" placeholder="0" type="number"><l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
+        '    <div><l0>战斗结束退出</l0><l1>戰鬥結束退出</l1><l2>Exit battle</l2>: <input class="hvAANumber" name="ExitBattleWaitTime" placeholder="3" type="number"><l0>(秒)</l0><l1>(秒)</l1><l2>(s)</l2></div>',
+        '  </div>',
+        '  </div>',
+        '  <div>',
+        '    <div class="hvAATable" style="grid-template-columns: 1fr 1fr 1.5fr 2fr;"><div><b><l0>战斗页面停留</l0><l1>戰鬥頁面停留</l1><l2>If not active for </l2>: </b></div>',
+        '      <div><input id="battleUnresponsive_Alert" type="checkbox"><label for="battleUnresponsive_Alert"><input class="hvAANumber" name="battleUnresponsiveTime_Alert" type="number"> <l0>秒，警报</l0><l1>秒，警報</l1><l2>(s), alarm</l2></label></div>',
+        '      <div><input id="battleUnresponsive_Reload" type="checkbox"><label for="battleUnresponsive_Reload"><input class="hvAANumber" name="battleUnresponsiveTime_Reload" type="number"> <l0>秒，刷新页面</l0><l1>秒，刷新頁面</l1><l2>(s), reload page</l2></label></div>',
+        '      <div><input id="battleUnresponsive_Alt" type="checkbox"><label for="battleUnresponsive_Alt"><input class="hvAANumber" name="battleUnresponsiveTime_Alt" type="number"> <l0>秒，切换主服务器与alt服务器</l0><l1>秒，切換主服務器與alt服務器</l1><l2>(s), switch between alt.hentaiverse</l2></label></div>',
+        '  </div>',
+        '  </div>',
         '  </div>',
 
         '<div class="hvAATab" id="hvAATab-BattleStarter">',
@@ -1830,6 +1941,8 @@
         '        <input id="arLevel_120" value="120,20" type="checkbox"><label for="arLevel_120">120</label> <input id="arLevel_130" value="130,21" type="checkbox"><label for="arLevel_130">130</label> <input id="arLevel_140" value="140,23" type="checkbox"><label for="arLevel_140">140</label> <input id="arLevel_150" value="150,24" type="checkbox"><label for="arLevel_150">150</label> <input id="arLevel_165" value="165,26" type="checkbox"><label for="arLevel_165">165</label> <input id="arLevel_180" value="180,27" type="checkbox"><label for="arLevel_180">180</label> <input id="arLevel_200" value="200,28" type="checkbox"><label for="arLevel_200">200</label> <input id="arLevel_225" value="225,29" type="checkbox"><label for="arLevel_225">225</label> <input id="arLevel_250" value="250,32" type="checkbox"><label for="arLevel_250">250</label> <input id="arLevel_300" value="300,33" type="checkbox"><label for="arLevel_300">300</label> <input id="arLevel_400" value="400,34" type="checkbox"><label for="arLevel_400">400</label> <input id="arLevel_500" value="500,35" type="checkbox"><label for="arLevel_500">500</label>',
         '        <input id="arLevel_RB50" value="RB50,105" type="checkbox"><label for="arLevel_RB50">RB50</label> <input id="arLevel_RB75A" value="RB75A,106" type="checkbox"><label for="arLevel_RB75A">RB75A</label> <input id="arLevel_RB75B" value="RB75B,107" type="checkbox"><label for="arLevel_RB75B">RB75B</label> <input id="arLevel_RB75C" value="RB75C,108" type="checkbox"><label for="arLevel_RB75C">RB75C</label>',
         '        <input id="arLevel_RB100" value="RB100,109" type="checkbox"><label for="arLevel_RB100">RB100</label> <input id="arLevel_RB150" value="RB150,110" type="checkbox"><label for="arLevel_RB150">RB150</label> <input id="arLevel_RB200" value="RB200,111" type="checkbox"><label for="arLevel_RB200">RB200</label> <input id="arLevel_RB250" value="RB250,112" type="checkbox"><label for="arLevel_RB250">RB250</label> <input id="arLevel_GF" value="GF,gr" type="checkbox"><label for="arLevel_GF" >GrindFest </label><input class="hvAANumber" name="idleArenaGrTime" placeholder="1" type="number">',
+        '      </div>',
+        '      <div><input id="skipUnclearedArena" type="checkbox" placeholder="1"><label for="skipUnclearedArena"><l0>跳过未通关过的</l0><l1>跳過未通關過的</l1><l2>Skip not cleared Arena/RingOfBlood</l2>',
         '      </div>',
         '      <div><input id="obscureNotIdleArena" type="checkbox"><label for="obscureNotIdleArena"><l0>页面中置灰未设置且未完成的</l0><l1>頁面中置灰未設置且未完成的</l1><l2>obscure not setted and not battled in Battle&gt;Arena/RingOfBlood</l2>',
         '      </div>',
@@ -1856,79 +1969,89 @@
         '    <input id="encounterSupply" type="checkbox"><label for="encounterSupply"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></label>',
         '    <div class="hvAAcheckItems hvAATable">',
         '      <div><input id="isCheck_11191" type="checkbox"><label for="isCheck_11191"><input class="hvAANumber" name="checkItem_11191" placeholder="0" type="number"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></label></div>',
-        '      <div><input id="isCheck_11195" type="checkbox"><label for="isCheck_11195"><input class="hvAANumber" name="checkItem_11195" placeholder="0" type="number"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></label></div>',
-        '      <div><input id="isCheck_11199" type="checkbox"><label for="isCheck_11199"><input class="hvAANumber" name="checkItem_11199" placeholder="0" type="number"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></label></div>',
         '      <div><input id="isCheck_11291" type="checkbox"><label for="isCheck_11291"><input class="hvAANumber" name="checkItem_11291" placeholder="0" type="number"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></label></div>',
-        '      <div><input id="isCheck_11295" type="checkbox"><label for="isCheck_11295"><input class="hvAANumber" name="checkItem_11295" placeholder="0" type="number"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></label></div>',
-        '      <div><input id="isCheck_11299" type="checkbox"><label for="isCheck_11299"><input class="hvAANumber" name="checkItem_11299" placeholder="0" type="number"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></label></div>',
         '      <div><input id="isCheck_11391" type="checkbox"><label for="isCheck_11391"><input class="hvAANumber" name="checkItem_11391" placeholder="0" type="number"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></label></div>',
+        '      <div><input id="isCheck_12101" type="checkbox"><label for="isCheck_12101"><input class="hvAANumber" name="checkItem_12101" placeholder="0" type="number"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2>Infusion of Flames</l2></label></div>',
+        '      <div><input id="isCheck_12201" type="checkbox"><label for="isCheck_12201"><input class="hvAANumber" name="checkItem_12201" placeholder="0" type="number"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2>Infusion of Frost</l2></label></div>',
+
+        '      <div><input id="isCheck_11195" type="checkbox"><label for="isCheck_11195"><input class="hvAANumber" name="checkItem_11195" placeholder="0" type="number"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></label></div>',
+        '      <div><input id="isCheck_11295" type="checkbox"><label for="isCheck_11295"><input class="hvAANumber" name="checkItem_11295" placeholder="0" type="number"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></label></div>',
         '      <div><input id="isCheck_11395" type="checkbox"><label for="isCheck_11395"><input class="hvAANumber" name="checkItem_11395" placeholder="0" type="number"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></label></div>',
+        '      <div><input id="isCheck_12301" type="checkbox"><label for="isCheck_12301"><input class="hvAANumber" name="checkItem_12301" placeholder="0" type="number"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2>Infusion of Lightning</l2></label></div>',
+        '      <div><input id="isCheck_12401" type="checkbox"><label for="isCheck_12401"><input class="hvAANumber" name="checkItem_12401" placeholder="0" type="number"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2>Infusion of Storms</l2></label></div>',
+
+        '      <div><input id="isCheck_11199" type="checkbox"><label for="isCheck_11199"><input class="hvAANumber" name="checkItem_11199" placeholder="0" type="number"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></label></div>',
+        '      <div><input id="isCheck_11299" type="checkbox"><label for="isCheck_11299"><input class="hvAANumber" name="checkItem_11299" placeholder="0" type="number"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></label></div>',
         '      <div><input id="isCheck_11399" type="checkbox"><label for="isCheck_11399"><input class="hvAANumber" name="checkItem_11399" placeholder="0" type="number"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></label></div>',
+        '      <div><input id="isCheck_12501" type="checkbox"><label for="isCheck_12501"><input class="hvAANumber" name="checkItem_12501" placeholder="0" type="number"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2>Infusion of Divinity</l2></label></div>',
+        '      <div><input id="isCheck_12601" type="checkbox"><label for="isCheck_12601"><input class="hvAANumber" name="checkItem_12601" placeholder="0" type="number"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2>Infusion of Darkness</l2></label></div>',
+
         '      <div><input id="isCheck_19111" type="checkbox"><label for="isCheck_19111"><input class="hvAANumber" name="checkItem_19111" placeholder="0" type="number"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></label></div>',
         '      <div><input id="isCheck_19131" type="checkbox"><label for="isCheck_19131"><input class="hvAANumber" name="checkItem_19131" placeholder="0" type="number"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></label></div>',
         '      <div><input id="isCheck_11501" type="checkbox"><label for="isCheck_11501"><input class="hvAANumber" name="checkItem_11501" placeholder="0" type="number"><l0>终极秘药</l0><l1>終極秘藥</l1><l2>Last Elixir</l2></label></div>',
-        '      <div><input id="isCheck_13101" type="checkbox"><label for="isCheck_13101"><input class="hvAANumber" name="checkItem_13101" placeholder="0" type="number"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2><br>Scroll of Swiftness</l2></label></div>',
-        '      <div><input id="isCheck_13111" type="checkbox"><label for="isCheck_13111"><input class="hvAANumber" name="checkItem_13111" placeholder="0" type="number"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2><br>Scroll of Protection</l2></label></div>',
-        '      <div><input id="isCheck_13199" type="checkbox"><label for="isCheck_13199"><input class="hvAANumber" name="checkItem_13199" placeholder="0" type="number"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2><br>Scroll of the Avatar</l2></label></div>',
-        '      <div><input id="isCheck_13201" type="checkbox"><label for="isCheck_13201"><input class="hvAANumber" name="checkItem_13201" placeholder="0" type="number"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2><br>Scroll of Absorption</l2></label></div>',
-        '      <div><input id="isCheck_13211" type="checkbox"><label for="isCheck_13211"><input class="hvAANumber" name="checkItem_13211" placeholder="0" type="number"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2><br>Scroll of Shadows</l2></label></div>',
-        '      <div><input id="isCheck_13221" type="checkbox"><label for="isCheck_13221"><input class="hvAANumber" name="checkItem_13221" placeholder="0" type="number"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2><br>Scroll of Life</l2></label></div>',
-        '      <div><input id="isCheck_13299" type="checkbox"><label for="isCheck_13299"><input class="hvAANumber" name="checkItem_13299" placeholder="0" type="number"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2><br>Scroll of the Gods</l2></label></div>',
-        '      <div><input id="isCheck_12101" type="checkbox"><label for="isCheck_12101"><input class="hvAANumber" name="checkItem_12101" placeholder="0" type="number"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2><br>Infusion of Flames</l2></label></div>',
-        '      <div><input id="isCheck_12201" type="checkbox"><label for="isCheck_12201"><input class="hvAANumber" name="checkItem_12201" placeholder="0" type="number"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2><br>Infusion of Frost</l2></label></div>',
-        '      <div><input id="isCheck_12301" type="checkbox"><label for="isCheck_12301"><input class="hvAANumber" name="checkItem_12301" placeholder="0" type="number"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2><br>Infusion of Lightning</l2></label></div>',
-        '      <div><input id="isCheck_12401" type="checkbox"><label for="isCheck_12401"><input class="hvAANumber" name="checkItem_12401" placeholder="0" type="number"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2><br>Infusion of Storms</l2></label></div>',
-        '      <div><input id="isCheck_12501" type="checkbox"><label for="isCheck_12501"><input class="hvAANumber" name="checkItem_12501" placeholder="0" type="number"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2><br>Infusion of Divinity</l2></label></div>',
-        '      <div><input id="isCheck_12601" type="checkbox"><label for="isCheck_12601"><input class="hvAANumber" name="checkItem_12601" placeholder="0" type="number"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2><br>Infusion of Darkness</l2></label></div>',
-        '      <div><input id="isCheck_11401" type="checkbox"><label for="isCheck_11401"><input class="hvAANumber" name="checkItem_11401" placeholder="0" type="number"><l0>能量饮料</l0><l1>能量飲料</l1><l2><br>Energy Drink</l2></label></div>',
-        '      <div><input id="isCheck_11402" type="checkbox"><label for="isCheck_11402"><input class="hvAANumber" name="checkItem_11402" placeholder="0" type="number"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2><br>Caffeinated Candy</l2></label></div>',
-        '      <div><input id="isCheck_61001" type="checkbox"><label for="isCheck_61001"><input class="hvAANumber" name="checkItem_61001" placeholder="0" type="number"><l0>虚空碎片</l0><l1>虛空碎片</l1><l2><br>Voidseeker Shard</l2></label></div>',
-        '      <div><input id="isCheck_61101" type="checkbox"><label for="isCheck_61101"><input class="hvAANumber" name="checkItem_61101" placeholder="0" type="number"><l0>以太碎片</l0><l1>以太碎片</l1><l2><br>Aether Shard</l2></label></div>',
-        '      <div><input id="isCheck_61501" type="checkbox"><label for="isCheck_61501"><input class="hvAANumber" name="checkItem_61501" placeholder="0" type="number"><l0>羽毛碎片</l0><l1>羽毛碎片</l1><l2><br>Featherweight Shard</l2></label></div>',
+        '      <div><input id="isCheck_13201" type="checkbox"><label for="isCheck_13201"><input class="hvAANumber" name="checkItem_13201" placeholder="0" type="number"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2>Scroll of Absorption</l2></label></div>',
+        '      <div><input id="isCheck_61001" type="checkbox"><label for="isCheck_61001"><input class="hvAANumber" name="checkItem_61001" placeholder="0" type="number"><l0>虚空碎片</l0><l1>虛空碎片</l1><l2>Voidseeker Shard</l2></label></div>',
+
+        '      <div><input id="isCheck_11401" type="checkbox"><label for="isCheck_11401"><input class="hvAANumber" name="checkItem_11401" placeholder="0" type="number"><l0>能量饮料</l0><l1>能量飲料</l1><l2>Energy Drink</l2></label></div>',
+        '      <div><input id="isCheck_13211" type="checkbox"><label for="isCheck_13211"><input class="hvAANumber" name="checkItem_13211" placeholder="0" type="number"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2>Scroll of Shadows</l2></label></div>',
+        '      <div><input id="isCheck_13221" type="checkbox"><label for="isCheck_13221"><input class="hvAANumber" name="checkItem_13221" placeholder="0" type="number"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2>Scroll of Life</l2></label></div>',
+        '      <div><input id="isCheck_13299" type="checkbox"><label for="isCheck_13299"><input class="hvAANumber" name="checkItem_13299" placeholder="0" type="number"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2>Scroll of the Gods</l2></label></div>',
+        '      <div><input id="isCheck_61101" type="checkbox"><label for="isCheck_61101"><input class="hvAANumber" name="checkItem_61101" placeholder="0" type="number"><l0>以太碎片</l0><l1>以太碎片</l1><l2>Aether Shard</l2></label></div>',
+
+        '      <div><input id="isCheck_11402" type="checkbox"><label for="isCheck_11402"><input class="hvAANumber" name="checkItem_11402" placeholder="0" type="number"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2>Caffeinated Candy</l2></label></div>',
+        '      <div><input id="isCheck_13101" type="checkbox"><label for="isCheck_13101"><input class="hvAANumber" name="checkItem_13101" placeholder="0" type="number"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2>Scroll of Swiftness</l2></label></div>',
+        '      <div><input id="isCheck_13111" type="checkbox"><label for="isCheck_13111"><input class="hvAANumber" name="checkItem_13111" placeholder="0" type="number"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2>Scroll of Protection</l2></label></div>',
+        '      <div><input id="isCheck_13199" type="checkbox"><label for="isCheck_13199"><input class="hvAANumber" name="checkItem_13199" placeholder="0" type="number"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2>Scroll of the Avatar</l2></label></div>',
+        '      <div><input id="isCheck_61501" type="checkbox"><label for="isCheck_61501"><input class="hvAANumber" name="checkItem_61501" placeholder="0" type="number"><l0>羽毛碎片</l0><l1>羽毛碎片</l1><l2>Featherweight Shard</l2></label></div>',
         '    </div>',
         '  </div>',
         '  <div><input id="checkSupplyGF" type="checkbox"><label for="checkSupplyGF"><b>[C!!]<l0>压榨届使用额外的库存检查</l0><l1>壓榨屆使用額外的庫存檢查</l1><l2>Extra supply check for Grind Fest</l2></b>;</label>',
         '    <l0>库存</l0><l1>庫存</l1><l2>Warn if supply</l2>&lt;max(100%,<input id="checkSupplyWarnGF" class="hvAANumber" name="checkSupplyWarnGF" placeholder="100" type="number">%)<l0>时提示</l0><l1>時提示</l1>;',
         '    <div class="hvAAcheckItems hvAATable">',
-        '      <div><input id="isCheckGF_11195" type="checkbox"><label for="isCheckGF_11195"><input class="hvAANumber" name="checkItemGF_11195" placeholder="0" type="number"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></label></div>',
         '      <div><input id="isCheckGF_11191" type="checkbox"><label for="isCheckGF_11191"><input class="hvAANumber" name="checkItemGF_11191" placeholder="0" type="number"><l0>体力长效药</l0><l1>體力長效藥</l1><l2>Health Draught</l2></label></div>',
-        '      <div><input id="isCheckGF_11199" type="checkbox"><label for="isCheckGF_11199"><input class="hvAANumber" name="checkItemGF_11199" placeholder="0" type="number"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></label></div>',
-        '      <div><input id="isCheckGF_11295" type="checkbox"><label for="isCheckGF_11295"><input class="hvAANumber" name="checkItemGF_11295" placeholder="0" type="number"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></label></div>',
         '      <div><input id="isCheckGF_11291" type="checkbox"><label for="isCheckGF_11291"><input class="hvAANumber" name="checkItemGF_11291" placeholder="0" type="number"><l0>魔力长效药</l0><l1>魔力長效藥</l1><l2>Mana Draught</l2></label></div>',
-        '      <div><input id="isCheckGF_11299" type="checkbox"><label for="isCheckGF_11299"><input class="hvAANumber" name="checkItemGF_11299" placeholder="0" type="number"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></label></div>',
-        '      <div><input id="isCheckGF_11395" type="checkbox"><label for="isCheckGF_11395"><input class="hvAANumber" name="checkItemGF_11395" placeholder="0" type="number"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></label></div>',
         '      <div><input id="isCheckGF_11391" type="checkbox"><label for="isCheckGF_11391"><input class="hvAANumber" name="checkItemGF_11391" placeholder="0" type="number"><l0>灵力长效药</l0><l1>靈力長效藥</l1><l2>Spirit Draught</l2></label></div>',
+        '      <div><input id="isCheckGF_12101" type="checkbox"><label for="isCheckGF_12101"><input class="hvAANumber" name="checkItemGF_12101" placeholder="0" type="number"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2>Infusion of Flames</l2></label></div>',
+        '      <div><input id="isCheckGF_12201" type="checkbox"><label for="isCheckGF_12201"><input class="hvAANumber" name="checkItemGF_12201" placeholder="0" type="number"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2>Infusion of Frost</l2></label></div>',
+
+        '      <div><input id="isCheckGF_11195" type="checkbox"><label for="isCheckGF_11195"><input class="hvAANumber" name="checkItemGF_11195" placeholder="0" type="number"><l0>体力药水</l0><l1>體力藥水</l1><l2>Health Potion</l2></label></div>',
+        '      <div><input id="isCheckGF_11295" type="checkbox"><label for="isCheckGF_11295"><input class="hvAANumber" name="checkItemGF_11295" placeholder="0" type="number"><l0>魔力药水</l0><l1>魔力藥水</l1><l2>Mana Potion</l2></label></div>',
+        '      <div><input id="isCheckGF_11395" type="checkbox"><label for="isCheckGF_11395"><input class="hvAANumber" name="checkItemGF_11395" placeholder="0" type="number"><l0>灵力药水</l0><l1>靈力藥水</l1><l2>Spirit Potion</l2></label></div>',
+        '      <div><input id="isCheckGF_12301" type="checkbox"><label for="isCheckGF_12301"><input class="hvAANumber" name="checkItemGF_12301" placeholder="0" type="number"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2>Infusion of Lightning</l2></label></div>',
+        '      <div><input id="isCheckGF_12401" type="checkbox"><label for="isCheckGF_12401"><input class="hvAANumber" name="checkItemGF_12401" placeholder="0" type="number"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2>Infusion of Storms</l2></label></div>',
+
+        '      <div><input id="isCheckGF_11199" type="checkbox"><label for="isCheckGF_11199"><input class="hvAANumber" name="checkItemGF_11199" placeholder="0" type="number"><l0>体力秘药</l0><l1>體力秘藥</l1><l2>Health Elixir</l2></label></div>',
+        '      <div><input id="isCheckGF_11299" type="checkbox"><label for="isCheckGF_11299"><input class="hvAANumber" name="checkItemGF_11299" placeholder="0" type="number"><l0>魔力秘药</l0><l1>魔力秘藥</l1><l2>Mana Elixir</l2></label></div>',
         '      <div><input id="isCheckGF_11399" type="checkbox"><label for="isCheckGF_11399"><input class="hvAANumber" name="checkItemGF_11399" placeholder="0" type="number"><l0>灵力秘药</l0><l1>靈力秘藥</l1><l2>Spirit Elixir</l2></label></div>',
+        '      <div><input id="isCheckGF_12501" type="checkbox"><label for="isCheckGF_12501"><input class="hvAANumber" name="checkItemGF_12501" placeholder="0" type="number"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2>Infusion of Divinity</l2></label></div>',
+        '      <div><input id="isCheckGF_12601" type="checkbox"><label for="isCheckGF_12601"><input class="hvAANumber" name="checkItemGF_12601" placeholder="0" type="number"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2>Infusion of Darkness</l2></label></div>',
+
         '      <div><input id="isCheckGF_19111" type="checkbox"><label for="isCheckGF_19111"><input class="hvAANumber" name="checkItemGF_19111" placeholder="0" type="number"><l0>花瓶</l0><l1>花瓶</l1><l2>Flower Vase</l2></label></div>',
         '      <div><input id="isCheckGF_19131" type="checkbox"><label for="isCheckGF_19131"><input class="hvAANumber" name="checkItemGF_19131" placeholder="0" type="number"><l0>泡泡糖</l0><l1>泡泡糖</l1><l2>Bubble-Gum</l2></label></div>',
         '      <div><input id="isCheckGF_11501" type="checkbox"><label for="isCheckGF_11501"><input class="hvAANumber" name="checkItemGF_11501" placeholder="0" type="number"><l0>终极秘药</l0><l1>終極秘藥</l1><l2>Last Elixir</l2></label></div>',
-        '      <div><input id="isCheckGF_13101" type="checkbox"><label for="isCheckGF_13101"><input class="hvAANumber" name="checkItemGF_13101" placeholder="0" type="number"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2><br>Scroll of Swiftness</l2></label></div>',
-        '      <div><input id="isCheckGF_13111" type="checkbox"><label for="isCheckGF_13111"><input class="hvAANumber" name="checkItemGF_13111" placeholder="0" type="number"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2><br>Scroll of Protection</l2></label></div>',
-        '      <div><input id="isCheckGF_13199" type="checkbox"><label for="isCheckGF_13199"><input class="hvAANumber" name="checkItemGF_13199" placeholder="0" type="number"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2><br>Scroll of the Avatar</l2></label></div>',
-        '      <div><input id="isCheckGF_13201" type="checkbox"><label for="isCheckGF_13201"><input class="hvAANumber" name="checkItemGF_13201" placeholder="0" type="number"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2><br>Scroll of Absorption</l2></label></div>',
-        '      <div><input id="isCheckGF_13211" type="checkbox"><label for="isCheckGF_13211"><input class="hvAANumber" name="checkItemGF_13211" placeholder="0" type="number"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2><br>Scroll of Shadows</l2></label></div>',
-        '      <div><input id="isCheckGF_13221" type="checkbox"><label for="isCheckGF_13221"><input class="hvAANumber" name="checkItemGF_13221" placeholder="0" type="number"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2><br>Scroll of Life</l2></label></div>',
-        '      <div><input id="isCheckGF_13299" type="checkbox"><label for="isCheckGF_13299"><input class="hvAANumber" name="checkItemGF_13299" placeholder="0" type="number"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2><br>Scroll of the Gods</l2></label></div>',
-        '      <div><input id="isCheckGF_12101" type="checkbox"><label for="isCheckGF_12101"><input class="hvAANumber" name="checkItemGF_12101" placeholder="0" type="number"><l0>火焰魔药</l0><l1>火焰魔藥</l1><l2><br>Infusion of Flames</l2></label></div>',
-        '      <div><input id="isCheckGF_12201" type="checkbox"><label for="isCheckGF_12201"><input class="hvAANumber" name="checkItemGF_12201" placeholder="0" type="number"><l0>冰冷魔药</l0><l1>冰冷魔藥</l1><l2><br>Infusion of Frost</l2></label></div>',
-        '      <div><input id="isCheckGF_12301" type="checkbox"><label for="isCheckGF_12301"><input class="hvAANumber" name="checkItemGF_12301" placeholder="0" type="number"><l0>闪电魔药</l0><l1>閃電魔藥</l1><l2><br>Infusion of Lightning</l2></label></div>',
-        '      <div><input id="isCheckGF_12401" type="checkbox"><label for="isCheckGF_12401"><input class="hvAANumber" name="checkItemGF_12401" placeholder="0" type="number"><l0>风暴魔药</l0><l1>風暴魔藥</l1><l2><br>Infusion of Storms</l2></label></div>',
-        '      <div><input id="isCheckGF_12501" type="checkbox"><label for="isCheckGF_12501"><input class="hvAANumber" name="checkItemGF_12501" placeholder="0" type="number"><l0>神圣魔药</l0><l1>神聖魔藥</l1><l2><br>Infusion of Divinity</l2></label></div>',
-        '      <div><input id="isCheckGF_12601" type="checkbox"><label for="isCheckGF_12601"><input class="hvAANumber" name="checkItemGF_12601" placeholder="0" type="number"><l0>黑暗魔药</l0><l1>黑暗魔藥</l1><l2><br>Infusion of Darkness</l2></label></div>',
-        '      <div><input id="isCheckGF_11401" type="checkbox"><label for="isCheckGF_11401"><input class="hvAANumber" name="checkItemGF_11401" placeholder="0" type="number"><l0>能量饮料</l0><l1>能量飲料</l1><l2><br>Energy Drink</l2></label></div>',
-        '      <div><input id="isCheckGF_11402" type="checkbox"><label for="isCheckGF_11402"><input class="hvAANumber" name="checkItemGF_11402" placeholder="0" type="number"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2><br>Caffeinated Candy</l2></label></div>',
-        '      <div><input id="isCheckGF_61001" type="checkbox"><label for="isCheckGF_61001"><input class="hvAANumber" name="checkItemGF_61001" placeholder="0" type="number"><l0>虚空碎片</l0><l1>虛空碎片</l1><l2><br>Voidseeker Shard</l2></label></div>',
-        '      <div><input id="isCheckGF_61101" type="checkbox"><label for="isCheckGF_61101"><input class="hvAANumber" name="checkItemGF_61101" placeholder="0" type="number"><l0>以太碎片</l0><l1>以太碎片</l1><l2><br>Aether Shard</l2></label></div>',
-        '      <div><input id="isCheckGF_61501" type="checkbox"><label for="isCheckGF_61501"><input class="hvAANumber" name="checkItemGF_61501" placeholder="0" type="number"><l0>羽毛碎片</l0><l1>羽毛碎片</l1><l2><br>Featherweight Shard</l2></label></div>',
+        '      <div><input id="isCheckGF_13201" type="checkbox"><label for="isCheckGF_13201"><input class="hvAANumber" name="checkItemGF_13201" placeholder="0" type="number"><l0>吸收卷轴</l0><l1>吸收捲軸</l1><l2>Scroll of Absorption</l2></label></div>',
+        '      <div><input id="isCheckGF_61001" type="checkbox"><label for="isCheckGF_61001"><input class="hvAANumber" name="checkItemGF_61001" placeholder="0" type="number"><l0>虚空碎片</l0><l1>虛空碎片</l1><l2>Voidseeker Shard</l2></label></div>',
+
+        '      <div><input id="isCheckGF_11401" type="checkbox"><label for="isCheckGF_11401"><input class="hvAANumber" name="checkItemGF_11401" placeholder="0" type="number"><l0>能量饮料</l0><l1>能量飲料</l1><l2>Energy Drink</l2></label></div>',
+        '      <div><input id="isCheckGF_13211" type="checkbox"><label for="isCheckGF_13211"><input class="hvAANumber" name="checkItemGF_13211" placeholder="0" type="number"><l0>幻影卷轴</l0><l1>幻影捲軸</l1><l2>Scroll of Shadows</l2></label></div>',
+        '      <div><input id="isCheckGF_13221" type="checkbox"><label for="isCheckGF_13221"><input class="hvAANumber" name="checkItemGF_13221" placeholder="0" type="number"><l0>生命卷轴</l0><l1>生命捲軸</l1><l2>Scroll of Life</l2></label></div>',
+        '      <div><input id="isCheckGF_13299" type="checkbox"><label for="isCheckGF_13299"><input class="hvAANumber" name="checkItemGF_13299" placeholder="0" type="number"><l0>众神卷轴</l0><l1>眾神捲軸</l1><l2>Scroll of the Gods</l2></label></div>',
+        '      <div><input id="isCheckGF_61101" type="checkbox"><label for="isCheckGF_61101"><input class="hvAANumber" name="checkItemGF_61101" placeholder="0" type="number"><l0>以太碎片</l0><l1>以太碎片</l1><l2>Aether Shard</l2></label></div>',
+
+        '      <div><input id="isCheckGF_11402" type="checkbox"><label for="isCheckGF_11402"><input class="hvAANumber" name="checkItemGF_11402" placeholder="0" type="number"><l0>咖啡因糖果</l0><l1>咖啡因糖果</l1><l2>Caffeinated Candy</l2></label></div>',
+        '      <div><input id="isCheckGF_13101" type="checkbox"><label for="isCheckGF_13101"><input class="hvAANumber" name="checkItemGF_13101" placeholder="0" type="number"><l0>加速卷轴</l0><l1>加速捲軸</l1><l2>Scroll of Swiftness</l2></label></div>',
+        '      <div><input id="isCheckGF_13111" type="checkbox"><label for="isCheckGF_13111"><input class="hvAANumber" name="checkItemGF_13111" placeholder="0" type="number"><l0>守护卷轴</l0><l1>守護捲軸</l1><l2>Scroll of Protection</l2></label></div>',
+        '      <div><input id="isCheckGF_13199" type="checkbox"><label for="isCheckGF_13199"><input class="hvAANumber" name="checkItemGF_13199" placeholder="0" type="number"><l0>化身卷轴</l0><l1>化身捲軸</l1><l2>Scroll of the Avatar</l2></label></div>',
+        '      <div><input id="isCheckGF_61501" type="checkbox"><label for="isCheckGF_61501"><input class="hvAANumber" name="checkItemGF_61501" placeholder="0" type="number"><l0>羽毛碎片</l0><l1>羽毛碎片</l1><l2>Featherweight Shard</l2></label></div>',
         '    </div>',
         '  </div>',
-        '  <div>',
-        '    <input id="checkEnchant" type="checkbox"><label for="checkEnchant"><b><l0>检查附魔</l0><l1>檢查附魔</l1><l2>Check enchant</l2></b>(<l0>请在库存检查设置中预留附魔所需份额</l0><l1>請在庫存檢查中預留附魔所需份額</l1><l2>Please includes portions in supply check</l2>);</label></br>',
+        '  <div style="text-decoration: line-through;">',
+        '    <input id="checkEnchant" type="checkbox"><label for="checkEnchant"><b><l0>（v091中已废弃）检查附魔</l0><l1>（v091中已廢棄）檢查附魔</l1><l2>(Obsolete in v091)Check enchant</l2></b>(<l0>请在库存检查设置中预留附魔所需份额</l0><l1>請在庫存檢查中預留附魔所需份額</l1><l2>Please includes portions in supply check</l2>);</label></br>',
         '    <input id="enchantEncounter" type="checkbox"><label for="enchantEncounter"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></label>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(8, 1fr);">' ,
-        '      <div><span class="hvAATitle"><b><l0>阈值</br>(分钟)</l0><l1>閾值</br>(分鐘)</l1><l2>Thresholds(m)</l2></b></span></br></div>',
-        '      <div><l0>主手</l0><l1>主手</l1><l2>Main<br>Hand</l2></div>',
-        '      <div><l0>副手</l0><l1>副手</l1><l2>Off<br>Hand</l2></div>',
+        '    <div class="hvAATable" style="grid-template-columns: 2fr repeat(7, 1fr);">' ,
+        '      <div><span class="hvAATitle"><b><l0>阈值(分钟)</l0><l1>閾值(分鐘)</l1><l2>Thresholds(m)</l2></b></span></br></div>',
+        '      <div><l0>主手</l0><l1>主手</l1><l2>Main Hand</l2></div>',
+        '      <div><l0>副手</l0><l1>副手</l1><l2>Off Hand</l2></div>',
         '      <div><l0>头盔</l0><l1>頭盔</l1><l2>Helmet</l2></div>',
         '      <div><l0>身体</l0><l1>身體</l1><l2>Body</l2></div>',
         '      <div><l0>手部</l0><l1>手部</l1><l2>Hands</l2></div>',
@@ -2006,12 +2129,12 @@
         '      <div><input id="isEnchant_1260115" type="checkbox"><label for="isEnchant_1260115">:<input class="hvAANumber" name="enchant_1260115" placeholder="0" type="number"></label></div>',
         '    </div>',
         '  </div>',
-        '  <div>',
-        '    <input id="checkEnchantGF" type="checkbox"><label for="checkEnchantGF"><b><l0>压榨界使用额外的附魔检查</l0><l1>壓榨界使用額外的附魔檢查</l1><l2>Extra enchant check for Grind Fest</l2></b></br><l0>若压榨界使用额外库存检查，则在对应设置中预留附魔所需份额</l0><l1>若壓榨界使用額外庫存檢查，則在對應配置中預留附魔所需份額</l1><l2>Includes portions in extra supply check for Grind Fest instead if it\'s enabled.</l2></label>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(8, 1fr);">',
-        '      <div><span class="hvAATitle"><b><l0>阈值</br>(分钟)</l0><l1>閾值</br>(分鐘)</l1><l2>Thresholds(m)</l2></b></span></br></div>',
-        '      <div><l0>主手</l0><l1>主手</l1><l2>Main<br>Hand</l2></div>',
-        '      <div><l0>副手</l0><l1>副手</l1><l2>Off<br>Hand</l2></div>',
+        '  <div style="text-decoration: line-through;">',
+        '    <input id="checkEnchantGF" type="checkbox"><label for="checkEnchantGF"><b><l0>（v091中已废弃）压榨界使用额外的附魔检查</l0><l1>（v091中已廢棄）壓榨界使用額外的附魔檢查</l1><l2>(Obsolete in v091)Extra enchant check for Grind Fest</l2></b></br><l0>若压榨界使用额外库存检查，则在对应设置中预留附魔所需份额</l0><l1>若壓榨界使用額外庫存檢查，則在對應配置中預留附魔所需份額</l1><l2>Includes portions in extra supply check for Grind Fest instead if it\'s enabled.</l2></label>',
+        '    <div class="hvAATable" style="grid-template-columns: 2fr repeat(7, 1fr);">',
+        '      <div><span class="hvAATitle"><b><l0>阈值(分钟)</l0><l1>閾值(分鐘)</l1><l2>Thresholds(m)</l2></b></span></br></div>',
+        '      <div><l0>主手</l0><l1>主手</l1><l2>Main Hand</l2></div>',
+        '      <div><l0>副手</l0><l1>副手</l1><l2>Off Hand</l2></div>',
         '      <div><l0>头盔</l0><l1>頭盔</l1><l2>Helmet</l2></div>',
         '      <div><l0>身体</l0><l1>身體</l1><l2>Body</l2></div>',
         '      <div><l0>手部</l0><l1>手部</l1><l2>Hands</l2></div>',
@@ -2094,7 +2217,7 @@
 
         '<div class="hvAATab" id="hvAATab-Recovery">',
         '  <div class="itemOrder"><b><l0>施放顺序(未配置的按照下面的顺序)</l0><l1>施放順序(未配置的按照下面的順序)</l1><l2>Cast Order(Using order below as default if not configed)</l2></b>: <input name="itemOrderName" style="width:80%;" type="text" disabled="true"><input name="itemOrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(4, 1fr);">' ,
+        '    <div class="hvAATable" style="grid-template-columns:repeat(5, 1fr);">' ,
         '    <div><input id="itemOrder_FC" value="FC,313" type="checkbox"><label for="itemOrder_FC"><l0>完全治愈(FC)</l0><l1>完全治愈(FC)</l1><l2>Full-Cure</l2></label></div>',
         '    <div><input id="itemOrder_HE" value="HE,11199" type="checkbox"><label for="itemOrder_HE"><l0>生命秘药(HE)</l0><l1>生命秘藥(HE)</l1><l2>Health Elixir</l2></label></div>',
         '    <div><input id="itemOrder_LE" value="LE,11501" type="checkbox"><label for="itemOrder_LE"><l0>最终秘药(LE)</l0><l1>最終秘藥(LE)</l1><l2>Last Elixir</l2></label></div>',
@@ -2130,41 +2253,49 @@
 
         '<div class="hvAATab" id="hvAATab-Channel">',
         '  <div><l0><b>获得引导时</b>（此时1点MP施法与150%伤害）</l0><l1><b>獲得引導時</b>（此時1點MP施法與150%傷害）</l1><l2><b>During Channeling effect</b> (1 mp spell cost and 150% spell damage)</l2>:</div>',
-        '  <div><b><l0>超过时不释放</l0><l1>超過時不釋放</l1><l2>Not cast if remain turns above</l2></b>: ',
-        '    <div><label for="channelThreshold_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Pr" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SL" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SS" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Ha" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_AF" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_He" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Re" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SV" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
-        '    <div><label for="channelThreshold_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Ab" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></div>',
+        '  <div><b><l0>超过时不释放</l0><l1>超過時不釋放</l1><l2>Not cast if remain turns above</l2>  (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</b>: ',
+        '  <div class="hvAATable" style="grid-template-columns: repeat(5, 1fr);">',
+        '    <div><label for="channelThreshold_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Pr" type="number"></label></div>',
+        '    <div><label for="channelThreshold_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SL" type="number"></label></div>',
+        '    <div><label for="channelThreshold_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SS" type="number"></label></div>',
+        '    <div><label for="channelThreshold_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Ha" type="number"></label></div>',
+        '    <div><label for="channelThreshold_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_AF" type="number"></label></div>',
+        '    <div><label for="channelThreshold_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_He" type="number"></label></div>',
+        '    <div><label for="channelThreshold_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Re" type="number"></label></div>',
+        '    <div><label for="channelThreshold_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_SV" type="number"></label></div>',
+        '    <div><label for="channelThreshold_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2> >= <input class="hvAANumber" placeholder="0" name="channelThreshold_Ab" type="number"></label></div>',
+
+        '  </div>',
         '  </div>',
         '  <div><b><l0>先施放引导技能</l0><l1>先施放引導技能</l1><l2>First cast</l2></b>: <br>',
         '    <l0>注意: 此处的施放顺序与</l0><l1>注意: 此處的施放順序与</l1><l2>Note: The cast order here is the same as in</l2><a class="hvAAGoto" name="hvAATab-Buff">BUFF<l01>技能</l01><l2> Spells</l2></a><l0>里的相同</l0><l1>裡的相同</l1><br>',
-        '    <input id="channelSkill_SS" type="checkbox"><label for="channelSkill_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2></label>',
-        '    <input id="channelSkill_SL" type="checkbox"><label for="channelSkill_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
-        '    <input id="channelSkill_Pr" type="checkbox"><label for="channelSkill_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label><br>',
-        '    <input id="channelSkill_Ab" type="checkbox"><label for="channelSkill_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label>',
-        '    <input id="channelSkill_SV" type="checkbox"><label for="channelSkill_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label>',
-        '    <input id="channelSkill_Re" type="checkbox"><label for="channelSkill_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
-        '    <input id="channelSkill_Ha" type="checkbox"><label for="channelSkill_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label>',
-        '    <input id="channelSkill_He" type="checkbox"><label for="channelSkill_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
-        '    <input id="channelSkill_AF" type="checkbox"><label for="channelSkill_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label></div>',
+        '  <div class="hvAATable" style="grid-template-columns: repeat(9, 1fr);">',
+        '    <div><input id="channelSkill_SS" type="checkbox"><label for="channelSkill_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2></label></div>',
+        '    <div><input id="channelSkill_SL" type="checkbox"><label for="channelSkill_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label></div>',
+        '    <div><input id="channelSkill_Pr" type="checkbox"><label for="channelSkill_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label><br></div>',
+        '    <div><input id="channelSkill_Ab" type="checkbox"><label for="channelSkill_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label></div>',
+        '    <div><input id="channelSkill_SV" type="checkbox"><label for="channelSkill_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label></div>',
+        '    <div><input id="channelSkill_Re" type="checkbox"><label for="channelSkill_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label></div>',
+        '    <div><input id="channelSkill_Ha" type="checkbox"><label for="channelSkill_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label></div>',
+        '    <div><input id="channelSkill_He" type="checkbox"><label for="channelSkill_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label></div>',
+        '    <div><input id="channelSkill_AF" type="checkbox"><label for="channelSkill_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label></div>',
+        '  </div>',
+        '  </div>',
         '  <div><input id="channelSkill2" type="checkbox"><label for="channelSkill2"><b><l0>再使用技能</l0><l1>再使用技能</l1><l2>Then use Skill</l2></b></label>: ',
         '    <div class="channelSkill2Order"><l0>施放顺序</l0><l1>施放順序</l1><l2>Cast Order</l2>: <input name="channelSkill2OrderName" style="width:80%;" type="text" disabled="true"><input name="channelSkill2OrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
-        '    <input id="channelSkill2Order_FC" value="FC,313" type="checkbox"><label for="channelSkill2Order_FC"><l0>完全治愈(FC)</l0><l1>完全治愈(FC)</l1><l2>Full-Cure</l2></label>',
-        '    <input id="channelSkill2Order_Cure" value="Cure,311" type="checkbox"><label for="channelSkill2Order_Cure"><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></label>',
-        '    <input id="channelSkill2Order_SS" value="SS,423" type="checkbox"><label for="channelSkill2Order_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2></label>',
-        '    <input id="channelSkill2Order_SL" value="SL,422" type="checkbox"><label for="channelSkill2Order_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label>',
-        '    <input id="channelSkill2Order_Pr" value="Pr,411" type="checkbox"><label for="channelSkill2Order_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label>',
-        '    <input id="channelSkill2Order_Ab" value="Ab,421" type="checkbox"><label for="channelSkill2Order_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label>',
-        '    <input id="channelSkill2Order_SV" value="SV,413" type="checkbox"><label for="channelSkill2Order_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label>',
-        '    <input id="channelSkill2Order_Re" value="Re,312" type="checkbox"><label for="channelSkill2Order_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label>',
-        '    <input id="channelSkill2Order_Ha" value="Ha,412" type="checkbox"><label for="channelSkill2Order_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label>',
-        '    <input id="channelSkill2Order_He" value="He,431" type="checkbox"><label for="channelSkill2Order_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label>',
-        '    <input id="channelSkill2Order_AF" value="AF,432" type="checkbox"><label for="channelSkill2Order_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label>',
+        '  <div class="hvAATable" style="grid-template-columns: repeat(6, 1fr);">',
+        '    <div><input id="channelSkill2Order_FC" value="FC,313" type="checkbox"><label for="channelSkill2Order_FC"><l0>完全治愈(FC)</l0><l1>完全治愈(FC)</l1><l2>Full-Cure</l2></label></div>',
+        '    <div><input id="channelSkill2Order_Cure" value="Cure,311" type="checkbox"><label for="channelSkill2Order_Cure"><l0>治疗(Cure)</l0><l1>治療(Cure)</l1><l2>Cure</l2></label></div>',
+        '    <div><input id="channelSkill2Order_SS" value="SS,423" type="checkbox"><label for="channelSkill2Order_SS"><l0>灵力盾(SS)</l0><l1>靈力盾(SS)</l1><l2>Spirit Shield</l2></label></div>',
+        '    <div><input id="channelSkill2Order_SL" value="SL,422" type="checkbox"><label for="channelSkill2Order_SL"><l0>生命火花(SL)</l0><l1>生命火花(SL)</l1><l2>Spark of Life</l2></label></div>',
+        '    <div><input id="channelSkill2Order_Pr" value="Pr,411" type="checkbox"><label for="channelSkill2Order_Pr"><l0>守护(Pr)</l0><l1>守護(Pr)</l1><l2>Protection</l2></label></div>',
+        '    <div><input id="channelSkill2Order_Ab" value="Ab,421" type="checkbox"><label for="channelSkill2Order_Ab"><l0>吸收(Ab)</l0><l1>吸收(Ab)</l1><l2>Absorb</l2></label></div>',
+        '    <div><input id="channelSkill2Order_SV" value="SV,413" type="checkbox"><label for="channelSkill2Order_SV"><l0>影纱(SV)</l0><l1>影紗(SV)</l1><l2>Shadow Veil</l2></label></div>',
+        '    <div><input id="channelSkill2Order_Re" value="Re,312" type="checkbox"><label for="channelSkill2Order_Re"><l0>细胞活化(Re)</l0><l1>細胞活化(Re)</l1><l2>Regen</l2></label></div>',
+        '    <div><input id="channelSkill2Order_Ha" value="Ha,412" type="checkbox"><label for="channelSkill2Order_Ha"><l0>疾速(Ha)</l0><l1>疾速(Ha)</l1><l2>Haste</l2></label></div>',
+        '    <div><input id="channelSkill2Order_He" value="He,431" type="checkbox"><label for="channelSkill2Order_He"><l0>穿心(He)</l0><l1>穿心(He)</l1><l2>Heartseeker</l2></label></div>',
+        '    <div><input id="channelSkill2Order_AF" value="AF,432" type="checkbox"><label for="channelSkill2Order_AF"><l0>奥术集中(AF)</l0><l1>奧術集中(AF)</l1><l2>Arcane Focus</l2></label></div>',
+        '  </div>',
         '  </div></div>',
         '  <div><input id="channelRebuff" type="checkbox"><label for="channelRebuff"><l0><b>最后ReBuff</b>: 重新施放最先将要消失的Buff</l0><l1><b>最後ReBuff</b>: 重新施放最先將要消失的Buff</l1><l2><b>At last, re-cast the spells which will expire first</b></l2>.</label></div>',
         '</div>',
@@ -2205,78 +2336,103 @@
         '  <div>',
         '    <l0>超出6个debuff的默认显示上限时（例如同时使用jpx时可忽略上限）：</l0><l1>超出6個debuff的默認顯示上限時（例如同時使用jpx時可忽略上限）：</l1><l2>When debuff count overflows 6 as the default maximum display count (such as ignore limitation while using jpx): </l2><select class="hvAANumber" name="debuffSkillTurnAlert"><option value="0" selected>跳过 / Skip</option><option value="1">警报 / Alert</option><option value="2">忽略 / Ignore</option></select><br>',
         '    <l0>剩余Turns低于阈值时警报</l0><l1>剩餘Turns低於閾值時警報</l1><l2>Alert when remain expire turns less than threshold</l2><br>',
-        '    <l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Sle" type="number">',
-        '    <l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Bl" type="number">',
-        '    <l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_We" type="number"><br>',
-        '    <l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Si" type="number">',
-        '    <l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Slo" type="number">',
-        '    <l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Im" type="number"><br>',
-        '    <l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Co" type="number">',
-        '    <l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Dr" type="number">',
-        '    <l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2>: <input class="hvAANumber" placeholder="0" name="debuffSkillTurn_MN" type="number"></div>',
+        '  <div class="hvAATable" style="grid-template-columns: repeat(9, 1fr);">',
+        '    <div><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Sle" type="number"></div>',
+        '    <div><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Bl" type="number"></div>',
+        '    <div><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_We" type="number"></div>',
+        '    <div><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Si" type="number"></div>',
+        '    <div><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Slo" type="number"></div>',
+        '    <div><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Im" type="number"></div>',
+        '    <div><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Co" type="number"></div>',
+        '    <div><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Dr" type="number"></div>',
+        '    <div><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_MN" type="number"></div>',
+        '</div>',
+        '  </div>',
+
         '  <div class="debuffSkillOrderAll">1. <l0>特殊先给全体施放的顺序(未配置的按照下面的顺序)</l0><l1>特殊先給全體施放的順序(未配置的按照下面的順序)</l1><l2>Cast Order for Special Debuff all enemies first(Using order below as default if not configed)</l2>:',
         '    <input name="debuffSkillOrderAllValue" style="width:80%;" type="text" disabled="true"><br>',
+        '<div class="hvAATable" style="grid-template-columns: repeat(7, 1fr) 1.5fr 1fr;">',
         // Dr, MN无法覆盖全体
-        '    <input id="debuffSkillOrderAll_Sle" type="checkbox"><label for="debuffSkillOrderAll_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label>',
-        '    <input id="debuffSkillOrderAll_Bl" type="checkbox"><label for="debuffSkillOrderAll_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label>',
-        '    <input id="debuffSkillOrderAll_We" type="checkbox"><label for="debuffSkillOrderAll_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
-        '    <input id="debuffSkillOrderAll_Si" type="checkbox"><label for="debuffSkillOrderAll_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label>',
-        '    <input id="debuffSkillOrderAll_Slo" type="checkbox"><label for="debuffSkillOrderAll_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
-        '    <input id="debuffSkillOrderAll_Dr" type="checkbox"><label for="debuffSkillOrderAll_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
-        '    <input id="debuffSkillOrderAll_Im" type="checkbox"><label for="debuffSkillOrderAll_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
-        '    <input id="debuffSkillOrderAll_MN" type="checkbox"><label for="debuffSkillOrderAll_MN"><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2></label>',
-        '    <input id="debuffSkillOrderAll_Co" type="checkbox"><label for="debuffSkillOrderAll_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
+        '    <div><input id="debuffSkillOrderAll_Sle" type="checkbox"><label for="debuffSkillOrderAll_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_Bl" type="checkbox"><label for="debuffSkillOrderAll_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_We" type="checkbox"><label for="debuffSkillOrderAll_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_Si" type="checkbox"><label for="debuffSkillOrderAll_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_Slo" type="checkbox"><label for="debuffSkillOrderAll_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_Dr" type="checkbox"><label for="debuffSkillOrderAll_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_Im" type="checkbox"><label for="debuffSkillOrderAll_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_MN" type="checkbox"><label for="debuffSkillOrderAll_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_Co" type="checkbox"><label for="debuffSkillOrderAll_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
+        '  </div>',
         '  </div>',
 
         '  <div>1.a. <l0>特殊先给全体施放时，视作覆盖的互斥Debuff</l0><l1>特殊特殊先給全體施放時，視作覆蓋的互斥Debuff</l1><l2>Exclusive debuffs during \'Cast Order for Special Debuff all enemies first\'</l2>:',
-        // Dr, MN无法覆盖全体
-        '    <input id="debuffAllExclusive_Sle" type="checkbox"><label for="debuffAllExclusive_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label>',
-        '    <input id="debuffAllExclusive_Bl" type="checkbox"><label for="debuffAllExclusive_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label>',
-        '    <input id="debuffAllExclusive_We" type="checkbox"><label for="debuffAllExclusive_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
-        '    <input id="debuffAllExclusive_Si" type="checkbox"><label for="debuffAllExclusive_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label>',
-        '    <input id="debuffAllExclusive_Slo" type="checkbox"><label for="debuffAllExclusive_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
-        '    <input id="debuffAllExclusive_Dr" type="checkbox"><label for="debuffAllExclusive_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
-        '    <input id="debuffAllExclusive_Im" type="checkbox"><label for="debuffAllExclusive_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
-        '    <input id="debuffAllExclusive_MN" type="checkbox"><label for="debuffAllExclusive_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label>',
-        '    <input id="debuffAllExclusive_Co" type="checkbox"><label for="debuffAllExclusive_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
+        '<div class="hvAATable" style="grid-template-columns: repeat(7, 1fr) 1.5fr 1fr;">',
+        '    <div><input id="debuffAllExclusive_Sle" type="checkbox"><label for="debuffAllExclusive_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_Bl" type="checkbox"><label for="debuffAllExclusive_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_We" type="checkbox"><label for="debuffAllExclusive_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_Si" type="checkbox"><label for="debuffAllExclusive_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_Slo" type="checkbox"><label for="debuffAllExclusive_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_Dr" type="checkbox"><label for="debuffAllExclusive_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_Im" type="checkbox"><label for="debuffAllExclusive_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_MN" type="checkbox"><label for="debuffAllExclusive_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_Co" type="checkbox"><label for="debuffAllExclusive_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
+        '  </div>',
         '  </div>',
 
         '  <div class="debuffSkillOrder">2. <l0>单体施放顺序(未配置的按照下面的顺序)</l0><l1>單體施放順序(未配置的按照下面的順序)</l1><l2>Cast Order for each enemy(Using order below as default if not configed)</l2>:',
         '    <input name="debuffSkillOrderValue" style="width:80%;" type="text" disabled="true"><br>',
-        '    <input id="debuffSkillOrder_Sle" type="checkbox"><label for="debuffSkillOrder_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label>',
-        '    <input id="debuffSkillOrder_Bl" type="checkbox"><label for="debuffSkillOrder_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label>',
-        '    <input id="debuffSkillOrder_We" type="checkbox"><label for="debuffSkillOrder_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label>',
-        '    <input id="debuffSkillOrder_Si" type="checkbox"><label for="debuffSkillOrder_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label>',
-        '    <input id="debuffSkillOrder_Slo" type="checkbox"><label for="debuffSkillOrder_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label>',
-        '    <input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label>',
-        '    <input id="debuffSkillOrder_Im" type="checkbox"><label for="debuffSkillOrder_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label>',
-        '    <input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label>',
-        '    <input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label>',
+        '<div class="hvAATable" style="grid-template-columns: repeat(7, 1fr) 1.5fr 1fr;">',
+        '    <div><input id="debuffSkillOrder_Sle" type="checkbox"><label for="debuffSkillOrder_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_Bl" type="checkbox"><label for="debuffSkillOrder_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_We" type="checkbox"><label for="debuffSkillOrder_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_Si" type="checkbox"><label for="debuffSkillOrder_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_Slo" type="checkbox"><label for="debuffSkillOrder_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_Im" type="checkbox"><label for="debuffSkillOrder_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
         '  </div>',
-        '  <div><l0>特殊先给全体施放和单体施放使用共享的阈值和各自独立的条件</l0><l1>特殊先給全體施放和單體施放使用共享的閾值和各自獨立的條件</l1><l2>Using sharing threshold and standalone conditions between special cast for debuff all enemies first and cast for debuff each enemy</l2></div>',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSleAll" type="checkbox"><label for="debuffSkillSleAll"><l0>先给全体上沉眠(Sl)</l0><l1>先給全體上沉眠(Sl)</l1><l2>Sleep all enemies first.</l2></label><input id="debuffSkillSleAllByIndex" type="checkbox"><label for="debuffSkillSleAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSleAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillBlAll" type="checkbox"><label for="debuffSkillBlAll"><l0>先给全体上致盲(Bl)</l0><l1>先給全體上致盲(Bl)</l1><l2>Blind all enemies first.</l2></label><input id="debuffSkillBlAllByIndex" type="checkbox"><label for="debuffSkillBlAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillBlAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给全体上虚弱(We)</l0><l1>先給全體上虛弱(We)</l1><l2>Weaken all enemies first.</l2></label><input id="debuffSkillWeAllByIndex" type="checkbox"><label for="debuffSkillWeAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillWeAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSiAll" type="checkbox"><label for="debuffSkillSiAll"><l0>先给全体上沉默(Si)</l0><l1>先給全體上沉默(Si)</l1><l2>Silence all enemies first.</l2></label><input id="debuffSkillSiAllByIndex" type="checkbox"><label for="debuffSkillSiAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSiAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSloAll" type="checkbox"><label for="debuffSkillSloAll"><l0>先给全体上缓慢(Slo)</l0><l1>先給全體上緩慢(Slo)</l1><l2>Slow all enemies first.</l2></label><input id="debuffSkillSloAllByIndex" type="checkbox"><label for="debuffSkillSloAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillSloAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillDrAll" type="checkbox"><label for="debuffSkillDrAll"><l0>先给全体上枯竭(Dr)</l0><l1>先給全體上枯竭(Dr)</l1><l2>Drain all enemies first.</l2></label><input id="debuffSkillDrAllByIndex" type="checkbox"><label for="debuffSkillDrAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillDrAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给全体上陷危(Im)</l0><l1>先給全體上陷危(Im)</l1><l2>Imperil all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillImAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillMNAll" type="checkbox"><label for="debuffSkillMNAll"><l0>先给全体上魔磁网/固定(MN)</l0><l1>先給全體上魔磁網/固定(MN)</l1><l2>MagNet/Immobilize all enemies first.</l2></label><input id="debuffSkillMNAllByIndex" type="checkbox"><label for="debuffSkillMNAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillMNAllCondition}}',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillCoAll" type="checkbox"><label for="debuffSkillCoAll"><l0>先给全体上混乱(Co)</l0><l1>先給全體上混亂(Co)</l1><l2>Confuse all enemies first.</l2></label><input id="debuffSkillCoAllByIndex" type="checkbox"><label for="debuffSkillCoAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label></div>{{debuffSkillCoAllCondition}}',
+        '  </div>',
 
-        '    <div><input id="debuffSkill_Sle" type="checkbox"><label for="debuffSkill_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Sle" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSleCondition}}</div>',
-        '    <div><input id="debuffSkill_Bl" type="checkbox"><label for="debuffSkill_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Bl" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillBlCondition}}</div>',
-        '    <div><input id="debuffSkill_We" type="checkbox"><label for="debuffSkill_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_We" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillWeCondition}}</div>',
-        '    <div><input id="debuffSkill_Si" type="checkbox"><label for="debuffSkill_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Si" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSiCondition}}</div>',
-        '    <div><input id="debuffSkill_Slo" type="checkbox"><label for="debuffSkill_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Slo" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillSloCondition}}</div>',
-        '    <div><input id="debuffSkill_Dr" type="checkbox"><label for="debuffSkill_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Dr" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillDrCondition}}</div>',
-        '    <div><input id="debuffSkill_Im" type="checkbox"><label for="debuffSkill_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Im" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillImCondition}}</div>',
-        '    <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_MN" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label>{{debuffSkillMNCondition}}</div>',
-        '    <div><input id="debuffSkill_Co" type="checkbox"><label for="debuffSkill_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2> <= <input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Co" type="number"> (<l0>阈值 &lt; 0 则不限制</l0><l1>閾值 &lt; 0 則不限制</l1><l2> Threshold &lt; 0 as unlimited</l2>)</label></label>{{debuffSkillCoCondition}}</div>',
+        '<div><b><l0>特殊先给全体施放和单体施放使用共享的阈值、重复命中权重和各自独立的条件</l0><l1>特殊先給全體施放和單體施放使用共享的閾值、重複命中權重和各自獨立的條件</l1><l2>Using sharing threshold/duplicateCastWeight and standalone conditions between special cast for debuff all enemies first and cast for debuff each enemy</l2></b><br>',
+        '      <l0>Buff持续时间 &lt;= 释放阈值时可释放，阈值 &lt; 0 则不限制</l0><l1>Buff持續時間 &lt;= 釋放閾值時可釋放，閾值 &lt; 0 則不限制</l1><l2>Cast available while buff remain duration &lt;= threshold, threshold &lt; 0 as unlimited</l2><br>',
+        '      EWF: <l0>重复释放权重公式</l0><l1>重複釋放的權重公式</l1><l2>Excluded Weight Formula for duplicate debuff targets</l2>',
         '  </div>',
+
+        '<div class="hvAATable" style="grid-template-columns: repeat(2, 1fr); width: 100%">',
+
+        '  <div><input id="debuffSkill_Sle" type="checkbox"><label for="debuffSkill_Sle"><l0>沉眠(Sl)</l0><l1>沉眠(Sl)</l1><l2>Sleep</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Sle" type="number">; EWF: <input name="excludedWeightFormula_Sle" placeholder="900" type="text">{{debuffSkillSleCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSleAll" type="checkbox"><label for="debuffSkillSleAll"><l0>先给全体上沉眠(Sl)</l0><l1>先給全體上沉眠(Sl)</l1><l2>Sleep all enemies first.</l2></label><input id="debuffSkillSleAllByIndex" type="checkbox"><label for="debuffSkillSleAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillSleAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_Bl" type="checkbox"><label for="debuffSkill_Bl"><l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Bl" type="number">; EWF: <input name="excludedWeightFormula_Bl" placeholder="900" type="text">{{debuffSkillBlCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillBlAll" type="checkbox"><label for="debuffSkillBlAll"><l0>先给全体上致盲(Bl)</l0><l1>先給全體上致盲(Bl)</l1><l2>Blind all enemies first.</l2></label><input id="debuffSkillBlAllByIndex" type="checkbox"><label for="debuffSkillBlAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillBlAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_We" type="checkbox"><label for="debuffSkill_We"><l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_We" type="number">; EWF: <input name="excludedWeightFormula_We" placeholder="900" type="text">{{debuffSkillWeCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillWeAll" type="checkbox"><label for="debuffSkillWeAll"><l0>先给全体上虚弱(We)</l0><l1>先給全體上虛弱(We)</l1><l2>Weaken all enemies first.</l2></label><input id="debuffSkillWeAllByIndex" type="checkbox"><label for="debuffSkillWeAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillWeAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_Si" type="checkbox"><label for="debuffSkill_Si"><l0>沉默(Si)</l0><l1>沉默(Si)</l1><l2>Silence</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Si" type="number">; EWF: <input name="excludedWeightFormula_Si" placeholder="900" type="text">{{debuffSkillSiCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSiAll" type="checkbox"><label for="debuffSkillSiAll"><l0>先给全体上沉默(Si)</l0><l1>先給全體上沉默(Si)</l1><l2>Silence all enemies first.</l2></label><input id="debuffSkillSiAllByIndex" type="checkbox"><label for="debuffSkillSiAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillSiAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_Slo" type="checkbox"><label for="debuffSkill_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Slo" type="number">; EWF: <input name="excludedWeightFormula_Slo" placeholder="900" type="text">{{debuffSkillSloCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillSloAll" type="checkbox"><label for="debuffSkillSloAll"><l0>先给全体上缓慢(Slo)</l0><l1>先給全體上緩慢(Slo)</l1><l2>Slow all enemies first.</l2></label><input id="debuffSkillSloAllByIndex" type="checkbox"><label for="debuffSkillSloAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillSloAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_Dr" type="checkbox"><label for="debuffSkill_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Dr" type="number">; EWF: <input name="excludedWeightFormula_Dr" placeholder="900" type="text">{{debuffSkillDrCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillDrAll" type="checkbox"><label for="debuffSkillDrAll"><l0>先给全体上枯竭(Dr)</l0><l1>先給全體上枯竭(Dr)</l1><l2>Drain all enemies first.</l2></label><input id="debuffSkillDrAllByIndex" type="checkbox"><label for="debuffSkillDrAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillDrAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_Im" type="checkbox"><label for="debuffSkill_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Im" type="number">; EWF: <input name="excludedWeightFormula_Im" placeholder="900" type="text">{{debuffSkillImCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给全体上陷危(Im)</l0><l1>先給全體上陷危(Im)</l1><l2>Imperil all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillImAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold" type="number">; EWF: <input name="excludedWeightFormula_MN" placeholder="900" type="text">{{debuffSkillMNCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillMNAll" type="checkbox"><label for="debuffSkillMNAll"><l0>先给全体上魔磁网/固定(MN)</l0><l1>先給全體上魔磁網/固定(MN)</l1><l2>MagNet/Immobilize all enemies first.</l2></label><input id="debuffSkillMNAllByIndex" type="checkbox"><label for="debuffSkillMNAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillMNAllCondition}}</div>',
+
+        '  <div><input id="debuffSkill_Co" type="checkbox"><label for="debuffSkill_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Co" type="number">; EWF: <input name="excludedWeightFormula_Co" placeholder="900" type="text">{{debuffSkillCoCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillCoAll" type="checkbox"><label for="debuffSkillCoAll"><l0>先给全体上混乱(Co)</l0><l1>先給全體上混亂(Co)</l1><l2>Confuse all enemies first.</l2></label><input id="debuffSkillCoAllByIndex" type="checkbox"><label for="debuffSkillCoAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillCoAllCondition}}</div>',
+
+        '</div>',
+        '</div>',
 
         '<div class="hvAATab" id="hvAATab-Skill">',
-        '  <div><span><l0>注意: 默认在灵动架式状态下使用，请在<a class="hvAAGoto" name="hvAATab-Main">主要选项</a>勾选并设置<b>开启/关闭灵动架式</b></l0><l1>注意: 默認在靈動架式狀態下使用，請在<a class="hvAAGoto" name="hvAATab-Main">主要選項</a>勾選並設置<b>開啟/關閉靈動架式</b></l1><l2>Note: use under Spirit by default, please check and set the <b>Turn on/off Spirit Stance</b> in <a class="hvAAGoto" name="hvAATab-Main">Main</a></l2></span></div>',
+        '  <div><input id="skillSSOnly" type="checkbox" placeholder="true"><label for="skillSSOnly"><l0>只在灵动架式状态下使用</l0><l1>只在靈動架式狀態下使用</l1><l2>Only use skills under Spirit by default</l2></label><br/><span><l0>(请在<a class="hvAAGoto" name="hvAATab-Main">主要选项</a>勾选并设置<b>开启/关闭灵动架式</b>)</l0><l1>(請在<a class="hvAAGoto" name="hvAATab-Main">主要選項</a>勾選並設置<b>開啟/關閉靈動架式</b>)</l1><l2>(please check and set the <b>Turn on/off Spirit Stance</b> in <a class="hvAAGoto" name="hvAATab-Main">Main</a>)</l2></span></div>',
 
         '  <div class="skillOrder"><l0>施放顺序(未配置的按照下面的顺序)</l0><l1>施放順序(未配置的按照下面的順序)</l1><l2>Cast Order(Using order below as default if not configed)</l2>: ',
         '  <input name="skillOrderValue" style="width:80%;" type="text" disabled="true"><br>',
@@ -2293,7 +2449,7 @@
         '  <div><l0>魔药使用条件</l0><l1>魔藥使用條件</l1><l2>Infusion Use Condition</l2>{{infusionCondition}}</div>',
         '  <div><input id="infusionDefaultOnly" type="checkbox" placeholder="true"><label for="infusionDefaultOnly"><b><l0>只使用与默认攻击模式相同的魔药</l0><l1>只使用與默認攻擊模式相同的魔藥</l1><l2>Use Infusion as same as default attack mode only.</l2></b></label></div>',
         '  <div class="infusionOrder"><b><l0>施放顺序(未配置的按照下面的顺序)</l0><l1>施放順序(未配置的按照下面的順序)</l1><l2>Cast Order(Using order below as default if not configed)</l2></b>: <input name="infusionOrderName" style="width:80%;" type="text" disabled="true"><br>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(4, 1fr);">' ,
+        '    <div class="hvAATable" style="grid-template-columns:repeat(6, 1fr);">' ,
         '    <div><input id="infusionOrder_Divinity" type="checkbox"><label for="infusionOrder_Divinity"><l0>神圣(Divinity)</l0><l1>神聖(Divinity)</l1><l2>Divinity</l2></label></div>',
         '    <div><input id="infusionOrder_Darkness" type="checkbox"><label for="infusionOrder_Darkness"><l0>黑暗(Darkness)</l0><l1>黑暗(Darkness)</l1><l2>Darkness</l2></label></div>',
         '    <div><input id="infusionOrder_Flames" type="checkbox"><label for="infusionOrder_Flames"><l0>火焰(Flames)</l0><l1>火焰(Flames)</l1><l2>Flames</l2></label></div>',
@@ -2332,10 +2488,11 @@
         '  <span class="hvAATitle"><l0>攻击规则</l0><l1>攻擊規則</l1><l2>Attack Rule</l2></span> <l01><a href="https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README.md#攻击规则-示例" target="_blank">示例</a></l01><l2><a href="https://github.com/dodying/UserJs/blob/master/HentaiVerse/hvAutoAttack/README_en.md#attack-rule-example" target="_blank">Example</a></l2>',
         '  <div><b>1. <l0>初始血量权重=Log10(目标血量/场上最低血量)</l0><l1>初始血量權重=Log10(目標血量/場上最低血量)</l1><l2>BaseHpWeight = BaseHpRatio*Log10(TargetHP/MaxHPOnField)</l2></b><br>',
         '    <l0>初始权重系数(>0:低血量优先;<0:高血量优先)</l0><l1>初始權重係數(>0:低血量優先;<0:高血量優先)</l1><l2>BaseHpRatio(>0:low hp first;<0:high hp first)</l2><input class="hvAANumber" name="baseHpRatio" placeholder="1" type="number"><br>',
-        '    <l0>不可命中目标的权重</l0><l1>不可名中目標的權重</l1><l2>Unreachable Target Weight</l2><input class="hvAANumber" name="unreachableWeight" placeholder="1000" type="number"><br>',
+        '    <l0>不可命中目标的权重公式</l0><l1>不可名中目標的權重公式</l1><l2>Unreachable Target Weight Formula</l2>: <input name="unreachableWeight" placeholder="1000" type="text"><br>',
+        '    <l0>BOSS:Yggdrasil额外权重</l0><l1>BOSS:Yggdrasil額外權重</l1><l2>BOSS:Yggdrasil Extra Weight</l2></b><input class="hvAANumber" name="YggdrasilExtraWeight" placeholder="-1000" type="number"><br>',
         '    <input id="cacheMonsterHP" type="checkbox"><label for="cacheMonsterHP"><l0>启用HP缓存</l0><l1>啟用HP緩存</l1><l2>Use HP Cache</l2></label><button class="clearMonsterHPCache"><l0>清空缓存</l0><l1>清空緩存</l1><l2>Clear HP Cache</l2></button><input id="portable_monsterDB" type="checkbox"><label for="portable_monsterDB"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2></label><input id="portable_monsterMID" type="checkbox" style="display:none"></div>',
         '  <div><b>2. <l0>初始权重与下述各Buff权重相加</l0><l1>初始權重與下述各Buff權重相加</l1><l2>PW(X) = BaseHpWeight + Accumulated_Weight_of_Deprecating_Spells_In_Effect(X)</l2></b><br>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(3, 1fr);">',
+        '    <div class="hvAATable" style="grid-template-columns:repeat(6, 1fr);">',
         '      <div><input class="hvAANumber" name="weight_We" placeholder="12" type="number"> <l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></div>',
         '      <div><input class="hvAANumber" name="weight_Bl" placeholder="10" type="number"> <l0>致盲(Bl)</l0><l1>致盲(Bl)</l1><l2>Blind</l2></div>',
         '      <div><input class="hvAANumber" name="weight_Slo" placeholder="15" type="number"> <l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></div>',
@@ -2355,8 +2512,8 @@
         '      <div><input class="hvAANumber" name="weight_BS" placeholder="0" type="number"> <l0>焚燒的靈魂(BS)</l0><l1>焚燒的靈魂(BS)</l1><l2>Burning Soul</l2></div>',
         '      <div><input class="hvAANumber" name="weight_RS" placeholder="0" type="number"> <l0>鮮美的靈魂(RS)</l0><l1>鮮美的靈魂(RS)</l1><l2>Ripened Soul</l2></div>',
         '    </div>',
-        '    <b><l0>降抗性和攻击模式属性相同时</l0><l1>降抗性和攻擊模式屬性相同時</l1><l2>While elements between Resistance-lower-debuff and Attack-Mode matches</l2></b>  [' + attackStatusType[g().attackStatus] + '] : <br>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(3, 1fr);">',
+        '    <b><l0>降抗性和攻击模式属性</l0><l1>降抗性和攻擊模式屬性</l1><l2>While elements between Resistance-lower-debuff and Attack-Mode matches</l2>  [' + attackStatusType[option.attackStatus??0] + '] <l0>相同时</l0><l1>相同時</l1><l2></l2></b> : <br>',
+        '    <div class="hvAATable" style="grid-template-columns: repeat(4, 1fr) repeat(2, 1.25fr);">',
         '      <div><input class="hvAANumber" name="weight_SS" placeholder="-14" type="number"> <l0>灼烧的皮肤(SS)</l0><l1>燒灼的皮膚(SS)</l1><l2>Searing Skin</l2></div>',
         '      <div><input class="hvAANumber" name="weight_FL" placeholder="-14" type="number"> <l0>冰封的肢体(FL)</l0><l1>冰封的肢體(FL)</l1><l2>Freezing Limbs</l2></div>',
         '      <div><input class="hvAANumber" name="weight_TA" placeholder="-14" type="number"> <l0>湍流的空气(TA)</l0><l1>湍流的空氣(TA)</l1><l2>Turbulent Air</l2></div>',
@@ -2364,8 +2521,8 @@
         '      <div><input class="hvAANumber" name="weight_BD" placeholder="-19" type="number"> <l0>崩溃的防御(BD)</l0><l1>崩潰的防禦(BD)</l1><l2>Breached Defense</l2></div>',
         '      <div><input class="hvAANumber" name="weight_BA" placeholder="-14" type="number"> <l0>钝化的攻击(BA)</l0><l1>鈍化的攻擊(BA)</l1><l2>Blunted Attack</l2></div>',
         '    </div>',
-        '    <b><l0>降抗性和攻击模式属性不相同时</l0><l1>降抗性和攻擊模式屬性不相同時</l1><l2>While elements between Resistance-lower-debuff and Attack-Mode NOT matches</l2></b>  [' + attackStatusType[g().attackStatus] + '] : <br>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(3, 1fr);">',
+        '    <b><l0>降抗性和攻击模式属性</l0><l1>降抗性和攻擊模式屬性</l1><l2>While elements between Resistance-lower-debuff and Attack-Mode NOT matches</l2>  [' + attackStatusType[option.attackStatus??0] + '] <l0>不相同时</l0><l1>不相同時</l1><l2></l2></b>: <br>',
+        '    <div class="hvAATable" style="grid-template-columns: repeat(4, 1fr) repeat(2, 1.25fr);">',
         '      <div><input class="hvAANumber" name="weight_SS1" placeholder="5" type="number"> <l0>灼烧的皮肤(SS)</l0><l1>燒灼的皮膚(SS)</l1><l2>Searing Skin</l2></div>',
         '      <div><input class="hvAANumber" name="weight_FL1" placeholder="5" type="number"> <l0>冰封的肢体(FL)</l0><l1>冰封的肢體(FL)</l1><l2>Freezing Limbs</l2></div>',
         '      <div><input class="hvAANumber" name="weight_TA1" placeholder="5" type="number"> <l0>湍流的空气(TA)</l0><l1>湍流的空氣(TA)</l1><l2>Turbulent Air</l2></div>',
@@ -2374,33 +2531,34 @@
         '      <div><input class="hvAANumber" name="weight_BA1" placeholder="5" type="number"> <l0>钝化的攻击(BA)</l0><l1>鈍化的攻擊(BA)</l1><l2>Blunted Attack</l2></div>',
         '    </div>',
         '    <b><l0>敌方增益，暂不清楚具体效果，默认按0权重计算</l0><l1>敵方增益，暫不清楚具體效果，默認按0權重計算</l1><l2>Enemy Procs, Evvecf value unknown, weight default as 0 for now.</l2>:</b><br>',
-        '    <div class="hvAATable" style="display:grid; grid-template-columns:repeat(3, 1fr);">',
-        '      <div><input class="hvAANumber" name="weight_Fos" placeholder="0" type="number"> <l0>姊妹们的盛怒(FoS)</l0><l1>姊妹們的盛怒(FoS)</l1><l2><br>Fury of the Sisters</l2></div>',
-        '      <div><input class="hvAANumber" name="weight_Lof" placeholder="0" type="number"> <l0>未来的悲叹(LoF)</l0><l1>未來的悲歎(LoF)</l1><l2><br>Lamentations of the Future</l2></div>',
-        '      <div><input class="hvAANumber" name="weight_SoP" placeholder="0" type="number"> <l0>昔日的凄叫(SoP)</l0><l1>昔日的淒叫(SoP)</l1><l2><br>Screams of the Past</l2></div>',
-        '      <div><input class="hvAANumber" name="weight_WoP" placeholder="0" type="number"> <l0>此刻的恸哭(WoP)</l0><l1>此刻的慟哭(WoP)</l1><l2><br>Wailings of the Present</l2></div>',
-        '      <div><input class="hvAANumber" name="weight_AW" placeholder="0" type="number"> <l0>吸收结界(AW)</l0><l1>吸收結界(AW)</l1><l2><br>Absorbing Ward</l2></div>',
+        '    <div class="hvAATable" style="grid-template-columns: 1fr 1.25fr 1fr 1fr 1fr;">',
+        '      <div><input class="hvAANumber" name="weight_Fos" placeholder="0" type="number"> <l0>姊妹们的盛怒(FoS)</l0><l1>姊妹們的盛怒(FoS)</l1><l2>Fury of the Sisters</l2></div>',
+        '      <div><input class="hvAANumber" name="weight_Lof" placeholder="0" type="number"> <l0>未来的悲叹(LoF)</l0><l1>未來的悲歎(LoF)</l1><l2>Lamentations of the Future</l2></div>',
+        '      <div><input class="hvAANumber" name="weight_SoP" placeholder="0" type="number"> <l0>昔日的凄叫(SoP)</l0><l1>昔日的淒叫(SoP)</l1><l2>Screams of the Past</l2></div>',
+        '      <div><input class="hvAANumber" name="weight_WoP" placeholder="0" type="number"> <l0>此刻的恸哭(WoP)</l0><l1>此刻的慟哭(WoP)</l1><l2>Wailings of the Present</l2></div>',
+        '      <div><input class="hvAANumber" name="weight_AW" placeholder="0" type="number"> <l0>吸收结界(AW)</l0><l1>吸收結界(AW)</l1><l2>Absorbing Ward</l2></div>',
         '    </div>',
         '  </div>',
-        '  <div><b>3. PW(X) += Log10(1 + <l0>武器攻击中央目标伤害倍率(副手及冲击技能)</l0><l1>乘以武器攻擊中央目標傷害倍率(副手及衝擊技能)</l1><l2>Weapon Attack Central Target Damage Ratio (Offhand & Strike)</l2>)</b><br><l0>额外伤害比例：</l0><l1>額外傷害比例：</l1><l2>Extra DMG Ratio: </l2><input class="hvAANumber" name="centralExtraRatio" placeholder="0" type="number">%</div>',
-        '  <div><b>4. <l0>优先选择权重最低的目标</l0><l1>優先選擇權重最低的目標</l1><l2>Choose target with lowest rank first</l2><br><l0>BOSS:Yggdrasil额外权重</l0><l1>BOSS:Yggdrasil額外權重</l1><l2>BOSS:Yggdrasil Extra Weight</l2></b><input class="hvAANumber" name="YggdrasilExtraWeight" placeholder="-1000" type="number"></div>',
-        '  <div><input id="displayWeight" type="checkbox"><label for="displayWeight"><l0>显示权重及顺序</l0><l1>顯示權重及順序</l1><l2>DIsplay Weight and order</l2></label>',
-        '  <input id="displayWeightBackground" type="checkbox"><label for="displayWeightBackground"><l0>显示优先级背景色</l0><l1>顯示優先級背景色</l1><l2>DIsplay Priority Background Color</l2></label>',
-        '  </br><l0>CSS格式或可eval执行的公式（可用&lt;rank&gt;, &lt;all&gt;指代优先级和总优先级数量, &lt;style_x&gt;指代第x个的相同配置值），例如：</l0><l1>CSS格式或可eval執行的公式（可用&lt;rank&gt;, &lt;all&gt;指代優先級和總優先級數量, &lt;style_x&gt;指代第x個的相同配置值）：例如</l1><l2>CSS or eval executable formula(use &lt;rank&gt; and &lt;all&gt; to refer to priority rank and total rank count, &lt;style_x&gt; to refer to the same option value of option No.x)Such as: </l2><br>`hsl(${Math.round(240*&lt;rank&gt;/Math.max(1,&lt;all&gt;-1))}deg 50% 50%)`<br>',
-        '  <div style="display:grid;grid-template-columns: repeat(1, 0.1fr 1fr);width:100%;">',
-        '  <div>&nbsp;&nbsp;1.</div><div><input class="customizeInput" name="weightBackground_1" type="text"></div>',
-        '  <div>&nbsp;&nbsp;2.</div><div><input class="customizeInput" name="weightBackground_2" type="text"></div>',
-        '  <div>&nbsp;&nbsp;3.</div><div><input class="customizeInput" name="weightBackground_3" type="text"></div>',
-        '  <div>&nbsp;&nbsp;4.</div><div><input class="customizeInput" name="weightBackground_4" type="text"></div>',
-        '  <div>&nbsp;&nbsp;5.</div><div><input class="customizeInput" name="weightBackground_5" type="text"></div>',
-        '  <div>&nbsp;&nbsp;6.</div><div><input class="customizeInput" name="weightBackground_6" type="text"></div>',
-        '  <div>&nbsp;&nbsp;7.</div><div><input class="customizeInput" name="weightBackground_7" type="text"></div>',
-        '  <div>&nbsp;&nbsp;8.</div><div><input class="customizeInput" name="weightBackground_8" type="text"></div>',
-        '  <div>&nbsp;&nbsp;9.</div><div><input class="customizeInput" name="weightBackground_9" type="text"></div>',
-        '  <div>10.</div><div><input class="customizeInput" name="weightBackground_0" type="text"></div>',
+        '  <div><b>3. PW(X) -= Log10(1 + <l0>武器攻击中央目标伤害倍率(副手及冲击技能)</l0><l1>乘以武器攻擊中央目標傷害倍率(副手及衝擊技能)</l1><l2>Weapon Attack Central Target Damage Ratio (Offhand & Strike)</l2>)</b><br><l0>额外伤害比例：</l0><l1>額外傷害比例：</l1><l2>Extra DMG Ratio: </l2><input class="hvAANumber" name="centralExtraRatio" placeholder="0" type="number">%</div>',
+        '  <div><b>4. <l0>额外权重公式</l0><l1>額外權重公式</l1><l2>Extra weight formula</l2>: </b><input name="extraWeightFormula" type="text"></div>',
+        '  <div><b>5. <l0>优先选择权重最低的目标</l0><l1>優先選擇權重最低的目標</l1><l2>Choose target with lowest rank first</l2></b><br>',
+        '    <input id="displayWeight" type="checkbox"><label for="displayWeight"><l0>显示权重及顺序</l0><l1>顯示權重及順序</l1><l2>DIsplay Weight and order</l2></label>',
+        '    <input id="displayWeightBackground" type="checkbox"><label for="displayWeightBackground"><l0>显示优先级背景色</l0><l1>顯示優先級背景色</l1><l2>DIsplay Priority Background Color</l2></label></br>',
+        '    <l0>CSS格式或可eval执行的公式（可用&lt;rank&gt;, &lt;all&gt;指代优先级和总优先级数量, &lt;style_x&gt;指代第x个的相同配置值），例如：</l0><l1>CSS格式或可eval執行的公式（可用&lt;rank&gt;, &lt;all&gt;指代優先級和總優先級數量, &lt;style_x&gt;指代第x個的相同配置值）：例如</l1><l2>CSS or eval executable formula(use &lt;rank&gt; and &lt;all&gt; to refer to priority rank and total rank count, &lt;style_x&gt; to refer to the same option value of option No.x)Such as: </l2><br>`hsl(${Math.round(240*&lt;rank&gt;/Math.max(1,&lt;all&gt;-1))}deg 50% 50%)`<br>',
+        '    <div class="hvAATable" style="grid-template-columns: repeat(1, 0.05fr 1fr);width:100%;">',
+        '    <div>&nbsp;&nbsp;1.</div><div><input class="customizeInput" name="weightBackground_1" type="text"></div>',
+        '    <div>&nbsp;&nbsp;2.</div><div><input class="customizeInput" name="weightBackground_2" type="text"></div>',
+        '    <div>&nbsp;&nbsp;3.</div><div><input class="customizeInput" name="weightBackground_3" type="text"></div>',
+        '    <div>&nbsp;&nbsp;4.</div><div><input class="customizeInput" name="weightBackground_4" type="text"></div>',
+        '    <div>&nbsp;&nbsp;5.</div><div><input class="customizeInput" name="weightBackground_5" type="text"></div>',
+        '    <div>&nbsp;&nbsp;6.</div><div><input class="customizeInput" name="weightBackground_6" type="text"></div>',
+        '    <div>&nbsp;&nbsp;7.</div><div><input class="customizeInput" name="weightBackground_7" type="text"></div>',
+        '    <div>&nbsp;&nbsp;8.</div><div><input class="customizeInput" name="weightBackground_8" type="text"></div>',
+        '    <div>&nbsp;&nbsp;9.</div><div><input class="customizeInput" name="weightBackground_9" type="text"></div>',
+        '    <div>10.</div><div><input class="customizeInput" name="weightBackground_0" type="text"></div>',
         '  </div>',
         '  </div>',
-        '  <div>PS. <l0>如果你对各Buff权重有特别见解，请务必</l0><l1>如果你對各Buff權重有特別見解，請務必</l1><l2>If you have any suggestions, please </l2><a class="hvAAGoto" name="hvAATab-Feedback"><l0>告诉我</l0><l1>告訴我</l1><l2>let me know</l2></a>.<br><l0>参考公式为：</l0><l1>參考公式為：</l1><l2>Basic Weight Calculation as: </l2>PW(X) = Log10(<br>  (HP/MaxHPOnField/(1+CentralAttackDamageExtraRatio)<br>  *[HPActualEffectivenessRate:∏(1-debuff),debuff=Im|PA|Bl|Co|Dr|MN|St]<br>  /[DMGActualEffectivenessRate:∏(1-debuff),debuff=We|Bl|Slo|Si|Sl|Co|Dr|MN|St])<br>)</div>',
+        '  <div>PS. <l0>如果你对各Buff权重有特别见解，请务必</l0><l1>如果你對各Buff權重有特別見解，請務必</l1><l2>If you have any suggestions, please </l2><a class="hvAAGoto" name="hvAATab-Feedback"><l0>告诉我</l0><l1>告訴我</l1><l2>let me know</l2></a>.<br><l0>参考公式为：</l0><l1>參考公式為：</l1><l2>Basic Weight Calculation as: </l2>PW(X) = Log10(<br>HP/MaxHPOnField/(1+CentralAttackDamageExtraRatio)<br>  *[HPActualEffectivenessRate:∏(1-debuff),debuff=Im|PA|Bl|Co|Dr|MN|St]<br>  /[DMGActualEffectivenessRate:∏(1-debuff),debuff=We|Bl|Slo|Si|Sl|Co|Dr|MN|St]<br>)</div>',
         '</div>',
 
         '<div class="hvAATab" id="hvAATab-Drop">',
@@ -2411,7 +2569,7 @@
         '<div class="hvAATab" id="hvAATab-Usage">',
         '  <div><button class="reRecordUsage"><l0>重置数据记录</l0><l1>重置數據記錄</l1><l2>Reset Usage Tracking</l2></button><input id="portable_stats" type="checkbox"><label for="portable_stats"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2></label><input id="portable_statsOld" type="checkbox" style="display:none"></div>',
         '  <div><b><l0>自身</l0><l1>自身</l1><l2>Self</l2></b>',
-        '  <div class="hvAATable" style="display: grid; grid-template-columns: repeat(5, 1fr);">' ,
+        '  <div class="hvAATable" style="grid-template-columns: repeat(10, 1fr);">' ,
         '    <div><input id="record_turn" type="checkbox"><label for="record_turn"><l0></l0><l1></l1><l2></l2>Turns</label></div>',
         '    <div><input id="record_round" type="checkbox"><label for="record_round"><l0></l0><l1></l1><l2></l2>Rounds</label></div>',
         '    <div><input id="record_battle" type="checkbox"><label for="record_battle"><l0></l0><l1></l1><l2></l2>Battle</label></div>',
@@ -2425,7 +2583,7 @@
         '  </div>',
         '  </div>',
         '  <div><b><l0>操作</l0><l1>操作</l1><l2>Actions</l2></b>',
-        '  <div class="hvAATable" style="display: grid; grid-template-columns: repeat(5, 1fr);">' ,
+        '  <div class="hvAATable" style="grid-template-columns: repeat(5, 1fr);">' ,
         '    <div><input id="record_restore" type="checkbox"><label for="record_restore"><l0>回复 (总量)</l0><l1>回复 (總量)</l1><l2>Restore (Amount)</l2></label></div>',
         '    <div><input id="record_items" type="checkbox"><label for="record_items"><l0>物品 (次数)</l0><l1>物品 (次數)</l1><l2>Items (Count)</l2></label></div>',
         '    <div><input id="record_magic" type="checkbox"><label for="record_magic"><l0>技能 (次数)</l0><l1>技能 (次數)</l1><l2>Magic (Count)</l2></label></div>',
@@ -2434,7 +2592,7 @@
         '  </div>',
         '  </div>',
         '  <div><b><input id="record_hurt" type="checkbox"><label for="record_hurt"><l0>受伤 (总量)</l0><l1>受傷 (總量)</l1><l2>Hurt (Amount)</l</label>2></b>',
-        '  <div class="hvAATable" style="display: grid; grid-template-columns: repeat(5, 1fr);">' ,
+        '  <div class="hvAATable" style="grid-template-columns: repeat(3, 1fr) repeat(6, 2fr);">' ,
         '    <div><input id="record_hurtavg" type="checkbox"><label for="record_hurtavg"><l0>平均</l0><l1>平均</l1><l2>Avg</l2></label></div>',
         '    <div><input id="record_hurtcount" type="checkbox"><label for="record_hurtcount"><l0>次数</l0><l1>次數</l1><l2>Count</l2></label></div>',
         '    <div><input id="record_hurttotal" type="checkbox"><label for="record_hurttotal"><l0>总量</l0><l1>總量</l1><l2>Total</l2></label></div>',
@@ -2457,7 +2615,8 @@
         '    <l0>注意: 留空“姓名”一栏则表示删除该行，修改后请保存</l0><l1>注意: 留空“姓名”一欄則表示刪除該行，修改後請保存</l1><l2>Note: The "name" input box left blank will be deleted, after change please save in time.</l2>',
         '    <table><tbody><tr class="hvAATh"><td><l0>图标</l0><l1>圖標</l1><l2>ICON</l2></td><td><l0>名称</l0><l1>名稱</l1><l2>Name</l2></td><td><l0>链接</l0><l1>鏈接</l1><l2>Link</l2></td></tr></tbody></table></div>',
         '  <div><span class="hvAATitle"><l0>备份与还原</l0><l1>備份與還原</l1><l2>Backup and Restore</l2></span></br><button class="hvAABackup"><l0>备份设置</l0><l1>備份設置</l1><l2>Backup Confiuration</l2></button><button class="hvAARestore"><l0>还原设置</l0><l1>還原設置</l1><l2>Restore Confiuration</l2></button><button class="hvAADelete"><l0>删除设置</l0><l1>刪除設置</l1><l2>Delete Confiuration</l2></button><ul class="hvAABackupList"></ul></div>',
-        '  <div><span class="hvAATitle"><l0>导入与导出</l0><l1>導入與導出</l1><l2>Import and Export</l2></span></br><button class="hvAAExport"><l0>导出设置</l0><l1>導出設置</l1><l2>Export Confiuration</l2></button><button class="hvAAImport"><l0>导入设置</l0><l1>導入設置</l1><l2>Import Confiuration</l2></button><textarea class="hvAAConfig"></textarea></div></div>',
+        '  <div><span class="hvAATitle"><l0>导入与导出</l0><l1>導入與導出</l1><l2>Import and Export</l2></span></br><button class="hvAAExport"><l0>导出设置</l0><l1>導出設置</l1><l2>Export Confiuration</l2></button><button class="hvAAImport"><l0>导入设置</l0><l1>導入設置</l1><l2>Import Confiuration</l2></button><textarea class="hvAAConfig"></textarea></div>',
+        '</div>',
 
         '<div class="hvAATab" id="hvAATab-Feedback">',
         '  <span class="hvAATitle"><l01>反馈</l01><l2>Feedback</l2></span>',
@@ -2465,7 +2624,9 @@
         '  <div><span class="hvAATitle"><l0>反馈说明</l0><l1>反饋說明</l1><l2>Feedback Note</l2></span>: <br>',
         '    <l0>如果你遇见了Bug，想帮助作者修复它<br>你应当提供以下多种资料: <br>1. 场景描述<br>2. 你的配置<br>3. 控制台日志 (按Ctrl+Shift+i打开开发者助手，再选择Console(控制台)面板)<br>4. 战斗日志  (如果是在战斗中)<br>如果是无法容忍甚至使脚本失效的Bug，请尝试安装旧版本<hr>如果你有一些建议使这个脚本更加有用，那么: <br>1. 请尽量简述你的想法<br>2. 如果可以，请提供一些场景 (方便作者更好理解)</l0>',
         '    <l1>如果你遇見了Bug，想幫助作者修復它<br>你應當提供以下多種資料: <br>1. 場景描述<br>2. 你的配置<br>3. 控制台日誌 (按Ctrl+Shift+i打開開發者助手，再選擇Console(控制台)面板)<br>4. 戰鬥日誌 (如果是在戰鬥中)<br>如果是無法容忍甚至使腳本失效的Bug，請嘗試安裝舊版本<hr>如果你有一些建議使這個腳本更加有用，那麼: <br>1. 請盡量簡述你的想法<br>2.如果可以，請提供一些場景 (方便作者更好理解)</l1>',
-        '    <l2>If you encounter a bug and would like to help the author fix it<br>You should provide the following information: <br>1. the Situation<br>2. Your Configuration<br>3. Console Log (press Ctrl + Shift + i to open the Developer Assistant, And then select the Console panel)<br>4. Battle Log (if in combat)<br>If you are unable to tolerate this bug or even the bug made the script fail, try installing the old version<hr>If you have some suggestions to make this script more useful, then: <br>1. Please briefly describe your thoughts<br>2. If you can, please provide some scenes (to facilitate the author to better understand)<br>PS. For English user, please express in basic English (Oh my poor English, thanks for Google Translate)</l2></div></div>',
+        '    <l2>If you encounter a bug and would like to help the author fix it<br>You should provide the following information: <br>1. the Situation<br>2. Your Configuration<br>3. Console Log (press Ctrl + Shift + i to open the Developer Assistant, And then select the Console panel)<br>4. Battle Log (if in combat)<br>If you are unable to tolerate this bug or even the bug made the script fail, try installing the old version<hr>If you have some suggestions to make this script more useful, then: <br>1. Please briefly describe your thoughts<br>2. If you can, please provide some scenes (to facilitate the author to better understand)<br>PS. For English user, please express in basic English (Oh my poor English, thanks for Google Translate)</l2></div>',
+        '  <div><input id="debugCheckCondition" type="checkbox"><label for="debugCheckCondition">debugCheckCondition:<br/>prefix@/# to log result in console, @for formula, #for param</label>: {{debugCondition}}</div>',
+        '</div>',
         '</div>',
 
         '<div class="hvAAButtonBox hvAACenter">',
@@ -2478,520 +2639,521 @@
       gE('select[name="lang"]').value = g().lang;
 
       // 绑定事件
-      gE('select[name="lang"]', optionBox).onchange = function () { // 选择语言
-        gE('.hvAA-LangStyle').textContent = `l${this.value}{display:inline!important;}`;
-        if (/^[01]$/.test(this.value)) {
-          gE('.hvAA-LangStyle').textContent += 'l01{display:inline!important;}';
-        }
-        g('lang', this.value);
-      };
-      gE('.hvAATabmenu', optionBox).onclick = function (e) { // 标签页事件
-        if (e.target.tagName === 'INPUT') {
-          return;
-        }
-        const target = (e.target.tagName === 'SPAN') ? e.target : e.target.parentNode;
-        const name = target.getAttribute('name');
-        let i, _html;
-        if (name === 'Drop') { // 掉落监测
-          let drop = getValue('drop', true) || {};
-          const dropOld = getValue('dropOld', true) || [];
-          drop = objSort(drop);
-          _html = '<tbody>';
-          if (dropOld.length === 0 || (dropOld.length === 1 && !getValue('drop', true))) {
-            if (dropOld.length === 1) {
-              drop = dropOld[0];
-            }
-            _html = `${_html}<tr class="hvAATh"><td></td><td><l0>数量</l0><l1>數量</l1><l2>Amount</l2></td></tr>`;
-            for (i in drop) {
-              _html = `${_html}<tr><td>${i}</td><td>${drop[i]}</td></tr>`;
-            }
-          } else {
-            if (getValue('drop')) {
-              drop.__name = getValue('battleCode', true)?.name;
-              dropOld.push(drop);
-            }
-            dropOld.reverse();
-            _html = `${_html}<tr class="hvAATh"><td class="selectTable"></td>`;
-            dropOld.forEach((_dropOld) => {
-              _html = `${_html}<td>${_dropOld.__name}</td>`;
-            });
-            _html = `${_html}</tr>`;
-            getKeys(dropOld).forEach((key) => {
-              if (key === '__name') {
-                return;
+      (function bindEvents() {
+        gE('select[name="lang"]', optionBox).onchange = function () { // 选择语言
+          gE('.hvAA-LangStyle').textContent = `l${this.value}{display:inline!important;}`;
+          if (/^[01]$/.test(this.value)) {
+            gE('.hvAA-LangStyle').textContent += 'l01{display:inline!important;}';
+          }
+          g('lang', this.value);
+        };
+        gE('.hvAATabmenu', optionBox).onclick = function (e) { // 标签页事件
+          if (e.target.tagName.toUpperCase() === 'INPUT') {
+            return;
+          }
+          const target = (e.target.tagName.toUpperCase() === 'SPAN') ? e.target : e.target.parentNode;
+          const name = target.getAttribute('name');
+          let i, _html;
+          if (name === 'Drop') { // 掉落监测
+            let drop = getValue('drop', true) || {};
+            const dropOld = getValue('dropOld', true) || [];
+            drop = objSort(drop);
+            _html = '<tbody>';
+            if (dropOld.length === 0 || (dropOld.length === 1 && !getValue('drop', true))) {
+              if (dropOld.length === 1) {
+                drop = dropOld[0];
               }
-              _html = `${_html}<tr><td>${key}</td>`;
+              _html = `${_html}<tr class="hvAATh"><td></td><td><l0>数量</l0><l1>數量</l1><l2>Amount</l2></td></tr>`;
+              for (i in drop) {
+                _html = `${_html}<tr><td>${i}</td><td>${drop[i]}</td></tr>`;
+              }
+            } else {
+              if (getValue('drop')) {
+                drop.__name = getValue('battleCode', true)?.name;
+                dropOld.push(drop);
+              }
+              dropOld.reverse();
+              _html = `${_html}<tr class="hvAATh"><td class="selectTable"></td>`;
               dropOld.forEach((_dropOld) => {
-                if (key in _dropOld) {
-                  _html = `${_html}<td>${_dropOld[key]}</td>`;
-                } else {
-                  _html = `${_html}<td></td>`;
-                }
+                _html = `${_html}<td>${_dropOld.__name}</td>`;
               });
               _html = `${_html}</tr>`;
-            });
-          }
-          _html = `${_html}</tbody>`;
-          gE('#hvAATab-Drop>table').innerHTML = _html;
-        } else if (name === 'Usage') { // 数据记录
-          let stats = getValue('stats', true) || {};
-          const statsOld = getValue('statsOld', true) || [];
-          const translation = {
-            self: '<l0>自身</l0><l1>自身</l1><l2>Self</l2>',
-            restore: '<l0>回复 (总量)</l0><l1>回复 (總量)</l1><l2>Restore (Amount)</l2>',
-            items: '<l0>物品 (次数)</l0><l1>物品 (次數)</l1><l2>Items (Frequency)</l2>',
-            magic: '<l0>技能 (次数)</l0><l1>技能 (次數)</l1><l2>Magic (Frequency)</l2>',
-            damage: '<l0>伤害 (总量)</l0><l1>傷害 (總量)</l1><l2>Damage (Amount)</l2>',
-            proficiency: '<l0>熟练度 (总量)</l0><l1>熟練度 (總量)</l1><l2>Proficiency (Amount)</l2>',
-            hurt: '<l0>受伤 (总量)</l0><l1>受傷 (總量)</l1><l2>Loss (Amount)</l2>',
-          };
-          _html = '<tbody>';
-          if (statsOld.length === 0 || (statsOld.length === 1 && !getValue('stats', true))) {
-            if (statsOld.length === 1) {
-              stats = statsOld[0];
-            }
-            for (i in stats) {
-              _html = `${_html}<tr class="hvAATh"><td>${translation[i]}</td><td><l01>值</l01><l2>Value</l2></td></tr>`;
-              stats[i] = objSort(stats[i]);
-              for (const j in stats[i]) {
-                _html = `${_html}<tr><td>${j}</td><td>${stats[i][j]}</td></tr>`;
-              }
-            }
-          } else {
-            if (getValue('stats')) {
-              stats.__name = getValue('battleCode', true)?.name;
-              statsOld.push(stats);
-            }
-            statsOld.reverse();
-            _html = `${_html}<tr class="hvAATh"><td class="selectTable"></td>`;
-            statsOld.forEach((_dropOld) => {
-              _html = `${_html}<td>${_dropOld.__name}</td>`;
-            });
-            _html = `${_html}</tr>`;
-            Object.keys(translation).forEach((i) => {
-              if (i === '__name') {
-                return;
-              }
-              _html = `${_html}<tr class="hvAATh"><td colspan="${statsOld.length + 1}">${translation[i]}</td></tr>`;
-              getKeys(statsOld, i).forEach((key) => {
+              getKeys(dropOld).forEach((key) => {
+                if (key === '__name') {
+                  return;
+                }
                 _html = `${_html}<tr><td>${key}</td>`;
-                statsOld.forEach((_statsOld) => {
-                  if (_statsOld[i] && (key in _statsOld[i])) {
-                    _html = `${_html}<td>${_statsOld[i][key]}</td>`;
+                dropOld.forEach((_dropOld) => {
+                  if (key in _dropOld) {
+                    _html = `${_html}<td>${_dropOld[key]}</td>`;
                   } else {
                     _html = `${_html}<td></td>`;
                   }
                 });
+                _html = `${_html}</tr>`;
               });
+            }
+            _html = `${_html}</tbody>`;
+            gE('#hvAATab-Drop>table').innerHTML = _html;
+          } else if (name === 'Usage') { // 数据记录
+            let stats = getValue('stats', true) || {};
+            const statsOld = getValue('statsOld', true) || [];
+            const translation = {
+              self: '<l0>自身</l0><l1>自身</l1><l2>Self</l2>',
+              restore: '<l0>回复 (总量)</l0><l1>回复 (總量)</l1><l2>Restore (Amount)</l2>',
+              items: '<l0>物品 (次数)</l0><l1>物品 (次數)</l1><l2>Items (Frequency)</l2>',
+              magic: '<l0>技能 (次数)</l0><l1>技能 (次數)</l1><l2>Magic (Frequency)</l2>',
+              damage: '<l0>伤害 (总量)</l0><l1>傷害 (總量)</l1><l2>Damage (Amount)</l2>',
+              proficiency: '<l0>熟练度 (总量)</l0><l1>熟練度 (總量)</l1><l2>Proficiency (Amount)</l2>',
+              hurt: '<l0>受伤 (总量)</l0><l1>受傷 (總量)</l1><l2>Loss (Amount)</l2>',
+            };
+            _html = '<tbody>';
+            if (statsOld.length === 0 || (statsOld.length === 1 && !getValue('stats', true))) {
+              if (statsOld.length === 1) {
+                stats = statsOld[0];
+              }
+              for (i in stats) {
+                _html = `${_html}<tr class="hvAATh"><td>${translation[i]}</td><td><l01>值</l01><l2>Value</l2></td></tr>`;
+                stats[i] = objSort(stats[i]);
+                for (const j in stats[i]) {
+                  _html = `${_html}<tr><td>${j}</td><td>${stats[i][j]}</td></tr>`;
+                }
+              }
+            } else {
+              if (getValue('stats')) {
+                stats.__name = getValue('battleCode', true)?.name;
+                statsOld.push(stats);
+              }
+              statsOld.reverse();
+              _html = `${_html}<tr class="hvAATh"><td class="selectTable"></td>`;
+              statsOld.forEach((_dropOld) => {
+                _html = `${_html}<td>${_dropOld.__name}</td>`;
+              });
+              _html = `${_html}</tr>`;
+              Object.keys(translation).forEach((i) => {
+                if (i === '__name') {
+                  return;
+                }
+                _html = `${_html}<tr class="hvAATh"><td colspan="${statsOld.length + 1}">${translation[i]}</td></tr>`;
+                getKeys(statsOld, i).forEach((key) => {
+                  _html = `${_html}<tr><td>${key}</td>`;
+                  statsOld.forEach((_statsOld) => {
+                    if (_statsOld[i] && (key in _statsOld[i])) {
+                      _html = `${_html}<td>${_statsOld[i][key]}</td>`;
+                    } else {
+                      _html = `${_html}<td></td>`;
+                    }
+                  });
+                });
+              });
+            }
+            _html = `${_html}</tbody>`;
+            gE('#hvAATab-Usage>table').innerHTML = _html;
+          } else if (name === 'Tools') { // 关于本脚本
+            gE('.hvAADebug', 'all', optionBox).forEach((input) => {
+              if (getValue('battle') && getValue('battle')[input.name]) {
+                input.value = getValue('battle')[input.name];
+              } else if (getValue(input.name)) {
+                input.value = getValue(input.name);
+              }
+            });
+          } else if (name === 'Drop' || name === 'Usage') {
+            gE('.selectTable', 'all', optionBox).forEach((i) => {
+              i.onclick = null;
+              i.onclick = function (e) {
+                const select = window.getSelection();
+                select.removeAllRanges();
+                const range = document.createRange();
+                range.selectNodeContents(e.target.parentNode.parentNode.parentNode);
+                select.addRange(range);
+              };
             });
           }
-          _html = `${_html}</tbody>`;
-          gE('#hvAATab-Usage>table').innerHTML = _html;
-        } else if (name === 'Tools') { // 关于本脚本
-          gE('.hvAADebug', 'all', optionBox).forEach((input) => {
-            if (getValue('battle') && getValue('battle')[input.name]) {
-              input.value = getValue('battle')[input.name];
-            } else if (getValue(input.name)) {
-              input.value = getValue(input.name);
-            }
+          gE('.hvAATab', 'all', optionBox).forEach((i) => {
+            i.style.display = (i.id === `hvAATab-${name}`) ? 'block' : 'none';
           });
-        } else if (name === 'Drop' || name === 'Usage') {
-          gE('.selectTable', 'all', optionBox).forEach((i) => {
-            i.onclick = null;
-            i.onclick = function (e) {
-              const select = window.getSelection();
-              select.removeAllRanges();
-              const range = document.createRange();
-              range.selectNodeContents(e.target.parentNode.parentNode.parentNode);
-              select.addRange(range);
-            };
-          });
-        }
-        gE('.hvAATab', 'all', optionBox).forEach((i) => {
-          i.style.display = (i.id === `hvAATab-${name}`) ? 'block' : 'none';
-        });
-      };
-      gE('.hvAAGoto', 'all', optionBox).forEach((i) => {
-        i.onclick = function () {
-          gE(`.hvAATabmenu>span[name="${this.name.replace('hvAATab-', '')}"]`).click();
         };
-      });
-
-      function updateGroup() {
-        const group = gE('.customizeGroup', 'all', g().customizeTarget);
-        const customizeBox = gE('.customizeBox');
-        if (group.length + 1 === gE('select[name="groupChoose"]>option', 'all', customizeBox).length) {
-          return;
-        }
-        const select = gE('select[name="groupChoose"]', customizeBox);
-        select.textContent = '';
-        for (let i = 0; i <= group.length; i++) {
-          const option = select.appendChild(cE('option'));
-          if (i === group.length) {
-            option.value = 'new';
-            option.textContent = 'new';
-          } else {
-            option.value = i + 1;
-            option.textContent = i + 1;
-          }
-        }
-      }
-      optionBox.onmousemove = function (e) { // 自定义条件相关事件
-        const target = (e.target.className === 'customize') ? e.target : (e.target.parentNode.className === 'customize') ? e.target.parentNode : e.target.parentNode.parentNode;
-        if (!gE('.customizeBox')) {
-          customizeBox();
-        }
-        updateGroup();
-        if (target.className !== 'customize' && target.parentNode.className !== 'customize') {
-          if (!target.className.match('customize')) {
-            gE('.customizeBox').style.zIndex = -1;
-          }
-          return;
-        }
-        g('customizeTarget', target);
-        const position = target.getBoundingClientRect();
-        const bodyPosition = document.body.getBoundingClientRect();
-        gE('.customizeBox').style.zIndex = 5;
-        gE('.customizeBox').style.top = `${position.bottom - bodyPosition.top}px`;
-        gE('.customizeBox').style.left = `${position.left - bodyPosition.left}px`;
-        gE('.customizeBox').style.cssText += `display: block; height: ${gE('.customizeGroup', 'all', g().customizeTarget).length * 30 + 30}px;`
-      };
-      // 标签页-主要选项
-      gE('input[name="pauseHotkeyStr"]', optionBox).onkeyup = function (e) {
-        this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
-        gE('input[name="pauseHotkeyCode"]', optionBox).value = e.keyCode;
-      };
-      gE('input[name="stepInHotkeyStr"]', optionBox).onkeyup = function (e) {
-        this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
-        gE('input[name="stepInHotkeyCode"]', optionBox).value = e.keyCode;
-      };
-      gE('input[name="altHotkeyStr"]', optionBox).onkeyup = function (e) {
-        this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
-        gE('input[name="altHotkeyCode"]', optionBox).value = e.keyCode;
-      };
-      gE('.testNotification', optionBox).onclick = function () {
-        _alert(0, '接下来开始预处理。\n如果询问是否允许，请选择允许', '接下來開始預處理。\n如果詢問是否允許，請選擇允許', 'Now, pretreat.\nPlease allow to receive notifications if you are asked for permission');
-        setNotification('Test');
-      };
-      gE('.testPopup', optionBox).onclick = function () {
-        _alert(0, '接下来开始预处理。\n关闭本警告框之后，请切换到其他标签页，\n并在足够长的时间后再打开本标签页', '接下來開始預處理。\n關閉本警告框之後，請切換到其他標籤頁，\n並在足夠長的時間後再打開本標籤頁', 'Now, pretreat.\nAfter dismissing this alert, focus other tab,\nfocus this tab again after long time.');
-        setTimeout(() => {
-          const riddleWindow = window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
-          if (riddleWindow) {
-            setTimeout(() => {
-              riddleWindow.close();
-            }, 200);
-          }
-        }, 3000);
-      };
-      gE('.idleArenaReset', optionBox).onclick = function () {
-        if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-          delValue('arena');
-        }
-      };
-      gE('.hvAAShowLevels', optionBox).onclick = function () {
-        gE('.hvAAArenaLevels').style.display = (gE('.hvAAArenaLevels').style.display === 'grid') ? 'none' : 'grid';
-      };
-      gE('.hvAALevelsClear', optionBox).onclick = function () {
-        gE('[name="idleArenaLevels"]', optionBox).value = '';
-        gE('[name="idleArenaValue"]', optionBox).value = '';
-        gE('.hvAAArenaLevels>input', 'all', optionBox).forEach((input) => {
-          input.checked = false;
+        gE('.hvAAGoto', 'all', optionBox).forEach((i) => {
+          i.onclick = function () {
+            gE(`.hvAATabmenu>span[name="${this.name.replace('hvAATab-', '')}"]`).click();
+          };
         });
-      };
 
-      const optionBox2Order = (ids, valueFrom=undefined, index=0) => function (e) {
-        if (Array.isArray(ids)) {
-          for (const i in ids) {
-            optionBox2Order(ids[i], valueFrom, i)(e);
+        function updateGroup() {
+          const group = gE('.customizeGroup', 'all', g().customizeTarget);
+          const customizeBox = gE('.customizeBox');
+          if (group.length + 1 === gE('select[name="groupChoose"]>option', 'all', customizeBox).length) {
+            return;
           }
-          return;
-        }
-        if (e.target.tagName !== 'INPUT' && e.target.type !== 'checkbox') {
-          return;
-        }
-        valueFrom ??= e => e.target.value.split(',');
-        const valueArray = valueFrom(e);
-        const latest = Array.isArray(valueArray) ? valueArray[index] : valueArray;
-
-        const orderObject = gE(`input[${ids}]`);
-        let value = orderObject.value;
-        const regExp = new RegExp(`(^|,)${latest}(,|$)`, 'g');
-        while (value.match(regExp)) {
-          value = value.replace(regExp, '$2').replace(/^,/, '');
-        }
-        if (e.target.checked) {
-          value = value + ((value) ? `,${latest}` : latest);
-        }
-        orderObject.value = value;
-      }
-      const getOrderFromId = e => e.target.id.match(/_(.*)/)[1];
-      const orderValues = {
-        '.attackStatusOrder': ['name="attackStatusOrderName"', 'name="attackStatusOrderValue"'],
-        '.battleOrder': 'name="battleOrderName"',
-        // 标签页-战斗开启
-        '.hvAAArenaLevels': ['Name="idleArenaLevels"', 'name="idleArenaValue"'],
-        // 标签页-恢复技能
-        '.itemOrder': ['name="itemOrderName"', 'name="itemOrderValue"'],
-
-        // 标签页-引导技能
-        '.channelSkill2Order': ['name="channelSkill2OrderName"', 'name="channelSkill2OrderValue"'],
-        // 标签页-BUFF技能
-        '.buffSkillOrder': 'name="buffSkillOrderValue"',
-        // 标签页-DEBUFF技能
-        '.debuffSkillOrder': 'name="debuffSkillOrderValue"',
-        '.debuffSkillOrderAll': 'name="debuffSkillOrderAllValue"',
-        // 标签页-其他技能
-        '.skillOrder': 'name="skillOrderValue"',
-        // 标签页-,
-        '.infusionOrder': 'name = "infusionOrderName"',
-      }
-      const isGetOrderFromId = ['.buffSkillOrder', '.debuffSkillOrder', '.debuffSkillOrderAll', '.skillOrder', '.infusionOrder'];
-      for (let ui in orderValues) {
-        gE(ui, optionBox).onclick = optionBox2Order(orderValues[ui], isGetOrderFromId.includes(ui) ? getOrderFromId : undefined);
-      }
-
-      // 标签页-警报
-      gE('input[name="audio_Text"]', optionBox).onchange = function () {
-        if (this.value === '') {
-          return;
-        }
-        if (!/^http(s)?:|^ftp:|^data:audio/.test(this.value)) {
-          _alert(0, '地址必须以"http:","https:","ftp:","data:audio"开头', '地址必須以"http:","https:","ftp:","data:audio"開頭', 'The address must start with "http:", "https:", "ftp:", and "data:audio"');
-          return;
-        }
-        _alert(0, '接下来将测试该音频\n如果该音频无法播放或无法载入，请变更\n请测试完成后再键入另一个音频', '接下來將測試該音頻\n如果該音頻無法播放或無法載入，請變更\n請測試完成後再鍵入另一個音頻', 'The audio will be tested after you close this prompt\nIf the audio doesn\'t load or play, change the url');
-        const box = gE('#hvAATab-Alarm').appendChild(cE('div'));
-        box.innerHTML = this.value;
-        const audio = box.appendChild(cE('audio'));
-        audio.controls = true;
-        audio.src = this.value;
-        audio.play();
-      };
-      // 标签页-攻击规则
-      gE('.clearMonsterHPCache', optionBox).onclick = function () {
-        delValue('monsterDB', true);
-        delValue('monsterDB', false);
-        delValue('monsterMID', true);
-        delValue('monsterMID', false);
-      };
-      gE('#portable_monsterDB', optionBox).onclick = function () {
-        gE('#portable_monsterMID', optionBox).checked = this.checked;
-      }
-      // 标签页-掉落监测
-      gE('.reDropMonitor', optionBox).onclick = function () {
-        if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-          delValue('drop', true);
-          delValue('drop', false);
-          delValue('dropOld', true);
-          delValue('dropOld', false);
-        }
-      };
-      gE('#portable_drop', optionBox).onclick = function () {
-        gE('#portable_dropOld', optionBox).checked = this.checked;
-      }
-      // 标签页-数据记录
-      gE('.reRecordUsage', optionBox).onclick = function () {
-        if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-          delValue('stats', true);
-          delValue('stats', false);
-          delValue('statsOld', true);
-          delValue('statsOld', false);
-        }
-      };
-      gE('#portable_stats', optionBox).onclick = function () {
-        gE('#portable_statsOld', optionBox).checked = this.checked;
-      }
-      // 标签页-关于本脚本
-      gE('.hvAAFix', optionBox).onclick = function () {
-        gE('.hvAADebug[name^="round"]', 'all', optionBox).forEach((input) => {
-          setValue(input.name, input.value || input.placeholder);
-        });
-      };
-      gE('.quickSiteAdd', optionBox).onclick = function () {
-        const tr = gE('.hvAAQuickSite>table>tbody', optionBox).appendChild(cE('tr'));
-        tr.innerHTML = '<td><input class="hvAADebug" type="text"></td><td><input class="hvAADebug" type="text"></td><td><input class="hvAADebug" type="text"></td>';
-      };
-      gE('.hvAAConfig', optionBox).onclick = function () {
-        this.style.height = 0;
-        this.style.height = `${this.scrollHeight}px`;
-        this.select();
-      };
-      function rmListItem(code) { // 同步删除界面显示对应的项
-        const configs = gE('#hvAATab-Tools > * > ul[class="hvAABackupList"] > li', 'all');
-        for (const config of configs) {
-          if (config.textContent == code) {
-            config.remove();
+          const select = gE('select[name="groupChoose"]', customizeBox);
+          select.textContent = '';
+          for (let i = 0; i <= group.length; i++) {
+            const option = select.appendChild(cE('option'));
+            if (i === group.length) {
+              option.value = 'new';
+              option.textContent = 'new';
+            } else {
+              option.value = i + 1;
+              option.textContent = i + 1;
+            }
           }
         }
-      }
-      gE('.hvAABackup', optionBox).onclick = function () {
-        const code = _alert(2, '请输入当前配置代号', '請輸入當前配置代號', 'Please put in a name for the current configuration') || time(3);
-        const backups = getValue('backup', true) || {};
-        if (code in backups) { // 覆写同名配置
-          if (_alert(1, '是否覆盖已有的同名配置？', '是否覆蓋已有的同名配置？', 'Do you want to overwrite the configuration with the same name?')) {
-            delete backups[code];
-            rmListItem(code);
-          } else return;
+        optionBox.onmousemove = function (e) { // 自定义条件相关事件
+          const target = (e.target.className === 'customize') ? e.target : (e.target.parentNode.className === 'customize') ? e.target.parentNode : e.target.parentNode.parentNode;
+          if (!gE('.customizeBox')) {
+            creatCustomizeBox();
+          }
+          updateGroup();
+          if (target.className !== 'customize' && target.parentNode.className !== 'customize') {
+            if (!target.className.match('customize')) {
+              gE('.customizeBox').style.zIndex = -1;
+            }
+            return;
+          }
+          g('customizeTarget', target);
+          const position = target.getBoundingClientRect();
+          const bodyPosition = document.body.getBoundingClientRect();
+          gE('.customizeBox').style.zIndex = 20;
+          gE('.customizeBox').style.top = `${position.bottom - bodyPosition.top}px`;
+          gE('.customizeBox').style.left = `${position.left - bodyPosition.left}px`;
+          gE('.customizeBox').style.cssText += `display: block; height: ${gE('.customizeGroup', 'all', g().customizeTarget).length * 30 + 30}px;`
+        };
+        // 标签页-主要选项
+        gE('input[name="pauseHotkeyStr"]', optionBox).onkeyup = function (e) {
+          this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
+          gE('input[name="pauseHotkeyCode"]', optionBox).value = e.keyCode;
+        };
+        gE('input[name="stepInHotkeyStr"]', optionBox).onkeyup = function (e) {
+          this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
+          gE('input[name="stepInHotkeyCode"]', optionBox).value = e.keyCode;
+        };
+        gE('input[name="altHotkeyStr"]', optionBox).onkeyup = function (e) {
+          this.value = (/^[a-z]$/.test(e.key)) ? e.key.toUpperCase() : e.key;
+          gE('input[name="altHotkeyCode"]', optionBox).value = e.keyCode;
+        };
+        gE('.testNotification', optionBox).onclick = function () {
+          _alert(0, '接下来开始预处理。\n如果询问是否允许，请选择允许', '接下來開始預處理。\n如果詢問是否允許，請選擇允許', 'Now, pretreat.\nPlease allow to receive notifications if you are asked for permission');
+          setNotification('Test');
+        };
+        gE('.testPopup', optionBox).onclick = function () {
+          _alert(0, '接下来开始预处理。\n关闭本警告框之后，请切换到其他标签页，\n并在足够长的时间后再打开本标签页', '接下來開始預處理。\n關閉本警告框之後，請切換到其他標籤頁，\n並在足夠長的時間後再打開本標籤頁', 'Now, pretreat.\nAfter dismissing this alert, focus other tab,\nfocus this tab again after long time.');
+          setTimeout(() => {
+            const riddleWindow = window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
+            if (riddleWindow) {
+              setTimeout(() => {
+                riddleWindow.close();
+              }, 200);
+            }
+          }, 3000);
+        };
+        gE('.idleArenaReset', optionBox).onclick = function () {
+          if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
+            delValue('arena');
+          }
+        };
+        gE('.hvAAShowLevels', optionBox).onclick = function () {
+          gE('.hvAAArenaLevels').style.display = (gE('.hvAAArenaLevels').style.display === 'grid') ? 'none' : 'grid';
+        };
+        gE('.hvAALevelsClear', optionBox).onclick = function () {
+          gE('[name="idleArenaLevels"]', optionBox).value = '';
+          gE('[name="idleArenaValue"]', optionBox).value = '';
+          gE('.hvAAArenaLevels>input', 'all', optionBox).forEach((input) => {
+            input.checked = false;
+          });
+        };
+
+        const optionBox2Order = (ids, valueFrom=undefined, index=0) => function (e) {
+          if (Array.isArray(ids)) {
+            for (const i in ids) {
+              optionBox2Order(ids[i], valueFrom, i)(e);
+            }
+            return;
+          }
+          if (e.target.tagName.toUpperCase() !== 'INPUT' && e.target.type !== 'checkbox') {
+            return;
+          }
+          valueFrom ??= e => e.target.value.split(',');
+          const valueArray = valueFrom(e);
+          const latest = Array.isArray(valueArray) ? valueArray[index] : valueArray;
+
+          const orderObject = gE(`input[${ids}]`);
+          let value = orderObject.value;
+          const regExp = new RegExp(`(^|,)${latest}(,|$)`, 'g');
+          while (value.match(regExp)) {
+            value = value.replace(regExp, '$2').replace(/^,/, '');
+          }
+          if (e.target.checked) {
+            value = value + ((value) ? `,${latest}` : latest);
+          }
+          orderObject.value = value;
         }
-        backups[code] = getValue('option');
-        setValue('backup', backups);
-        const li = gE('.hvAABackupList', optionBox).appendChild(cE('li'));
-        li.textContent = code;
-      };
-      gE('.hvAARestore', optionBox).onclick = function () {
-        const code = _alert(2, '请输入配置代号', '請輸入配置代號', 'Please put in a name for a configuration');
-        const backups = getValue('backup', true) || {};
-        if (!(code in backups) || !code) {
-          return;
+        const getOrderFromId = e => e.target.id.match(/_(.*)/)[1];
+        const orderValues = {
+          '.attackStatusOrder': ['name="attackStatusOrderName"', 'name="attackStatusOrderValue"'],
+          '.battleOrder': 'name="battleOrderName"',
+          // 标签页-战斗开启
+          '.hvAAArenaLevels': ['Name="idleArenaLevels"', 'name="idleArenaValue"'],
+          // 标签页-恢复技能
+          '.itemOrder': ['name="itemOrderName"', 'name="itemOrderValue"'],
+
+          // 标签页-引导技能
+          '.channelSkill2Order': ['name="channelSkill2OrderName"', 'name="channelSkill2OrderValue"'],
+          // 标签页-BUFF技能
+          '.buffSkillOrder': 'name="buffSkillOrderValue"',
+          // 标签页-DEBUFF技能
+          '.debuffSkillOrder': 'name="debuffSkillOrderValue"',
+          '.debuffSkillOrderAll': 'name="debuffSkillOrderAllValue"',
+          // 标签页-其他技能
+          '.skillOrder': 'name="skillOrderValue"',
+          // 标签页-,
+          '.infusionOrder': 'name = "infusionOrderName"',
         }
-        setValue('option', backups[code]);
-        goto();
-      };
-      gE('.hvAADelete', optionBox).onclick = function () {
-        const code = _alert(2, '请输入配置代号', '請輸入配置代號', 'Please put in a name for a configuration');
-        const backups = getValue('backup', true) || {};
-        if (!(code in backups) || !code) {
-          return;
+        const isGetOrderFromId = ['.buffSkillOrder', '.debuffSkillOrder', '.debuffSkillOrderAll', '.skillOrder', '.infusionOrder'];
+        for (let ui in orderValues) {
+          gE(ui, optionBox).onclick = optionBox2Order(orderValues[ui], isGetOrderFromId.includes(ui) ? getOrderFromId : undefined);
         }
-        delete backups[code];
-        setValue('backup', backups);
-        rmListItem(code);
-      };
-      gE('.hvAAExport', optionBox).onclick = function () {
-        const t = getValue('option');
-        gE('.hvAAConfig').value = typeof t === 'string' ? t : JSON.stringify(t);
-      };
-      gE('.hvAAImport', optionBox).onclick = function () {
-        const option = JSON.parse(gE('.hvAAConfig').value);
-        if (!option) {
-          return;
+
+        // 标签页-警报
+        gE('input[name="audio_Text"]', optionBox).onchange = function () {
+          if (this.value === '') {
+            return;
+          }
+          if (!/^http(s)?:|^ftp:|^data:audio/.test(this.value)) {
+            _alert(0, '地址必须以"http:","https:","ftp:","data:audio"开头', '地址必須以"http:","https:","ftp:","data:audio"開頭', 'The address must start with "http:", "https:", "ftp:", and "data:audio"');
+            return;
+          }
+          _alert(0, '接下来将测试该音频\n如果该音频无法播放或无法载入，请变更\n请测试完成后再键入另一个音频', '接下來將測試該音頻\n如果該音頻無法播放或無法載入，請變更\n請測試完成後再鍵入另一個音頻', 'The audio will be tested after you close this prompt\nIf the audio doesn\'t load or play, change the url');
+          const box = gE('#hvAATab-Alarm').appendChild(cE('div'));
+          box.innerHTML = this.value;
+          const audio = box.appendChild(cE('audio'));
+          audio.controls = true;
+          audio.src = this.value;
+          audio.play();
+        };
+        // 标签页-攻击规则
+        gE('.clearMonsterHPCache', optionBox).onclick = function () {
+          delValue('monsterDB', true);
+          delValue('monsterDB', false);
+          delValue('monsterMID', true);
+          delValue('monsterMID', false);
+        };
+        gE('#portable_monsterDB', optionBox).onclick = function () {
+          gE('#portable_monsterMID', optionBox).checked = this.checked;
         }
-        if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-          setValue('option', option);
+        // 标签页-掉落监测
+        gE('.reDropMonitor', optionBox).onclick = function () {
+          if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
+            delValue('drop', true);
+            delValue('drop', false);
+            delValue('dropOld', true);
+            delValue('dropOld', false);
+          }
+        };
+        gE('#portable_drop', optionBox).onclick = function () {
+          gE('#portable_dropOld', optionBox).checked = this.checked;
+        }
+        // 标签页-数据记录
+        gE('.reRecordUsage', optionBox).onclick = function () {
+          if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
+            delValue('stats', true);
+            delValue('stats', false);
+            delValue('statsOld', true);
+            delValue('statsOld', false);
+          }
+        };
+        gE('#portable_stats', optionBox).onclick = function () {
+          gE('#portable_statsOld', optionBox).checked = this.checked;
+        }
+        // 标签页-关于本脚本
+        gE('.hvAAFix', optionBox).onclick = function () {
+          gE('.hvAADebug[name^="round"]', 'all', optionBox).forEach((input) => {
+            setValue(input.name, input.value || input.placeholder);
+          });
+        };
+        gE('.quickSiteAdd', optionBox).onclick = function () {
+          const tr = gE('.hvAAQuickSite>table>tbody', optionBox).appendChild(cE('tr'));
+          tr.innerHTML = '<td><input class="hvAADebug" type="text"></td><td><input class="hvAADebug" type="text"></td><td><input class="hvAADebug" type="text"></td>';
+        };
+        gE('.hvAAConfig', optionBox).onclick = function () {
+          this.style.height = 0;
+          this.style.height = `${this.scrollHeight}px`;
+          this.select();
+        };
+        function rmListItem(code) { // 同步删除界面显示对应的项
+          const configs = gE('#hvAATab-Tools > * > ul[class="hvAABackupList"] > li', 'all');
+          for (const config of configs) {
+            if (config.textContent == code) {
+              config.remove();
+            }
+          }
+        }
+        gE('.hvAABackup', optionBox).onclick = function () {
+          const code = _alert(2, '请输入当前配置代号（或默认使用当前时间）', '請輸入當前配置代號（或默認使用當前時間）', 'Please put in a name for the current configuration (or use current time as default)') || time(3);
+          const backups = getValue('backup', true) || {};
+          if (code in backups) { // 覆写同名配置
+            if (_alert(1, '是否覆盖已有的同名配置？', '是否覆蓋已有的同名配置？', 'Do you want to overwrite the configuration with the same name?')) {
+              delete backups[code];
+              rmListItem(code);
+            } else return;
+          }
+          backups[code] = getValue('option');
+          setValue('backup', backups);
+          const li = gE('.hvAABackupList', optionBox).appendChild(cE('li'));
+          li.textContent = code;
+        };
+        gE('.hvAARestore', optionBox).onclick = function () {
+          const code = _alert(2, '请输入配置代号', '請輸入配置代號', 'Please put in a name for a configuration');
+          const backups = getValue('backup', true) || {};
+          if (!(code in backups) || !code) {
+            return;
+          }
+          setValue('option', backups[code]);
           goto();
-        }
-      };
-      gE('.hvAAReset', optionBox).onclick = function () {
-        if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-          const option = getValue('option');
-          const newOption = {};
-          setValue('option', Object.fromEntries(excludeStandalone.option.map(ex => [ex, option[ex]])));
-          if (_alert(1, '已重置，是否刷新', '已重置，是否刷新', 'Reseted. Page reload?')) {
+        };
+        gE('.hvAADelete', optionBox).onclick = function () {
+          const code = _alert(2, '请输入配置代号', '請輸入配置代號', 'Please put in a name for a configuration');
+          const backups = getValue('backup', true) || {};
+          if (!(code in backups) || !code) {
+            return;
+          }
+          delete backups[code];
+          setValue('backup', backups);
+          rmListItem(code);
+        };
+        gE('.hvAAExport', optionBox).onclick = function () {
+          const t = getValue('option');
+          gE('.hvAAConfig').value = typeof t === 'string' ? t : JSON.stringify(t);
+        };
+        gE('.hvAAImport', optionBox).onclick = function () {
+          const option = JSON.parse(gE('.hvAAConfig').value);
+          if (!option) {
+            return;
+          }
+          if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
+            setValue('option', option);
             goto();
           }
-        }
-      };
-      gE('.hvAAApply', optionBox).onclick = function () {
-        if (gE('select[name="attackStatus"] option[value="-1"]:checked', optionBox) || !gE('select[name="attackStatus"] option:checked', optionBox)) {
-          _alert(0, '请选择攻击模式', '請選擇攻擊模式', 'Please select the attack mode');
-          gE('.hvAATabmenu>span[name="Main"]').click();
-          gE('#attackStatus', optionBox).style.border = '1px solid red';
-          setTimeout(() => {
-            gE('#attackStatus', optionBox).style.border = '';
-          }, 0.5 * _1s);
-          return;
-        }
-        const arenaPrev = g().option?.idleArenaValue;
-        const _option = {
-          version: g().version,
         };
-        let inputs = gE('input,select', 'all', optionBox);
-        let itemName, itemArray, itemValue, i;
-        for (i = 0; i < inputs.length; i++) {
-          if (inputs[i].className === 'hvAADebug') {
-            continue;
-          } else if (inputs[i].type === 'number' || inputs[i].className === 'hvAANumber') {
-            itemName = inputs[i].name;
-            itemValue = inputs[i].value ? inputs[i].value * 1 : '';
-            if (isNaN(itemValue)) {
-              continue;
+        gE('.hvAAReset', optionBox).onclick = function () {
+          if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
+            const option = getValue('option');
+            const newOption = {};
+            setValue('option', Object.fromEntries(excludeStandalone.option.map(ex => [ex, option[ex]])));
+            if (_alert(1, '已重置，是否刷新', '已重置，是否刷新', 'Reseted. Page reload?')) {
+              goto();
             }
-          } else if (inputs[i].type === 'text' || inputs[i].type === 'hidden') {
-            itemName = inputs[i].name;
-            itemValue = inputs[i].value || '';
-            if (itemValue === '') {
+          }
+        };
+        gE('.hvAAApply', optionBox).onclick = function () {
+          if (gE('select[name="attackStatus"] option[value="-1"]:checked', optionBox) || !gE('select[name="attackStatus"] option:checked', optionBox)) {
+            _alert(0, '请选择攻击模式', '請選擇攻擊模式', 'Please select the attack mode');
+            gE('.hvAATabmenu>span[name="Main"]').click();
+            gE('#attackStatus', optionBox).style.border = '1px solid red';
+            setTimeout(() => {
+              gE('#attackStatus', optionBox).style.border = '';
+            }, 0.5 * _1s);
+            return;
+          }
+          const arenaPrev = g().option?.idleArenaValue;
+          const _option = {
+            version: g().version,
+          };
+          let inputs = gE('input,select', 'all', optionBox);
+          let itemName, itemArray, itemValue, i;
+          for (i = 0; i < inputs.length; i++) {
+            if (inputs[i].className === 'hvAADebug') {
               continue;
-            }
-          } else if (inputs[i].type === 'checkbox') {
-            itemName = inputs[i].id;
-            itemValue = inputs[i].checked;
-            if (itemValue === false) {
-              if (!inputs[i].placeholder) {
+            } else if (inputs[i].type === 'number' || inputs[i].className === 'hvAANumber') {
+              itemName = inputs[i].name;
+              itemValue = inputs[i].value ? inputs[i].value * 1 : '';
+              if (isNaN(itemValue)) {
                 continue;
               }
-              itemValue = 0;
-            }
-          } else if (inputs[i].type === 'select-one') {
-            itemName = inputs[i].name;
-            itemValue = inputs[i].value;
-          }
-          itemArray = itemName.split('_');
-          if (itemArray.length === 1) {
-            _option[itemName] = itemValue;
-            if (inputs[i].placeholder && (_option[itemName] === '' || _option[itemName] === inputs[i].placeholder || _option[itemName] === inputs[i].placeholder * 1) || (_option[itemName] === true && inputs[i].placeholder)) {
-              delete _option[itemName]
-            }
-          } else {
-            if (!(itemArray[0] in _option)) {
-              _option[itemArray[0]] = {};
-            }
-            if (inputs[i].className === 'customizeInput') {
-              if (typeof _option[itemArray[0]][itemArray[1]] === 'undefined') {
-                _option[itemArray[0]][itemArray[1]] = [];
+            } else if (inputs[i].type === 'text' || inputs[i].type === 'hidden') {
+              itemName = inputs[i].name;
+              itemValue = inputs[i].value || '';
+              if (itemValue === '') {
+                continue;
               }
-              _option[itemArray[0]][itemArray[1]].push(itemValue);
+            } else if (inputs[i].type === 'checkbox') {
+              itemName = inputs[i].id;
+              itemValue = inputs[i].checked;
+              if (itemValue === false) {
+                if (!inputs[i].placeholder) {
+                  continue;
+                }
+                itemValue = 0;
+              }
+            } else if (inputs[i].type === 'select-one') {
+              itemName = inputs[i].name;
+              itemValue = inputs[i].value;
+            }
+            itemArray = itemName.split('_');
+            if (itemArray.length === 1) {
+              _option[itemName] = itemValue;
+              if (inputs[i].placeholder && (_option[itemName] === '' || _option[itemName] === inputs[i].placeholder || _option[itemName] === inputs[i].placeholder * 1) || (_option[itemName] === true && inputs[i].placeholder)) {
+                delete _option[itemName]
+              }
             } else {
-              _option[itemArray[0]][itemArray[1]] = itemValue;
-              if (inputs[i].placeholder && (_option[itemArray[0]][itemArray[1]] === '' || _option[itemArray[0]][itemArray[1]] === inputs[i].placeholder || _option[itemArray[0]][itemArray[1]] === inputs[i].placeholder * 1 || (_option[itemArray[0]][itemArray[1]] === true && inputs[i].placeholder))) {
-                delete _option[itemArray[0]][itemArray[1]]
+              if (!(itemArray[0] in _option)) {
+                _option[itemArray[0]] = {};
+              }
+              if (inputs[i].className === 'customizeInput') {
+                if (typeof _option[itemArray[0]][itemArray[1]] === 'undefined') {
+                  _option[itemArray[0]][itemArray[1]] = [];
+                }
+                _option[itemArray[0]][itemArray[1]].push(itemValue);
+              } else {
+                _option[itemArray[0]][itemArray[1]] = itemValue;
+                if (inputs[i].placeholder && (_option[itemArray[0]][itemArray[1]] === '' || _option[itemArray[0]][itemArray[1]] === inputs[i].placeholder || _option[itemArray[0]][itemArray[1]] === inputs[i].placeholder * 1 || (_option[itemArray[0]][itemArray[1]] === true && inputs[i].placeholder))) {
+                  delete _option[itemArray[0]][itemArray[1]]
+                }
+              }
+              if (!Object.keys(_option[itemArray[0]]).length) {
+                delete _option[itemArray[0]]
               }
             }
-            if (!Object.keys(_option[itemArray[0]]).length) {
-              delete _option[itemArray[0]]
+          }
+          inputs = gE('.hvAAQuickSite input[type="text"], .hvAAQuickSite input[type="number"]', 'all', optionBox);
+          for (i = 0; 3 * i < inputs.length; i++) {
+            if (i === 0 && inputs.length !== 0) {
+              _option.quickSite = [];
             }
+            if (inputs[3 * i + 1].value === '') {
+              continue;
+            }
+            _option.quickSite.push({
+              fav: inputs[3 * i].value,
+              name: inputs[3 * i + 1].value,
+              url: inputs[3 * i + 2].value,
+            });
           }
-        }
-        inputs = gE('.hvAAQuickSite input[type="text"], .hvAAQuickSite input[type="number"]', 'all', optionBox);
-        for (i = 0; 3 * i < inputs.length; i++) {
-          if (i === 0 && inputs.length !== 0) {
-            _option.quickSite = [];
+          setValue('option', _option);
+          optionBox.style.display = 'none';
+          // 清除不再需要的portable数据
+          for (const key of portable) {
+            if (_option.portable && Object.keys(_option.portable).includes(key)) continue;
+            delValue(key, true, true);
           }
-          if (inputs[3 * i + 1].value === '') {
-            continue;
+          // 更改设置后实时刷新竞技场数据
+          const arenaNew = _option.idleArenaValue;
+          if (arenaNew === arenaPrev) {
+            goto();
+            return;
           }
-          _option.quickSite.push({
-            fav: inputs[3 * i].value,
-            name: inputs[3 * i + 1].value,
-            url: inputs[3 * i + 2].value,
-          });
-        }
-        setValue('option', _option);
-        optionBox.style.display = 'none';
-        // 清除不再需要的portable数据
-        for (const key of portable) {
-          if (_option.portable && Object.keys(_option.portable).includes(key)) continue;
-          delValue(key, true, true);
-        }
-        // 更改设置后实时刷新竞技场数据
-        const arenaNew = _option.idleArenaValue;
-        if (arenaNew === arenaPrev) {
-          goto();
-          return;
-        }
-        if (_option.idleArena && _option.idleArenaValue) {
-          const arena = getValue('arena', true);
-          arena.isOptionUpdated = undefined;
-          setValue('arena', arena);
-          goto();
-        }
-      };
-      gE('.hvAACancel', optionBox).onclick = function () {
-        optionBox.style.display = 'none';
-      };
+          if (_option.idleArena && _option.idleArenaValue) {
+            const arena = getValue('arena', true);
+            arena.isOptionUpdated = undefined;
+            setValue('arena', arena);
+            goto();
+          }
+        };
+        gE('.hvAACancel', optionBox).onclick = function () {
+          optionBox.style.display = 'none';
+        };
+      })();
 
       // 加载UI数据
-      const option = g().option;
       if (option) {
         let i, j, k;
         const inputs = gE('input,select', 'all', optionBox);
@@ -3110,10 +3272,10 @@
       input.style.cssText += `width:${length+1}ch;`
     }
 
-    function customizeBox() { // 自定义条件界面
+    function creatCustomizeBox() { // 自定义条件界面
       const customizeBox = gE('body').appendChild(cE('div'));
       customizeBox.className = 'customizeBox';
-      const statusOption = [
+      const statusOption = creatCustomizeBox.prototype.statusOption ??= [
         '<option value="hp">hp</option>',
         '<option value="mp">mp</option>',
         '<option value="sp">sp</option>',
@@ -3164,17 +3326,21 @@
         '<option value="_dw">dw</option>',
         '<option value="_staff">staff</option>',
         '<option value="">- - - -</option>',
+        '<option value="skillOTOS">skillOTOS</option>',
         '<option value="_isCd_">isCd</option>',
         '<option value="_spirit">spirit</option>',
         '<option value="_buffTurn_">buffTurn</option>',
         '<option value="">- - - -</option>',
         '<option value="_targetBuffTurn_">targetBuffTurn</option>',
+        '<option value="_targetIsAlive">targetIsAlive</option>',
         '<option value="_targetHp">targetHp</option>',
         '<option value="_targetMp">targetMp</option>',
         '<option value="_targetSp">targetSp</option>',
         '<option value="_targetHpDecimal">targetHpDecimal</option>',
         '<option value="_targetMpDecimal">targetMpDecimal</option>',
         '<option value="_targetSpDecimal">targetSpDecimal</option>',
+        '<option value="_targetOrder">targetOrder</option>',
+        '<option value="_targetWeight">targetWeight</option>',
         '<option value="_targetRank">targetRank</option>',
         '<option value="_targetName">targetName</option>',
         '<option value="_targetBossType">targetBossType</option>',
@@ -3202,7 +3368,7 @@
         let find = attr(target);
         while (!find) {
           target = target.parentNode;
-          if (target.id === 'csp' || target.tagName === 'BODY') {
+          if (target.id === 'csp' || target.tagName.toUpperCase() === 'BODY') {
             box.style.display = 'none';
             return;
           }
@@ -3259,16 +3425,19 @@
     }
 
     function setAlarm(e) { // 发出警报
+      const option = g().option??{};
       e = e || 'Common';
-      if (g().option.notification) {
+      if (option.notification) {
         setNotification(e);
       }
-      if (g().option.alert && g().option.audioEnable && g().option.audioEnable[e]) {
+      if (option.alert && option.audioEnable && option.audioEnable[e]) {
         setAudioAlarm(e);
       }
+      return true;
     }
 
     function setAudioAlarm(e) { // 发出音频警报
+      const option = g().option??{};
       let audio;
       if (gE(`#hvAAAlert-${e}`)) {
         audio = gE(`#hvAAAlert-${e}`);
@@ -3276,7 +3445,7 @@
         audio = gE('body').appendChild(cE('audio'));
         audio.id = `hvAAAlert-${e}`;
         const fileType = '.ogg'; // var fileType = (/Chrome|Safari/.test(navigator.userAgent)) ? '.mp3' : '.wav';
-        audio.src = (g().option.audio && g().option.audio[e]) ? g().option.audio[e] : `https://github.com/dodying/UserJs/raw/master/HentaiVerse/hvAutoAttack/${e}${fileType}`;
+        audio.src = (option.audio && option.audio[e]) ? option.audio[e] : `https://github.com/dodying/UserJs/raw/master/HentaiVerse/hvAutoAttack/${e}${fileType}`;
         audio.controls = true;
         audio.loop = (e === 'Riddle');
       }
@@ -3290,7 +3459,7 @@
     }
 
     function setNotification(e) { // 发出桌面通知
-      const notification = [
+      const notification = setNotification.prototype.notification ??= [
         {
           Common: {
             text: '未知',
@@ -3310,6 +3479,10 @@
           },
           Victory: {
             text: '游戏胜利\n页面将在3秒后刷新',
+            time: 3,
+          },
+          BattleUnresponsive: {
+            text: '战斗无响应',
             time: 3,
           },
           Test: {
@@ -3337,6 +3510,10 @@
             text: '遊戲勝利\n頁面將在3秒後刷新',
             time: 3,
           },
+          BattleUnresponsive: {
+            text: '戰鬥無響應',
+            time: 3,
+          },
           Test: {
             text: '測試文本',
             time: 3,
@@ -3360,6 +3537,10 @@
           },
           Victory: {
             text: 'You\'re victorious.\nThis page will refresh in 3 seconds.',
+            time: 3,
+          },
+          BattleUnresponsive: {
+            text: 'Battle unresponsive',
             time: 3,
           },
           Test: {
@@ -3400,57 +3581,17 @@
       }
     }
 
-    function checkCondition(parms, targets = undefined) {
-      let i, j, k, target;
-      targets ??= [g().battle.monsterStatus[0]];
-      if (!parms || !Object.keys(parms).length) {
-        return targets[0];
-      }
-      const returnValue = function (str) {
-        // 旧版本/强制使用func
-        if (str.match(/^_/) && !str.match(/\./)) {
-          const arr = str.split('_');
-          return func[arr[1]](...[...arr].splice(2));
-        }
-        if (!isNaN(str * 1)) { // 数字直接返回
-          return str * 1;
-        }
-        const paramList = str.replace(/[^\d](\.)/g, (match, ...p) => {
-          return match.replace('.', '_'); // 将不是数字小数点的 . 转为 _ 以便进行参数分割
-        }).split('_');
-        let result, isInData;
-        while (paramList.length) {
-          const key = paramList.shift();
-          if (typeof result === 'undefined') { // 获取顶层数据
-            result = g().battle ? g().battle[key] : undefined;
-            if (typeof result === 'undefined' || result === null) {
-              result = getValue('battle', true) ? getValue('battle', true)[key] : undefined;
-            }
-            if (typeof result === 'undefined' || result === null) {
-              result = g(key);
-            }
-            if (typeof result === 'undefined' || result === null) {
-              result = getValue(key);
-            }
-            if (typeof result === 'undefined' || result === null) {
-              result = g().option?.[key];
-            }
-            if ((typeof result === 'undefined' || result === null) && func[key]) {
-              result = func[key](...paramList);
-            }
-            if (typeof result === 'undefined' || result === null) break;
-            isInData = true; // 存在顶层数据
-            continue;
-          }
-          if (typeof result === 'string') {
-            result = JSON.parse(result);
-          }
-          result = result[key]
-        }
-        result ??= isInData ? 0 : result; // 存在顶层数据时默认为0
-        return isNaN(result * 1) ? result ?? str : (result * 1);
-      };
-      const func = {
+    function imgArray2img(...img) {
+      return img.join('_').replace('_png', 'png');
+    }
+
+    function returnValueGetter(paramResultsGetter, targetGetter) {
+      let minmaxModes = returnValueGetter.prototype.minmaxModes ??= (()=> {
+        const modes = ['min', 'max', 'count', 'sum'];
+        const flags = ['a', 'ag', 'g'];
+        return flags.reduce((result, f) => result.concat(modes.map(m => f + m)), []);
+      })();
+      returnValueGetter.prototype.func ??= {
         ar() {
           return g().battle.roundType === 'ar' ? 1 : 0;
         },
@@ -3542,23 +3683,38 @@
         buffTurn(...img) {
           return getBuffTurnFromImg(getBuff(imgArray2img(img)));
         },
+        hpDecimal() {
+          return g().hp / 100;
+        },
+        mpDecimal() {
+          return g().mp / 100;
+        },
+        spDecimal() {
+          return g().sp / 100;
+        },
+        ocDecimal() {
+          return g().oc / 100;
+        },
+      };
+      let currentGroup=null;
+      const func = {
+        ...returnValueGetter.prototype.func,
         targetBuffTurn(...img) {
           const getBuffTurn = (t, i) => getBuffTurnFromImg(getBuff(imgArray2img(i), getMonsterID(t)));
-          const first = img.shift();
-          if (first === 'min') {
-            return Math.min(...targets.filter(t => !t.isDead).map(t=>getBuffTurn(t, img)));
-          }
-          if (first === 'max') {
-            return Math.max(...targets.filter(t => !t.isDead).map(t=>getBuffTurn(t, img)));
-          }
-          img.unshift(first);
-          return getBuffTurn(target, img);
+          let param = minmaxModes.includes(img[0]) ? img.shift() : undefined;
+          return switchMaxMin(param, t=>getBuffTurn(t, img));
         },
-        targetRank() {
-          return Object.entries(g().battle.monsterStatus).find(([k, v]) => v.order === target.order)[0] * 1;
+        targetOrder(param) {
+          return switchMaxMin(param, t=>t.order);
+        },
+        targetWeight(param) {
+          return switchMaxMin(param, t=>t.finWeight);
+        },
+        targetRank(param) {
+          return switchMaxMin(param, t=>Object.entries(g().battle.monsterStatus).find(([k, v]) => v.order === t.order)[0] * 1);
         },
         targetName(param) {
-          param ??= target
+          param ??= targetGetter();
           const mon = getMonster(getMonsterID(param));
           return gE(`.btm3>div>div`, mon).innerText.replace(' ', '_');
         },
@@ -3576,22 +3732,42 @@
               case 'Ryouko Asakura':
               case 'Yuki Nagato':
                 return 2; // Legendaries
-              case 'Skuld':
-              case 'Urd':
-              case 'Verdandi':
-              case 'Yggdrasil':
-                return 3; // Trio and the Tree
+              case 'Real Life':
+              case 'Invisible Pink Unicorn':
+              case 'Flying Spaghetti Monster':
+                return 3; // Gods
               case 'Rhaegal':
               case 'Viserion':
               case 'Drogon':
                 return 4; // A Dance with Dragons
-              case 'Real Life':
-              case 'Invisible Pink Unicorn':
-              case 'Flying Spaghetti Monster':
-                return 5; // Gods
+              case 'Skuld':
+              case 'Urd':
+              case 'Verdandi':
+              case 'Yggdrasil':
+                return 5; // Trio and the Tree
+              case 'Recycled Boss Rush':
+              case 'Bottomless Dungeon':
+              case 'New Game +':
+              case 'Achievement Grind':
+              case 'Time Trial Mode':
+              case 'Hardcore Mode':
+                return 6; // Post Game Content
+              case 'Fluttershy':
+              case 'Gummy':
+              case 'Rainbow Dash':
+              case 'Twilight Sparkle':
+              case 'Rarity':
+              case 'Applejack':
+              case 'Pinkie Pie':
+              case 'Angel Bunny':
+              case 'Spike':
+                return 7; // Ponies
               default:
                 return 0;
             }});
+        },
+        targetIsAlive(param) {
+          return switchMaxMin(param, t=>t.isDead ? 0 : 1);
         },
         targetHp(param) {
           return switchMaxMin(param, t=>Math.floor(func.targetHpDecimal(t) * 100));
@@ -3611,107 +3787,232 @@
         targetSpDecimal(param) {
           return switchMaxMin(param, t=>t.spNow);
         },
-        hpDecimal() {
-          return g().hp / 100;
-        },
-        mpDecimal() {
-          return g().mp / 100;
-        },
-        spDecimal() {
-          return g().sp / 100;
-        },
-        ocDecimal() {
-          return g().oc / 100;
-        },
+        targetGroup(...args) {
+          const groupMode = args.shift();
+          const numArgs = args.map(arg=> arg === '' ? -1 : parseInt(arg));
+          if (numArgs.some(isNaN)) throw new Error(`Error args for targetGroup, args: ${args}.`);
+          const currentTarget = targetGetter();
+          const targets = g().battle.monsterStatus;
+          switch(groupMode) {
+            case 'a': // all targets (as default if currentGroup is undefined)
+              currentGroup = targets;
+              break;
+            case 's': // 等数量自动分组
+              {
+                const groupSize = numArgs[0];
+                if (groupSize <= 0) throw new Error(`Using zero/subzero or error groupSize in targetGroup, args: ${args}.`);
+                const getGroupIndex = t => Math.floor(t.order / groupSize);
+                const groupIndex = getGroupIndex(currentTarget);
+                currentGroup = targets.filter(t => getGroupIndex(t) === groupIndex);
+              }
+              break;
+            case 'r': // 按照和current的距离
+              {
+                let [rangeUp, rangeDown] = [numArgs[0], numArgs[1]];
+                if (rangeUp === undefined) throw new Error(`1 args at least is required for targetGroup as mode 'r'.`);
+                // 对称范围. 只有单参数的 `targetGroup_r_[r1]` 时会是该情况，双参数的`targetGroup_r_[r1]_`时range2在param split后赋值为 ''，然后在numArgs中赋值为-1
+                rangeDown ??= rangeUp;
+                // >= 10 的，视作反方向。即 10 <=> -1 <=> ''(省略但有_分割)
+                [rangeUp, rangeDown] = [rangeUp, rangeDown].map(r=> r >= 10 ? 9-r : r );
+                const center = currentTarget.order;
+                const [startOrder, endOrder] = [center-rangeUp, center+rangeDown];
+                currentGroup = targets.filter(t => t.order >= startOrder && t.order <= endOrder);
+              }
+              break;
+            case 'oa': // 按照指定order，忽略current是否在内
+            case 'o': // 按照指定order
+              {
+                const [startOrder, endOrder] = numArgs;
+                startOrder??=-1;
+                if ([undefined, -1].includes(endOrder))
+                {
+                  endOrder = 10;
+                }
+                // 检查当前评估的怪物是否在区间内
+                if (groupMode!=='oa' && (currentTarget.order < startOrder || currentTarget.order > endOrder)) {
+                  currentGroup = null;
+                } else {
+                  // 检查该区间内是否有活怪带有此 Buff
+                  currentGroup = targets.filter(t => t.order >= startOrder && t.order <= endOrder);
+                }
+              }
+              break;
+            default:
+              throw new Error(`Unsupported targetGroup mode: ${groupMode}.`);
+          }
+          return currentGroup ? Object.keys(currentGroup).length : 0;
+        }
       };
-      for (i in parms) {
-        for (target of targets) {
-          if (target.isDead) {
+
+      function switchMaxMin(param, defaultResult, skipAliveCheck=false, targets=undefined) {
+        if (['gacount', 'gasum', 'gamax', 'gamin', 'gcount', 'gsum', 'gmax', 'gmin'].includes(param)) {
+          return switchMaxMin(param.replace(/^g/,''), defaultResult, skipAliveCheck, currentGroup);
+        }
+        if (['acount', 'asum', 'amax', 'amin', 'agcount', 'agsum', 'agmax', 'agmin'].includes(param)) {
+          return switchMaxMin(param.replace(/^a/,''), defaultResult, true, targets);
+        }
+        if (targets === undefined) targets = g().battle.monsterStatus; // 只处理 undefined，null 是空 group
+        if (!targets) return 0;
+        if (!skipAliveCheck) targets = targets.filter(t => !t.isDead);
+        switch (param) {
+          case 'count':
+            return targets.map(defaultResult).reduce((acc, cur) => acc + Math.sign(cur), 0);
+          case 'sum':
+            return targets.map(defaultResult).reduce((acc, cur) => acc + cur, 0);
+          case 'max':
+            return Math.max(...targets.map(defaultResult));
+          case 'min':
+            return Math.min(...targets.map(defaultResult));
+          default:
+            if (param !== undefined) console.warn(`Unknown param ${param} for switchMaxMin, fallback to default.`);
+            return defaultResult(targetGetter());
+        }
+      }
+
+      const getter = function (str, isDebug) {
+        const debug = str.match(/^#/);
+        if (debug) str = str.replace(/^#/, '');
+
+        const onResult = (r) => {
+          if (debug || isDebug) paramResultsGetter()[str] = r;
+          if (debug) console.log([str], r);
+          return r;
+        }
+
+        // 旧版本/强制使用func
+        if (str.match(/^_/) && !str.match(/\./)) {
+          const arr = str.split('_');
+          return onResult(func[arr[1]](...[...arr].splice(2)));
+        }
+        if (!isNaN(str * 1)) { // 数字直接返回
+          return onResult(str * 1);
+        }
+        const paramList = str.replace(/[^\d](\.)/g, (match, ...p) => {
+          return match.replace('.', '_'); // 将不是数字小数点的 . 转为 _ 以便进行参数分割
+        }).split('_');
+        let result, isInData;
+        const option = g().option??{};
+        const battle = g().battle??{};
+        while (paramList.length) {
+          const key = paramList.shift();
+          if (typeof result === 'undefined') { // 获取顶层数据
+            result = battle[key];
+            if (typeof result === 'undefined' || result === null) {
+              result = getValue('battle', true) ? getValue('battle', true)[key] : undefined;
+            }
+            if (typeof result === 'undefined' || result === null) {
+              result = g(key);
+            }
+            if (typeof result === 'undefined' || result === null) {
+              result = getValue(key);
+            }
+            if (typeof result === 'undefined' || result === null) {
+              result = option[key];
+            }
+            if ((typeof result === 'undefined' || result === null) && func[key]) {
+              result = func[key](...paramList);
+            }
+            if (typeof result === 'undefined' || result === null) break;
+            isInData = true; // 存在顶层数据
             continue;
           }
-          let parmResult = true;
-          for (j = 0; j < parms[i].length; j++) {
-            let result = true;
-            if (!Array.isArray(parms[i])) {
-              continue;
-            }
-            k = parms[i][j].replace(/,\s*(.*)\s*,/, (match, p1) => {
-              switch (p1) {
-                case '>':
-                case '1':
-                  return '>';
-                case '<':
-                case '2':
-                  return '<';
-                case '≥':
-                case '>=':
-                case '3':
-                  return '>=';
-                case '≤':
-                case '<=':
-                case '4':
-                  return '<=';
-                case '=':
-                case '==':
-                case '===':
-                case '5':
-                  return '==';
-                case '≠':
-                case '~=':
-                case '<>':
-                case '!=':
-                case '6':
-                  return '!=';
-              }
-            }).replace(/(?<![=!~><])=(?!=)|≥|≤|≠|~=|<>/g, (match) => {
-              switch (match) {
-                case '≥':
-                  return '>=';
-                case '≤':
-                  return '<=';
-                case '=':
-                case '===':
-                  return '==';
-                case '≠':
-                case '~=':
-                case '<>':
-                  return '!=';
-              }
-            }).replace('_1h', '_onehanded').replace('_2h', '_twohanded');
-            result = $RPN.evaluate(k, returnValue);
-            if (!result) {
-              parmResult = false;
-              break;
-            }
+          if (typeof result === 'string') {
+            result = JSON.parse(result);
           }
-          if (parmResult) {
-            return target;
-          }
+          if (['number', 'string'].includes(typeof result)) continue;
+          result = result[key];
         }
+        result ??= isInData ? 0 : result; // 存在顶层数据时默认为0
+        return onResult(isNaN(result * 1) ? result ?? str : (result * 1));
       }
-      return undefined;
+      getter.paramResultsGetter = paramResultsGetter;
+      return getter;
+    }
 
-      function switchMaxMin(param, defaultResult) {
-        param ??= target;
-        switch (param) {
-          case 'max':
-            return Math.max(...targets.filter(t => !t.isDead).map(defaultResult));
-          case 'min':
-            return Math.min(...targets.filter(t => !t.isDead).map(defaultResult));
-          default:
-            return defaultResult(param);
+    function handleRPNFormula(formula, returnValue) {
+      let k, isDebug, result;
+      if (!formula) return 0;
+      k = formula.replace(/,\s*(.*)\s*,/, (match, p1) => {
+        switch (p1) {
+          case '>':
+          case '1':
+            return '>';
+          case '<':
+          case '2':
+            return '<';
+          case '≥':
+          case '>=':
+          case '3':
+            return '>=';
+          case '≤':
+          case '<=':
+          case '4':
+            return '<=';
+          case '=':
+          case '==':
+          case '===':
+          case '5':
+            return '==';
+          case '≠':
+          case '~=':
+          case '<>':
+          case '!=':
+          case '6':
+            return '!=';
         }
-      }
+      }).replace(/===/g, '==').replace(/(?<![=<>!~])=(?!=)/g, '==')
+        .replace(/≥|≤|≠|~=|<>/g, (match) => {
+        switch (match) {
+          case '≥':
+            return '>=';
+          case '≤':
+            return '<=';
+          case '≠':
+          case '~=':
+          case '<>':
+            return '!=';
+        }
+      }).replace('_1h', '_onehanded').replace('_2h', '_twohanded');
+      isDebug = k.match(/^@/);
+      result = $RPN.evaluate(k.replace(/^@/, ''), (str)=>returnValue(str, isDebug));
+      if (isDebug) console.log([k], result, returnValue.paramResultsGetter());
+      return result;
+    }
 
-      function imgArray2img(...img) {
-        return img.join('_').replace('_png', 'png');
+    function resolveRPNFormula(formula, target) {
+      let paramResults={};
+      const returnValue = returnValueGetter(() => paramResults, ()=>target);
+      return handleRPNFormula(formula, returnValue);
+    }
+
+    function checkCondition(parms, targets = undefined) {
+      let i, j, k, target, paramResults={};
+      targets ??= [g().battle.monsterStatus[0]];
+      if (!parms || !Object.keys(parms).length) {
+        return targets[0];
       }
+      const returnValue = returnValueGetter(() => paramResults, ()=>target);
+      for (i in parms) { for (target of targets.filter(t=>!t.isDead)) {
+        paramResults={};
+        let parmResult = true;
+        for (j = 0; j < parms[i].length; j++) {
+          let result = true;
+          if (!Array.isArray(parms[i])) continue;
+          const formula = parms[i][j];
+          result = handleRPNFormula(formula, returnValue);
+          if (result) continue;
+          parmResult = false;
+          break;
+        }
+        if (parmResult) return target;
+      }} return undefined;
     }
 
     function pauseChange() { // 暂停状态更改
+      const option = g().option??{};
       if (getValue('disabled')) {
         if (gE('.pauseChange')) {
-          gE('.pauseChange').innerHTML = `<l0>暂停</l0><l1>暫停</l1><l2>Pause</l2>${(g().option.pauseHotkey && g().option.pauseHotkeyStr) ? `(${g().option.pauseHotkeyStr})` : '' }`;
+          gE('.pauseChange').innerHTML = `<l0>暂停</l0><l1>暫停</l1><l2>Pause</l2>${(option.pauseHotkey && option.pauseHotkeyStr) ? `(${option.pauseHotkeyStr})` : '' }`;
         }
         document.title = gE('#navbar') ? 'The Hentaiverse' : getValue('disabled');
         delValue(0);
@@ -3720,7 +4021,7 @@
         }
       } else {
         if (gE('.pauseChange')) {
-          gE('.pauseChange').innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(g().option.pauseHotkey && g().option.pauseHotkeyStr) ? `(${g().option.pauseHotkeyStr})` : '' }</l012>`;
+          gE('.pauseChange').innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(option.pauseHotkey && option.pauseHotkeyStr) ? `(${option.pauseHotkeyStr})` : '' }</l012>`;
         }
         setValue('disabled', document.title);
         document.title = _alert(-1, 'hvAutoAttack暂停中', 'hvAutoAttack暫停中', 'hvAutoAttack Paused');
@@ -3758,11 +4059,9 @@
       const quickSiteBar = gE('body').appendChild(cE('div'));
       quickSiteBar.className = 'quickSiteBar';
       quickSiteBar.innerHTML = '<span><a href="javascript:void(0);"class="quickSiteBarToggle">&lt;&lt;</a></span><span><a href="https://tieba.baidu.com/f?kw=hv网页游戏"target="_blank"><img src="https://www.baidu.com/favicon.ico" class="favicon"></img>贴吧</a></span><span><a href="https://forums.e-hentai.org/index.php?showforum=76"target="_blank"><img src="https://forums.e-hentai.org/favicon.ico" class="favicon"></img>Forums</a></span>';
-      if (g().option.quickSite) {
-        g().option.quickSite.forEach((site) => {
-          quickSiteBar.innerHTML = `${quickSiteBar.innerHTML}<span title="${site.name}"><a href="${site.url}"target="_self">${(site.fav) ? `<img src="${site.fav}"class="favicon"></img>` : ''}${site.name}</a></span>`;
-        });
-      }
+      g().option?.quickSite?.forEach((site) => {
+        quickSiteBar.innerHTML = `${quickSiteBar.innerHTML}<span title="${site.name}"><a href="${site.url}"target="_self">${(site.fav) ? `<img src="${site.fav}"class="favicon"></img>` : ''}${site.name}</a></span>`;
+      });
       gE('.quickSiteBarToggle', quickSiteBar).onclick = function () {
         const spans = gE('span', 'all', quickSiteBar);
         for (let i = 1; i < spans.length; i++) {
@@ -3773,7 +4072,7 @@
     }
 
     function autoSwitchIsekai() {
-      if (!g().option.isekai) {
+      if (!g().option?.isekai) {
         // 若不启用自动跳转
         return;
       }
@@ -3784,7 +4083,7 @@
       await updateEncounter(false);
       await waitPause();
       $async.logSwitch(arguments);
-      const option = g().option;
+      const option = g().option??{};
       const ready = {
         isChecked: () => ready.supply && ready.repair && ready.encounter,
       };
@@ -3794,34 +4093,34 @@
         (async () => { try {
           ready.proficiency = await asyncSetProficiency() || true;
           await tryEncounter();
-        } catch (err) { console.error(err) } })(),
+        } catch (err) { console.error(err); }})(),
         // ability
         (async () => { try {
           ready.ability = await asyncSetAbilityData() || true;
           await tryEncounter();
-        } catch (err) { console.error(err) } })(),
+        } catch (err) { console.error(err); }})(),
         // stamina & hathperk
         (async () => { try {
           ready.stamina = await asyncSetStamina() || true;
           await tryEncounter();
-        } catch (err) { console.error(err) } })(),
+        } catch (err) { console.error(err); }})(),
         // item & supply
         (async () => { try {
           ready.item = await asyncGetItems() || true;
           await tryEncounter();
           ready.supply = checkSupply();
           await tryEncounter();
-        } catch (err) { console.error(err) } })(),
+        } catch (err) { console.error(err); }})(),
         // repair
         (async () => { try {
           ready.repair = await asyncCheckRepair();
           await tryEncounter();
-        } catch (err) { console.error(err) } })(),
+        } catch (err) { console.error(err); }})(),
         // equipment storage
         (async () => { try {
           ready.storage = await asyncCheckEquStorage();
           await tryEncounter();
-        } catch (err) { console.error(err) } })(),
+        } catch (err) { console.error(err); }})(),
         // arena data
         updateArena(),
       ]);
@@ -3857,8 +4156,8 @@
         $async.logSwitch(arguments);
         ready.encounter ||= !(await updateEncounter(option.encounter));
         $async.logSwitch(arguments);
-      } catch (err) { console.error(err) } }
-    } catch (err) { console.error(err) } }
+      } catch (err) { console.error(err); }}
+    } catch (err) { console.error(err); }}
 
     function setEncounter(encounter) {
       return g('encounter', setValue('encounter', encounter));
@@ -3903,7 +4202,7 @@
         const regex = /<div><div class="fc2 far fcb"><div>(.*) <\/div><\/div><\/div>\n\t<div><div class="fc2 fal fcb"><div>&nbsp;(.*)<\/div><\/div><\/div>/;
         const profs = gE('#stats_pane .stats_page:last-child .st2:last-child', doc).innerHTML.match( new RegExp(regex, regex.flags + 'g'));
         profs.forEach(p=>{
-        const exec = p.match(regex);
+          const exec = p.match(regex);
           proficiency[exec[2]] = exec[1]*1;
         });
       } else {
@@ -3914,7 +4213,7 @@
       }
       localStorage.setItem(`hvAA-${current}_proficiency`, JSON.stringify(proficiency));
       $async.logSwitch(arguments);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     async function asyncSetAbilityData() { try {
       await waitPause();
@@ -4011,7 +4310,7 @@
       setValue('ability', newAbility);
       ability = Object.keys(newAbility).length ? newAbility : ability;
       $async.logSwitch(arguments);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     async function asyncSetStamina() { try {
       await waitPause();
@@ -4028,7 +4327,7 @@
           if (!perk?.length) {
             perk = undefined;
           }
-          if (isIsekai || !g().option.restoreStamina) {
+          if (isIsekai || !g().option?.restoreStamina) {
             return perk;
           }
           let currentID, html;
@@ -4040,18 +4339,18 @@
           }
           const doc = $doc(html);
           const perks = gE('.stuffbox>table>tbody>tr', 'all', doc);
-          if (perks && perks[25].innerHTML.includes('Obtained') && !(perk ??= []).includes(currentID)) {
+          if (perks && perks[25]?.innerHTML.includes('Obtained') && !(perk ??= []).includes(currentID)) {
             perk.push(currentID);
           }
           return perk;
-        } catch(e) {console.error(e) }})()
+        } catch (err) { console.error(err); }})()
       ]);
       if (!stamina.current) {
         if (!getValue('stamina')) {
           setValue('stamina', stamina);
         }
         $async.logSwitch(arguments);
-        return
+        return;
       }
       stamina.time = time(0);
       if (!stamina.punish) {
@@ -4086,10 +4385,11 @@
       setValue('stamina', stamina);
       console.log('stamina', stamina, '\n', last, '->', stamina.current, '=', lastCost, '*', ratio);
       $async.logSwitch(arguments);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     async function asyncGetItems() { try {
-      if (!g().option.checkSupply && (isIsekai || !g().option.restoreStamina)) {
+      const option = g().option??{};
+      if (!option.checkSupply && (isIsekai || !option.restoreStamina)) {
         return;
       }
       await waitPause();
@@ -4110,10 +4410,10 @@
       }
       g('items', items);
       $async.logSwitch(arguments);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     function checkSupply(isGFStandalone) {
-      const option = g().option;
+      const option = g().option??{};
       if (!option.checkSupply) {
         return true;
       }
@@ -4175,85 +4475,85 @@
       return !needs.length;
     }
 
-    async function asyncCheckEnchant(isGrindFest) {
-      try {
-        if (hvVersion >= 91) return true;
-        $async.logSwitch(arguments);
-        const option = g().option;
-        const [isEnchant, thresholds] = isGrindFest && option.checkEnchantGF ? [option.isEnchantGF, option.enchantGF] : [option.isEnchant, option.enchant];
-        if (!isEnchant) return true;
-        await waitPause();
+    //     async function asyncCheckEnchant(isGrindFest) {
+    //       try {
+    //         if (hvVersion >= 91) return true;
+    //         $async.logSwitch(arguments);
+    //         const option = g().option??{};
+    //         const [isEnchant, thresholds] = isGrindFest && option.checkEnchantGF ? [option.isEnchantGF, option.enchantGF] : [option.isEnchant, option.enchant];
+    //         if (!isEnchant) return true;
+    //         await waitPause();
 
-        const enchant = {};
-        Object.keys(isEnchant).forEach(id => {
-          if (!isEnchant[id]) return;
-          const item = Math.floor(id/100);
-          const slot = id % 100;
-          (enchant[slot] ??= {})[item] = thresholds[id];
-        });
+    //         const enchant = {};
+    //         Object.keys(isEnchant).forEach(id => {
+    //           if (!isEnchant[id]) return;
+    //           const item = Math.floor(id/100);
+    //           const slot = id % 100;
+    //           (enchant[slot] ??= {})[item] = thresholds[id];
+    //         });
 
-        const url = `?s=Forge&ss=re`;
-        const enchant_data= {
-          "Voidseeker's Blessing" : { Weapon: 'vseek', item:61001, }, // 'Voidseeker Shard'
-          'Suffused Aether' : { Weapon: 'ether', item:61101, }, // 'Aether Shard'
-          'Featherweight Charm' : { Weapon: 'feath', Armor: 'feath', item:61501, }, // 'Featherweight Shard'
-          'Infused Flames' : { Weapon: 'sfire', Armor: 'pfire', item:12101, }, // 'Infusion of Flames'
-          'Infused Frost' : { Weapon: 'scold', Armor: 'pcold', item:12201, }, // 'Infusion of Frost'
-          'Infused Lightning' : { Weapon: 'selec', Armor: 'pelec', item:12301, }, // 'Infusion of Lightning'
-          'Infused Storms' : { Weapon: 'swind', Armor: 'pwind', item:12401, }, // 'Infusion of Storms'
-          'Infused Divinity' : { Weapon: 'sholy', Armor: 'pholy', item:12501, }, // 'Infusion of Divinity'
-          'Infused Darkness' : { Weapon: 'sdark', Armor: 'pdark', item:12601, }, // 'Infusion of Darkness'
-        }
-        const item2Enchant = {
-          61001: "Voidseeker's Blessing",
-          61101: 'Suffused Aether',
-          61501: 'Featherweight Charm',
-          12101: 'Infused Flames',
-          12201: 'Infused Frost',
-          12301: 'Infused Lightning',
-          12401: 'Infused Storms',
-          12501: 'Infused Divinity',
-          12601: 'Infused Darkness',
-        }
-        const d = $doc(await $ajax.insert(`?s=Character&ss=eq`));
-        const eqps = {};
-        Array.from(gE('.eqb', 'all', d)).forEach(eqb=> {
-          const slot = eqb.getAttribute('onclick').match(`equip_slot=(.*)'`)[1] * 1;
-          const id = gE('div[onmouseover*="equips.set"]', eqb)?.id.replace('e', '') * 1;
-          eqps[id]=slot;
-        });
-        const doc = $doc(await $ajax.insert(url));
-        const eqpdoc = await $ajax.insert(gE('#mainpane>script[src]', doc).src);
-        const json = JSON.parse(eqpdoc.match(/{.*}/)[0]);
-        await Promise.all(Array.from(gE('.eqp>[id]', 'all', doc)).map(e => (async eqp => { try {
-          const id = eqp.id.match(/\d+/)[0];
-          const slot = eqps[id];
-          const data = json[id];
-          if (!enchant[slot]) return;
-          const enchanted = {};
-          Array.from(gE('#ee>span', 'all', $doc(await $ajax.insert(`equip/${id}/${data.k}`))))?.forEach(s=> {
-            const info = s.innerHTML.match(/(.*) \[(\d+)m\]/);
-            enchanted[enchant_data[info[1]].item] = info[2]*1
-            return;
-          });
-          let type = data.d.match(`<div class=\"eq e.\"><div>.* *(Armor|Weapon|Shield|Staff).*</div><div>Condition`)[1];
-          type = (type === 'Shield') ? 'Armor' : (type === 'Staff' ? 'Weapon' : type);
-          return await Promise.all(Object.keys(enchant[slot]).map(i => (async item => { try {
-            const threshold = enchant[slot][item];
-            const current = enchanted[item] ?? 0;
-            const enc = enchant_data[item2Enchant[item]][type];
-            if (!enc) return;
-            if (current && current >= threshold) return;
-            const failed = $doc(await $ajax.insert(`?s=Forge&ss=en`, `select_item=${id}&enchantment=${enc}`))?.innerText;
-            if (failed) {
-              console.error(failed, ':', data.t, ':', enc, '=', current, '>?', threshold, '=', current >= threshold);
-            }
-          } catch (err) { console.error(err) }; })(i)));
-        } catch (err) { console.error(err) }; })(e)));
-      } catch (err) { console.error(err) }; return false; }
+    //         const url = `?s=Forge&ss=re`;
+    //         const enchant_data= {
+    //           "Voidseeker's Blessing" : { Weapon: 'vseek', item:61001, }, // 'Voidseeker Shard'
+    //           'Suffused Aether' : { Weapon: 'ether', item:61101, }, // 'Aether Shard'
+    //           'Featherweight Charm' : { Weapon: 'feath', Armor: 'feath', item:61501, }, // 'Featherweight Shard'
+    //           'Infused Flames' : { Weapon: 'sfire', Armor: 'pfire', item:12101, }, // 'Infusion of Flames'
+    //           'Infused Frost' : { Weapon: 'scold', Armor: 'pcold', item:12201, }, // 'Infusion of Frost'
+    //           'Infused Lightning' : { Weapon: 'selec', Armor: 'pelec', item:12301, }, // 'Infusion of Lightning'
+    //           'Infused Storms' : { Weapon: 'swind', Armor: 'pwind', item:12401, }, // 'Infusion of Storms'
+    //           'Infused Divinity' : { Weapon: 'sholy', Armor: 'pholy', item:12501, }, // 'Infusion of Divinity'
+    //           'Infused Darkness' : { Weapon: 'sdark', Armor: 'pdark', item:12601, }, // 'Infusion of Darkness'
+    //         }
+    //         const item2Enchant = {
+    //           61001: "Voidseeker's Blessing",
+    //           61101: 'Suffused Aether',
+    //           61501: 'Featherweight Charm',
+    //           12101: 'Infused Flames',
+    //           12201: 'Infused Frost',
+    //           12301: 'Infused Lightning',
+    //           12401: 'Infused Storms',
+    //           12501: 'Infused Divinity',
+    //           12601: 'Infused Darkness',
+    //         }
+    //         const d = $doc(await $ajax.insert(`?s=Character&ss=eq`));
+    //         const eqps = {};
+    //         Array.from(gE('.eqb', 'all', d)).forEach(eqb=> {
+    //           const slot = eqb.getAttribute('onclick').match(`equip_slot=(.*)'`)[1] * 1;
+    //           const id = gE('div[onmouseover*="equips.set"]', eqb)?.id.replace('e', '') * 1;
+    //           eqps[id]=slot;
+    //         });
+    //         const doc = $doc(await $ajax.insert(url));
+    //         const eqpdoc = await $ajax.insert(gE('#mainpane>script[src]', doc).src);
+    //         const json = JSON.parse(eqpdoc.match(/{.*}/)[0]);
+    //         await Promise.all(Array.from(gE('.eqp>[id]', 'all', doc)).map(e => (async eqp => { try {
+    //           const id = eqp.id.match(/\d+/)[0];
+    //           const slot = eqps[id];
+    //           const data = json[id];
+    //           if (!enchant[slot]) return;
+    //           const enchanted = {};
+    //           Array.from(gE('#ee>span', 'all', $doc(await $ajax.insert(`equip/${id}/${data.k}`))))?.forEach(s=> {
+    //             const info = s.innerHTML.match(/(.*) \[(\d+)m\]/);
+    //             enchanted[enchant_data[info[1]].item] = info[2]*1
+    //             return;
+    //           });
+    //           let type = data.d.match(`<div class=\"eq e.\"><div>.* *(Armor|Weapon|Shield|Staff).*</div><div>Condition`)[1];
+    //           type = (type === 'Shield') ? 'Armor' : (type === 'Staff' ? 'Weapon' : type);
+    //           return await Promise.all(Object.keys(enchant[slot]).map(i => (async item => { try {
+    //             const threshold = enchant[slot][item];
+    //             const current = enchanted[item] ?? 0;
+    //             const enc = enchant_data[item2Enchant[item]][type];
+    //             if (!enc) return;
+    //             if (current && current >= threshold) return;
+    //             const failed = $doc(await $ajax.insert(`?s=Forge&ss=en`, `select_item=${id}&enchantment=${enc}`))?.innerText;
+    //             if (failed) {
+    //               console.error(failed, ':', data.t, ':', enc, '=', current, '>?', threshold, '=', current >= threshold);
+    //             }
+    //           } catch (err) { console.error(err); }})(i)));
+    //         } catch (err) { console.error(err); }})(e)));
+    //       } catch (err) { console.error(err); }; return false; }
 
     async function asyncCheckRepair(isGrindFestStandalone) { try {
-      const option = g().option;
+      const option = g().option??{};
       if (!option.repair) {
         return true;
       }
@@ -4278,7 +4578,7 @@
           }
           const after = $doc(await $ajax.insert(url, `select_item=${id}`));
           return gE('.messagebox_error', )?.innerText ? undefined : json[id].t;
-        } catch (err) { console.error(err) } }));
+        } catch (err) { console.error(err); }}));
       } else {
         const url = `?s=Bazaar&ss=am&screen=repair&filter=equipped`;
         const doc = $doc(await $ajax.insert(url));
@@ -4295,7 +4595,7 @@
           }
           const after = $doc(await $ajax.insert(url, `&eqids[]=${id}&postoken=${token}&replace_charms=on`));
           return gE(`#e${id}`, after) ? gE('.lc', eqp).childNodes[2].textContent : undefined;
-        } catch (err) { console.error(err) } }));
+        } catch (err) { console.error(err); }}));
       }
       eqps = eqps.filter(e=>e);
       if (eqps.length) {
@@ -4316,10 +4616,10 @@
       }
       $async.logSwitch(arguments);
       return !eqps.length;
-    } catch (err) { console.error(err) }; return false; }
+    } catch (err) { console.error(err); }; return false; }
 
     async function asyncCheckEquStorage() { try {
-      const option = g().option;
+      const option = g().option??{};
       if (!option.equStorage) {
         return true;
       }
@@ -4345,7 +4645,7 @@
       }
       $async.logSwitch(arguments);
       return count * 1 <= option.equStorageValue;
-    } catch (err) { console.error(err) }; return false; }
+    } catch (err) { console.error(err); }; return false; }
 
     async function checkBattleReady(method, condition = {}) {
       await waitPause();
@@ -4356,7 +4656,7 @@
           return;
         }
       }
-      const option = g().option;
+      const option = g().option??{};
       const stamina = getValue('stamina', true);
       const [low, lowNR, cost, ratio] = [condition.staminaLow??option.staminaLow, option.staminaLowWithReNat??0, Math.round((condition.staminaCost??0) * 100) / 100, stamina.punish ? stamina.ratio??1 : 1]
       const checked = await checkStamina(low, cost);
@@ -4407,13 +4707,13 @@
       const punish = !!gE('#stamina_readout .fc4.far', doc).parentNode.title;
       $async.logSwitch(arguments);
       return [current, punish ? punish : undefined];
-    } catch(e) { console.error(e); }}
+    } catch (err) { console.error(err); }}
 
     async function checkStamina(low, cost) {
       // await waitPause();
       $async.logSwitch(arguments);
       const stamina = getValue('stamina', true);
-      const option = g().option;
+      const option = g().option??{};
       let now = time(0);
       let hours = Math.floor(now / _1h);
       let [current, punish] = await getCurrentStamina();
@@ -4444,15 +4744,15 @@
     }
 
     async function updateEncounter(engage) { try {
-      if (!g().option.encounter && !g().option.encounterDisplay) {
+      const option = g().option??{};
+      if (!option.encounter && !option.encounterDisplay) {
         console.log("skip encounter check");
         return false;
       }
       // await waitPause();
-      // $async.logSwitch(arguments);
+      $async.logSwitch(arguments);
       const encounter = getEncounter();
       const count = encounter.filter(e => e.url).length;
-      const option = g().option;
       const now = time(0);
       const last = encounter[0]?.time ?? getValue('lastEH', true) ?? 0; // 上次遭遇 或 上次打开EH 或 0
       let cd;
@@ -4482,36 +4782,34 @@
       } else {
         ui.style.cssText += 'color:unset!important;';
       }
-      ui.innerHTML = `${formatTime(cd).slice(0, 2).map(cdi => cdi.toString().padStart(2, '0')).join(`:`)}[${encounter.length ? (count >= 24 ? `☯` : count) : `✪`}${missed ? `-${missed}` : ``}]`;
+      ui.innerHTML = `${formatTime(cd).slice(0, 2).map(cdi => pad(cdi)).join(`:`)}[${encounter.length ? (count >= 24 ? `☯` : count) : `✪`}${missed ? `-${missed}` : ``}]`;
       if (engage) {
         if (!cd) {
           await waitPause();
           onEncounter();
-          // $async.logSwitch(arguments);
+          $async.logSwitch(arguments);
           return true;
         }
         if (cd < 30 * _1m && encounter[0]?.url && !encounter[0].encountered) {
           await waitPause();
           $ajax.openNoFetch(encounter[0].url);
-          // $async.logSwitch(arguments);
+          $async.logSwitch(arguments);
           return true;
         }
       }
       let interval = cd > _1h ? _1m : (!option.encounterQuickCheck || cd > _1m) ? _1s : 80;
       interval = (option.encounterQuickCheck && cd > _1m) ? (interval - cd % interval) / 4 : interval; // 让倒计时显示更平滑
       setTimeout(() => updateEncounter(engage), interval);
-      // $async.logSwitch(arguments);
+      $async.logSwitch(arguments);
       return engage && cd <= waitCD;
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     async function onEncounter() { try {
-      const option = g().option;
-      while (
-        !(await $ajax.insert(location))
-        || (option.checkURLBeforeNewRound && !(await $ajax.insert(option.checkURLBeforeNewRound)))
-      ) { // perhaps network connect not available
-        await pauseAsync(option.checkURLBeforeNewRoundRetry);
-      }
+      const option = g().option??{};
+      await until( // perhaps network connect not available
+        async ()=>await $ajax.insert(location) && (!option.checkURLBeforeNewRound || await $ajax.insert(option.checkURLBeforeNewRound)),
+        option.checkURLBeforeNewRoundRetry
+      );
       $async.logSwitchStrict('updateEncounter', true);
       if (getValue('disabled') || getValue('battle') || !await checkBattleReady(onEncounter, { staminaLow: option.staminaEncounter })) {
         $async.logSwitchStrict('updateEncounter', false);
@@ -4521,10 +4819,10 @@
       if (!window.top.location.href.endsWith(`?s=Battle`)) {
         setValue('lastUrl', window.top.location.href);
       }
-      if (option.enchantEncounter) await asyncCheckEnchant();
+      // if (option.enchantEncounter) await asyncCheckEnchant();
       $ajax.openNoFetch('https://e-hentai.org/news.php?encounter');
       $async.logSwitchStrict('updateEncounter', false);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     async function startUpdateArena(idleStart, startIdleArena = true) { try {
       $async.logSwitchStrict('startUpdateArena', true);
@@ -4532,7 +4830,7 @@
       if (!idleStart) {
         await updateArena();
       }
-      let timeout = g().option.idleArenaTime * _1s;
+      let timeout = g().option?.idleArenaTime * _1s;
       if (idleStart) {
         timeout -= time(0) - idleStart;
       }
@@ -4542,7 +4840,7 @@
       const last = getValue('arena', true)?.date ?? now;
       setTimeout(startUpdateArena, Math.max(0, Math.floor(last / _1d + 1) * _1d - now));
       $async.logSwitchStrict('startUpdateArena', false);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     async function updateArena(forceUpdateToken = false) { try {
       await waitPause();
@@ -4551,31 +4849,37 @@
       const isToday = arena.date && time(2, arena.date) === time(2);
       if (forceUpdateToken || !isToday || !arena.isOptionUpdated) {
         arena.token = {};
-        await Promise.all(['gr', 'ar', 'rb'].map(s => (async site => {
-          try {
-            const doc = $doc(await $ajax.insert(`?s=Battle&ss=${site}`));
-            getStartBattleButtons(doc).forEach(btn => { arena.token[btn.id] = btn.token ?? null; });
-          } catch (err) { console.error(err) }
-        })(s)));
+        await Promise.all(['gr', 'ar', 'rb'].map(s => (async site => { try {
+          const doc = $doc(await $ajax.insert(`?s=Battle&ss=${site}`));
+          getStartBattleButtons(doc, site).forEach(btn => {
+            if (btn.cleared) {
+              arena.token[btn.id] = btn.token;
+              return;
+            }
+            delete arena.token[btn.id];
+          });
+        } catch (err) { console.error(err); }})(s)));
       }
+
+      const option = g().option??{};
       if (!isToday) {
         arena.date = time(0);
-        arena.gr = g().option.idleArenaGrTime;
+        arena.gr = option.idleArenaGrTime;
         arena.arrayDone = [];
       }
       if (!isToday || !arena.isOptionUpdated) {
-        arena.array = g().option.idleArenaValue?.split(',') ?? [];
+        arena.array = option.idleArenaValue?.split(',') ?? [];
         arena.array.reverse();
       }
       arena.arrayDone = arena.arrayDone.filter(id => id === 'gr' || !Object.keys(arena.token).includes(id.toString()));
       $async.logSwitch(arguments);
       return setValue('arena', arena);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     async function idleArena() { try { // 闲置竞技场
       let id;
       let arena = getValue('arena', true);
-      const option = g().option;
+      const option = g().option??{};
       const writeArenaStart = function () {
         console.log('Arena Start', id);
         document.title = _alert(-1, '闲置竞技场开始', '閒置競技場開始', 'Idle Arena start');
@@ -4600,12 +4904,12 @@
           id = undefined;
           continue;
         }
-        if (id in arena.token) {
+        if (arena.token[id] !== undefined) {
           break;
         }
         if (id >= 105) {
           arena.token = (await updateArena(true)).token;
-          if (id in arena.token) {
+          if (arena.token[id] !== undefined) {
             break;
           }
         }
@@ -4665,13 +4969,9 @@
       }
       await waitPause();
       writeArenaStart();
-      while(option.checkURLBeforeNewRound && !(await $ajax.insert(option.checkURLBeforeNewRound))) {
-        await pauseAsync(option.checkURLBeforeNewRoundRetry);
-      }
-      await asyncCheckEnchant(id === 'gr');
-      while(!(await $ajax.insert(query, `initid=${id === 'gr' ? 1 : id}${token}`))) {
-        await pauseAsync(option.checkURLBeforeNewRoundRetry);
-      }
+      await until(async ()=>!option.checkURLBeforeNewRound || await $ajax.insert(option.checkURLBeforeNewRound), option.checkURLBeforeNewRoundRetry);
+      // await asyncCheckEnchant(id === 'gr');
+      await until(async ()=>await $ajax.insert(query, `initid=${id === 'gr' ? 1 : id}${token}`), option.checkURLBeforeNewRoundRetry);
       stamina.lastCost = id === 'gr' ? undefined : cost;
       setValue('stamina', stamina);
       if (option.altBattleFirst && await $ajax.insert(location.replace('hentaiverse.org', 'alt.hentaiverse.org').replace('alt.alt', 'alt'))) {
@@ -4682,11 +4982,12 @@
         goto();
       }
       $async.logSwitch(arguments);
-    } catch (err) { console.error(err) } }
+    } catch (err) { console.error(err); }}
 
     // 战斗中//
     function onBattleRound() { // 主程序
       if (!gE('#battle_main')) return;
+      lastResponsive = time(0);
       let battle = getValue('battle', true);
       if (!battle || !battle.roundAll) { // 修复因多个页面/世界同时读写造成缓存数据异常的情况
         battle = JSON.parse(JSON.stringify(g().battle));
@@ -4719,7 +5020,7 @@
       }
 
       function getBattleTypeDisplay(isTitle) {
-        const battleInfoList = {
+        const battleInfoList = getBattleTypeDisplay.prototype.battleInfoList ??= {
           'gr': {
             name: ['压榨', '壓榨', 'Grindfest'],
             title: 'GF',
@@ -4852,10 +5153,10 @@
       countMonsterHP();
       displayMonsterWeight();
       displayPlayStatePercentage();
-
+      const option = g().option??{};
       if (getValue('disabled')) { // 如果禁用
         document.title = _alert(-1, 'hvAutoAttack暂停中', 'hvAutoAttack暫停中', 'hvAutoAttack Paused');
-        gE('#hvAABox2>button').innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(g().option.pauseHotkey && g().option.pauseHotkeyStr) ? `(${g().option.pauseHotkeyStr})` : '' }<l012>`;
+        gE('#hvAABox2>button').innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(option.pauseHotkey && option.pauseHotkeyStr) ? `(${option.pauseHotkeyStr})` : '' }<l012>`;
         return;
       }
       battle = getValue('battle', true);
@@ -4864,7 +5165,7 @@
       setValue('battle', battle);
       killBug(); // 解决 HentaiVerse 可能出现的 bug
 
-      if (g().option.autoFlee && checkCondition(g().option.fleeCondition)) {
+      if (option.autoFlee && checkCondition(option.fleeCondition)) {
         gE('1001').click();
         setExitBattleTimeout('Flee');
         return;
@@ -4885,8 +5186,10 @@
         'Skill': autoSkill,
         'Atk': attack,
       };
-      const option = g().option;
       const names = option.battleOrderDefaultOnly ? [] : option.battleOrderName?.split(',') ?? [];
+      if (option.debugCheckCondition) {
+        checkCondition(option.debugCondition);
+      }
       for (let i = 0; i < names.length; i++) {
         if (taskList[names[i]]()) {
           onStepInDone();
@@ -4953,7 +5256,7 @@
          * @param {(target) => number} excludeWeightRatio target with id
          * @returns
          */
-    function getRangeCenter(target, range, isWeaponAttack, excludeWeightRatio, forceUseIndex) {
+    function getRangeCenter(target, range, isWeaponAttack, excludeWeight, forceUseIndex) {
       let msTemp = JSON.parse(JSON.stringify(g().battle.monsterStatus));
       msTemp.sort(objArrSort('order'));
       let minWeight = Number.MAX_SAFE_INTEGER;
@@ -4961,12 +5264,12 @@
       if (!range || range >= msTemp.length) {
         return { id: getMonsterID(target), weight: minWeight };
       }
-      const option = g().option;
+      const option = g().option??{};
       const centralExtraWeight = -1 * Math.log10(1 + (isWeaponAttack ? option.centralExtraRatio / 100 : 0));
       let order = target.order;
       let newOrder = order;
       // sort by order to fix id
-      let unreachableWeight = option.unreachableWeight;
+      let unreachableWeight = resolveRPNFormula(option.unreachableWeight, target);
       // 1. 以选中目标为中心，优先向上
       // 2. 超过顶部则向下找
       // 3. 死亡、超过底下的将被溢出抛弃
@@ -4987,13 +5290,8 @@
             weight += unreachableWeight;
             continue;
           }
-          if (excludeWeightRatio) {
-            // 特殊排除(ratio === 1则直接排除，0<ratio<1则优先于溢出的情况, ratio === 0 则不排除, ratio < 0 相当于增加权重?)
-            const ratio = excludeWeightRatio(mon);
-            weight += ratio * unreachableWeight;
-            if (ratio>0) {
-              continue;
-            }
+          if (excludeWeight) {
+            weight += excludeWeight(mon);
           }
           weight += cew; // 中心目标会受到副手及冲击攻击时，相当于有效生命值降低
           weight += forceUseIndex ? -1 : mon.finWeight; // 强制使用顺序而非权重时，全部使用统一的权重而非怪物状态
@@ -5008,7 +5306,7 @@
     }
 
     function autoPause() {
-      const option = g().option;
+      const option = g().option??{};
       if (option.autoPause && checkCondition(option.pauseCondition)) {
         pauseChange();
         return true;
@@ -5017,8 +5315,9 @@
     }
 
     function autoDefend() {
-      const option = g().option;
+      const option = g().option??{};
       if (option.defend && checkCondition(option.defendCondition)) {
+        updateSkillOTOS('defend');
         gE('#ckey_defend').click();
         return true;
       }
@@ -5026,8 +5325,9 @@
     }
 
     function setExitBattleTimeout(alarm) {
+      lastResponsive = Infinity;
       setAlarm(alarm);
-      const option = g().option;
+      const option = g().option??{};
       if (alarm === 'Defeat' && !option.autoSkipDefeated) {
         return;
       }
@@ -5035,34 +5335,43 @@
       setTimeoutOrExecute(() => $ajax.openNoFetch(getValue('lastUrl')), option.ExitBattleWaitTime * _1s);
     }
 
-    function reloader() {
+    async function checkResponsive() {
+      const option = g().option??{};
       const battleUnresponsive = {
-        'Alert': { method: setAlarm },
+        'Alert': { method: ()=>setAlarm('BattleUnresponsive') },
         'Reload': { method: goto },
         'Alt': { method: gotoAlt }
       }
-      function clearBattleUnresponsive() {
-        Object.keys(battleUnresponsive).forEach(t => {
-          if (!battleUnresponsive[t].timeout) return;
-          clearTimeout(battleUnresponsive[t].timeout);
-        });
+      let min = Infinity;
+      for (let t in option.battleUnresponsive) {
+        if (!option.battleUnresponsive[t] || !battleUnresponsive[t]) {
+          delete battleUnresponsive[t];
+          continue;
+        }
+        battleUnresponsive[t].time = Math.max(1, option.battleUnresponsiveTime[t]) * _1s;
+        min = Math.min(min, battleUnresponsive[t].time);
       }
-      async function onBattleUnresponsive(method) { try {
+      if (!Object.keys(battleUnresponsive).length) return;
+      let isBreak;
+      while (true) {
         await waitPause();
-        method();
-      } catch (err) { console.error(err) } }
+        const waited = new Date() - lastResponsive;
+        for (let t in battleUnresponsive) {
+          if (battleUnresponsive[t].time > waited) continue;
+          isBreak ||= battleUnresponsive[t].method();
+        }
+        if (isBreak) break;
+        await pauseAsync(min - waited);
+      }
+    }
 
+    function reloader() {
       let obj, a, cost;
       const eventStart = cE('a');
       eventStart.id = 'eventStart';
       eventStart.onclick = function () {
-        const option = g().option;
+        const option = g().option??{};
         a = unsafeWindow.info;
-        for (let t in option.battleUnresponsive) {
-          if (option.battleUnresponsive[t]) {
-            battleUnresponsive[t].timeout = setTimeout(() => onBattleUnresponsive(battleUnresponsive[t].method), Math.max(1, option.battleUnresponsiveTime[t]) * _1s);
-          }
-        }
         if (option.recordUsage) {
           obj = {
             mode: a.mode,
@@ -5082,7 +5391,8 @@
       const eventEnd = cE('a');
       eventEnd.id = 'eventEnd';
       eventEnd.onclick = function () {
-        const option = g().option;
+
+        const option = g().option??{};
         const timeNow = time(0);
         g('runSpeed', (1000 / (timeNow - g().timeNow)).toFixed(2));
         g('timeNow', timeNow);
@@ -5096,7 +5406,6 @@
           recordUsage(obj);
         }
         if (g().monsterAlive && !gE('#btcp')) {
-          clearBattleUnresponsive();
           onBattleRound();
           return;
         }
@@ -5109,84 +5418,70 @@
         onRoundEnd();
         async function onRoundEnd() { try {
           await waitPause();
-          // $async.logSwitch(arguments);
+          $async.logSwitch(arguments);
           if (g().monsterAlive > 0) { // Defeat
             setExitBattleTimeout('Defeat');
-            clearBattleUnresponsive();
-          } else if (g().battle.roundNow === g().battle.roundAll) { // Victory
+            return;
+          }
+          if (g().battle.roundNow === g().battle.roundAll) { // Victory
             setExitBattleTimeout('Victory');
-            clearBattleUnresponsive();
-          } else { // Next Round
-            setTimeoutOrExecute(onNewRound, option.NewRoundWaitTime * _1s);
+            return;
           }
 
-          async function onNewRound() { try {
+          if (option.NewRoundWaitTime) { // Next Round
+            await pauseAsync(option.NewRoundWaitTime * _1s);
             await waitPause();
-            // $async.logSwitch(arguments);
-            if (gE('#btcp')?.innerHTML.includes("finishbattle.png")) {
-              goto();
-              // $async.logSwitch(arguments);
+          }
+          if (gE('#btcp')?.innerHTML.includes("finishbattle.png")) return console.error(`gE('#btcp')?.innerHTML.includes("finishbattle.png")`);
+          let url = option.checkURLBeforeNewRound;
+          if (url) {
+            lastResponsive = Infinity;
+            await until(async ()=>{ try {
+              await waitPause();
+              return await $ajax.insert(url,undefined,undefined,{},{},true);
+            } catch (err) { console.error('Connect failed:', url) }}, option.checkURLBeforeNewRoundRetry*_1s);
+            lastResponsive = time(0);
+          }
+          const doc = $doc(await $ajax.insert(window.location.href));
+          if (gE('#riddlecounter', doc)) {
+            lastResponsive = Infinity;
+            if (option.riddlePopup && !window.opener) {
+              window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
+              $async.logSwitch(arguments);
               return;
             }
-            clearBattleUnresponsive();
-            let urlChecked;
-            if (option.checkURLBeforeNewRound) {
-              while (!urlChecked) {
-                try {
-                  urlChecked = await $ajax.insert(option.checkURLBeforeNewRound);
-                } catch(e) {
-                  await waitPause();
-                  await pauseAsync(option.checkURLBeforeNewRoundRetry);
-                } finally {
-                  if (!!urlChecked) {
-                    // console.log('Done url check:', !!urlChecked, option.checkURLBeforeNewRound);
-                  } else {
-                    console.error('Failed connect ', option.checkURLBeforeNewRound);
-                  }
-                }
-              }
-            }
-            const html = await $ajax.insert(window.location.href);
-            const doc = $doc(html);
-            if (gE('#riddlecounter', doc)) {
-              console.log('url check:', option.checkURLBeforeNewRound, '\n', urlChecked);
-              if (option.riddlePopup && !window.opener) {
-                window.open(window.location.href, 'riddleWindow', 'resizable,scrollbars,width=1241,height=707');
-                // $async.logSwitch(arguments);
-                return;
-              }
-              console.log(window.location.href);
-              goto();
-              // $async.logSwitch(arguments);
-              return;
-            }
+            console.log(window.location.href);
+            goto();
+            $async.logSwitch(arguments);
+            return;
+          }
+          if (gE('#btcp')) { // 在没有btcp时跳过，例如被Monsterbation、jpx等其他脚本移除时
             if (option.nativeNewRound) {
               onStepInDone();
               gE('#btcp').click();
-              // $async.logSwitch(arguments);
+              $async.logSwitch(arguments);
               return;
             }
             gE('#pane_completion').removeChild(gE('#btcp'));
-            ['#battle_right', '#battle_left'].forEach(selector => { gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); });
-            unsafeWindow.battle = undefined;
-            await loadUnsafeWindowBattle();
-            document.dispatchEvent(new Event('DOMContentLoaded'));
-            $debug.log('______________newRound', true);
-            newRound(true);
-            onStepInDone();
-            onBattleRound();
-            // $async.logSwitch(arguments);
-          } catch (err) { console.error(err) } }
-          // $async.logSwitch(arguments);
-        } catch (err) { console.error(err) } }
+          }
+          ['#battle_right', '#battle_left'].forEach(selector => { gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); });
+          unsafeWindow.battle = undefined;
+          await loadUnsafeWindowBattle();
+          document.dispatchEvent(new Event('DOMContentLoaded'));
+          newRound(true);
+          onStepInDone();
+          onBattleRound();
+          $async.logSwitch(arguments);
+        } catch (err) { console.error(err); }}
       };
       gE('body').appendChild(eventEnd);
 
-      window.sessionStorage.delay = g().option.delay;
-      window.sessionStorage.delay2 = g().option.delay2;
+      const option = g().option??{};
+      window.sessionStorage.delay = option.delay;
+      window.sessionStorage.delay2 = option.delay2;
       const fakeApiCall = cE('script');
       fakeApiCall.textContent = `api_call = ${function (b, a, d) {
-        const delay = window.sessionStorage.delay * 1;
+        let delay = window.sessionStorage.delay * 1;
         const delay2 = window.sessionStorage.delay2 * 1;
         window.info = a;
         unsafeWindow = typeof unsafeWindow === 'undefined' ? window : unsafeWindow;
@@ -5199,27 +5494,22 @@
           document.getElementById('eventEnd').click();
         };
         document.getElementById('eventStart').click();
-        if (a.mode === 'magic' && a.skill >= 200) {
-          if (delay <= 0) {
-            b.send(JSON.stringify(a));
-          } else {
-            setTimeout(() => {
-              b.send(JSON.stringify(a));
-            }, delay * (Math.random() * 50 + 50) / 100);
-          }
-        } else if (delay2 <= 0) {
+        if (a.mode !== 'magic' || a.skill < 200) {
+          delay = delay2;
+        }
+        if (delay <= 0) {
           b.send(JSON.stringify(a));
         } else {
           setTimeout(() => {
             b.send(JSON.stringify(a));
-          }, delay2 * (Math.random() * 50 + 50) / 100);
+          }, delay * (Math.random() * 50 + 50) / 100);
         }
       }.toString()};
       // bool
       const isIsekai = ${isIsekai};
-      const isDisplay = ${g().option.isDisplayAllDebuff};
-      const debuffAutoFill = ${g().option.debuffAutoFill?.toString() ?? 'undefined'};
-      const debuffAutoFillRec = ${g().option.debuffAutoFillRec?.toString() ?? 'undefined'};
+      const isDisplay = ${option.isDisplayAllDebuff};
+      const debuffAutoFill = ${option.debuffAutoFill?.toString() ?? 'undefined'};
+      const debuffAutoFillRec = ${option.debuffAutoFillRec?.toString() ?? 'undefined'};
       // string
       const current = "${current}";
       const other = "${other}";
@@ -5234,7 +5524,7 @@
       const hvVersion = ${JSON.stringify(hvVersion)};
       const monsterBuffSkillLib = ${JSON.stringify(monsterBuffSkillLib)};
       // funciton
-      ${[updateMonsterEffects,
+      ${[updateMonsterEffects, fixMonsterStatus,
          getMonsterID, getMonster, getMonster, getBuff,
          getValue, setValue, delValue,
          getLocal, setLocal, delLocal,
@@ -5264,10 +5554,16 @@
     }
 
     function updateMonsterEffects(isNewTurn=true) {
-      if (!(typeof GM_getValue === 'undefined' ? debuffAutoFill : g().option.debuffAutoFill)) return;
-      const battle = getValue('battle', true);
+      const option = typeof GM_getValue === 'undefined' ? {} : g().option??{};
+      if (!(typeof GM_getValue === 'undefined' ? debuffAutoFill : option.debuffAutoFill)) return;
+      let battle = getValue('battle', true);
       if (!battle?.monsterStatus) return;
-      let regExp = {
+      if (battle.monsterStatus.map(m=>getMonster(getMonsterID(m))).filter(mon=>mon===null).length) {
+        fixMonsterStatus();
+        battle = getValue('battle', true);
+      }
+
+      let regExp = updateMonsterEffects.prototype.regExp ??= {
         locationQueries: /\w+=\w+/g,
         playerInfo: /(\w+) Lv\.(\d+)/,
         staminaInfo: /Stamina:\s(\d+)/,
@@ -5530,7 +5826,7 @@
         let effects = Object.keys(effectObj);
 
         // DEBUG ---------------------
-        if (typeof GM_getValue === 'undefined' ? debuffAutoFillRec : g().option.debuffAutoFillRec) {
+        if (typeof GM_getValue === 'undefined' ? debuffAutoFillRec : option.debuffAutoFillRec) {
           // 统计持续时间及熟练度相关数据，以便进行核验和测试
           const rec = JSON.parse(localStorage.getItem(`hvAA-${current}_rec`) ?? `{}`);
           for (const effect of effects) {
@@ -5639,23 +5935,19 @@
     }
 
     async function loadUnsafeWindowBattle() { try {
-      while (!unsafeWindow.battle) {
-        await pauseAsync(300);
-        unsafeWindow.battle = new unsafeWindow.Battle();
-      }
+      unsafeWindow.battle = await until(()=>new unsafeWindow.Battle(), 300);
       unsafeWindow.battle.clear_infopane();
-    } catch(e) { console.error(e) }}
+    } catch (err) { console.error(err); }}
 
     function newRound(isNew) { // New Round
+      $debug.log('______________newRound', isNew);
+      const option = g().option??{};
       const token = document.documentElement.outerHTML.match(/var battle_token = "(.*)";/)[1];
       let battle = getValue('battle', true);
       const isSameBattle = battle?.token === token;
       const prof = getValue('proficiency', true);
       if (isNew) {
-        battle = {
-          proficiency: isSameBattle ? battle?.proficiency ?? prof : prof,
-          skillOTOS: {}
-        };
+        battle = { proficiency: isSameBattle ? battle?.proficiency ?? prof : prof };
       }
       if (!battle) {
         battle = JSON.parse(JSON.stringify(g().battle ?? {}));
@@ -5743,13 +6035,10 @@
             monsterDB[name].mid = mid;
             monsterDB[name][lv] = hp;
           }
-          monsterStatus[order] = {
-            order: order,
-            hp,
-          };
+          monsterStatus[order] = { order, hp };
           order++;
         }
-        if (g().option.cacheMonsterHP) {
+        if (option.cacheMonsterHP) {
           setValue('monsterDB', monsterDB);
           setValue('monsterMID', monsterMID);
         }
@@ -5815,15 +6104,14 @@
 
       const monsterBuff = gE(monsterStateKeys.buffs, 'all');
       const hpMin = Math.min.apply(null, hpArray);
-      const option = g().option;
+      const option = g().option??{};
       const yggdrasilExtraWeight = option.YggdrasilExtraWeight;
-      const unreachableWeight = option.unreachableWeight;
       const baseHpRatio = option.baseHpRatio;
       // 权重越小，优先级越高
       for (i = 0; i < monsterStatus.length; i++) { // 死亡的排在最后（优先级最低）
         const target = monsterStatus[i];
         if (target.isDead) {
-          target.finWeight = unreachableWeight;
+          target.finWeight = resolveRPNFormula(option.unreachableWeight, target);
           continue;
         }
         let weight = baseHpRatio * Math.log10(target.hpNow / hpMin); // > 0 生命越低权重越低优先级越高
@@ -5857,13 +6145,24 @@
         }
         monsterStatus[i].finWeight = weight;
       }
+
+      // 先存一次，用于下面的额外权重公式
+      monsterStatus.sort(objArrSort('finWeight'));
+      battle.monsterStatus = monsterStatus;
+      g('battle', battle);
+
+      // 额外权重公式
+      for (let i = 0; i < battle.monsterStatus.length; i++) {
+        const target = battle.monsterStatus[i];
+        target.finWeight += resolveRPNFormula(option.extraWeightFormula, target);
+      }
       monsterStatus.sort(objArrSort('finWeight'));
       battle.monsterStatus = monsterStatus;
       g('battle', battle);
     }
 
     function autoRecover(isCureOnly) { // 自动回血回魔
-      const option = g().option;
+      const option = g().option??{};
       if (!option.item) {
         return false;
       }
@@ -5876,6 +6175,7 @@
           continue;
         }
         if (option.item[name[i]] && checkCondition(option[`item${name[i]}Condition`]) && isOn(id)) {
+          updateSkillOTOS(id);
           (gE(`.bti3>div[onmouseover*="(${id})"]`) ?? gE(id)).click();
           return true;
         }
@@ -5884,7 +6184,7 @@
     }
 
     function useScroll() { // 自动使用卷轴
-      const option = g().option;
+      const option = g().option??{};
       if (!option.scrollSwitch) {
         return false;
       }
@@ -5900,7 +6200,7 @@
       if (!checkCondition(option.scrollCondition)) {
         return false;
       }
-      const scrollLib = {
+      const scrollLib = useScroll.prototype.scrollLib ??= {
         Go: {
           name: 'Scroll of the Gods',
           id: 13299,
@@ -5952,7 +6252,8 @@
         if (!option.scroll[i]) {
           continue;
         }
-        if (!gE(`.bti3>div[onmouseover*="(${scrollLib[i].id})"]`)) {
+        const id = scrollLib[i].id;
+        if (!gE(`.bti3>div[onmouseover*="(${id})"]`)) {
           continue;
         }
         if (!checkCondition(option[`scroll${i}Condition`])) {
@@ -5962,7 +6263,8 @@
           if (getBuff(scrollLib[i][`img${j}`] + scrollFirst)) {
             continue;
           }
-          gE(`.bti3>div[onmouseover*="(${scrollLib[i].id})"]`).click();
+          updateSkillOTOS(id);
+          gE(`.bti3>div[onmouseover*="(${id})"]`).click();
           return true;
         }
       }
@@ -5970,7 +6272,7 @@
     }
 
     function useChannelSkill() { // 自动施法Channel技能
-      const option = g().option;
+      const option = g().option??{};
       if (!option.channelSkillSwitch) {
         return false;
       }
@@ -5982,12 +6284,15 @@
       if (option.channelSkill) {
         const skillPack = splitOrders(option.buffSkillOrderValue, ['SS', 'SL', 'Pr', 'Ab', 'SV', 'Re', 'Ha', 'He', 'AF']);
         for (const buff of skillPack) {
-          const current = getBuffTurnFromImg(getBuff(playerBuffSkillLib[buff].img));
+          const buffObj = getBuff(playerBuffSkillLib[buff].img);
+          const current = getBuffTurnFromImg(buffObj);
           const threshold = option.channelThreshold ? option.channelThreshold[buff] : 0;
           if (threshold > 0 && current >= threshold) continue;
-          if (!option.channelSkill[buff] || getBuff(playerBuffSkillLib[buff].img)) continue;
-          if (!isOn(playerBuffSkillLib[buff].id)) continue;
-          gE(playerBuffSkillLib[buff].id).click();
+          if (!option.channelSkill[buff] || buffObj) continue;
+          const id = playerBuffSkillLib[buff].id;
+          if (!isOn(id)) continue;
+          updateSkillOTOS(id);
+          gE(id).click();
           return true;
         }
       }
@@ -6001,6 +6306,7 @@
             if (threshold > 0 && current > threshold) continue;
           }
           if (!isOn(id)) continue;
+          updateSkillOTOS(id);
           gE(id).click();
           return true;
         }
@@ -6008,12 +6314,13 @@
       if (option.channelRebuff) {
         let minBuff, minTime;
         for (const buff in playerBuffSkillLib) {
-          let current = getBuffTurnFromImg(getBuff(playerBuffSkillLib[buff].img));
+          const buffObj = getBuff(playerBuffSkillLib[buff].img);
+          let current = getBuffTurnFromImg(buffObj);
           const threshold = option.channelThreshold ? option.channelThreshold[buff] : 0;
           if (threshold > 0 && current > threshold) continue;
 
           current = isNaN(current) ? 0 : current;
-          if (getBuff(playerBuffSkillLib[buff].img)?.src.match(/_scroll.png$/) || (minTime && current >= minTime)) {
+          if (buffObj?.src.match(/_scroll.png$/) || (minTime && current >= minTime)) {
             continue;
           }
           if (!current && (!option.buffSkillSwitch || !option.buffSkill[buff])) continue;
@@ -6023,7 +6330,8 @@
           minBuff = id;
           minTime = current;
         }
-        if (minBuff) {
+        if (minBuff && gE(minBuff)) {
+          updateSkillOTOS(minBuff);
           gE(minBuff).click();
           return true;
         }
@@ -6032,7 +6340,7 @@
     }
 
     function useBuffSkill() { // 自动施法BUFF技能
-      const option = g().option;
+      const option = g().option??{};
       if (!option.buffSkillSwitch) {
         return false;
       }
@@ -6047,16 +6355,18 @@
       for (i = 0; i < skillPack.length; i++) {
         let buff = skillPack[i];
         if (!option.buffSkill[buff]) continue;
-        if (!isOn(playerBuffSkillLib[buff].id)) continue;
+        const id = playerBuffSkillLib[buff].id;
+        if (!isOn(id)) continue;
         if (!checkCondition(option[`buffSkill${buff}Condition`])) continue;
         const current = getBuffTurnFromImg(getBuff(playerBuffSkillLib[buff].img));
         const threshold = option.buffSkillThreshold ? option.buffSkillThreshold[buff] : 0;
         if (threshold >= 0 && current > threshold) continue;
-        gE(playerBuffSkillLib[buff].id).click();
+        updateSkillOTOS(id);
+        gE(id).click();
         return true;
       }
 
-      const draughtPack = {
+      const draughtPack = useBuffSkill.prototype.draughtPack ??= {
         HD: {
           id: 11191,
           img: 'healthpot',
@@ -6079,8 +6389,10 @@
         },
       };
       for (i in draughtPack) {
-        if (!getBuff(draughtPack[i].img) && option.buffSkill && option.buffSkill[i] && checkCondition(option[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`)) {
-          gE(`.bti3>div[onmouseover*="(${draughtPack[i].id})"]`).click();
+        const id = draughtPack[i].id;
+        if (!getBuff(draughtPack[i].img) && option.buffSkill && option.buffSkill[i] && checkCondition(option[`buffSkill${i}Condition`]) && gE(`.bti3>div[onmouseover*="(${id})"]`)) {
+          updateSkillOTOS(id);
+          gE(`.bti3>div[onmouseover*="(${id})"]`).click();
           return true;
         }
       }
@@ -6088,7 +6400,7 @@
     }
 
     function useInfusions() { // 自动使用魔药
-      const option = g().option;
+      const option = g().option??{};
       if (!option.infusionSwitch) return false;
       if (!checkCondition(option.infusionCondition)) {
         return false;
@@ -6098,10 +6410,11 @@
         if (getBuff(infusionLib[status].img)) return false;
         const itemBtn = gE(`.bti3>div[onmouseover*="(${infusionLib[status].id})"]`);
         if (!itemBtn) return false;
+        updateSkillOTOS(infusionLib[status].id);
         itemBtn.click();
         return true;
       }
-      const infusionLib = [ null, {
+      const infusionLib = useInfusions.prototype.infusionLib ??= [ null, {
         id: 12101,
         img: 'fireinfusion',
         name: 'Flames',
@@ -6145,8 +6458,9 @@
     }
 
     function autoFocus() {
-      const option = g().option;
+      const option = g().option??{};
       if (option.focus && checkCondition(option.focusCondition)) {
+        updateSkillOTOS('focus');
         gE('#ckey_focus').click();
         return true;
       }
@@ -6159,12 +6473,13 @@
       if (spValue <= 1) {
         return false;
       }
-      const option = g().option;
+      const option = g().option??{};
       const enabled = gE('#ckey_spirit[src*="spirit_a"]');
       if (
         (!isDisableOnly && option.turnOnSS && checkCondition(option.turnOnSSCondition) && !enabled)
         || (option.turnOffSS && checkCondition(option.turnOffSSCondition) && enabled)
       ) {
+        updateSkillOTOS(enabled ? 'spiritoff' : 'spiriton');
         gE('#ckey_spirit').click();
         return true;
       }
@@ -6185,15 +6500,12 @@
          * 优先释放先天和武器技能
          */
     function autoSkill() {
-      const option = g().option;
-      if (!option.skillSwitch) {
+      const option = g().option??{};
+      if (!option.skillSwitch) return false;
+      if (!option.skill) return false;
+      if (option.skillSSOnly && !gE('#ckey_spirit[src*="spirit_a"]')) {
         return false;
       }
-      // if (!gE('#ckey_spirit[src*="spirit_a"]')) {
-      //   return false;
-      // }
-      if (!option.skill) return false;
-
       const skillOrder = splitOrders(option.skillOrderValue, ['OFC', 'FRD', 'T3', 'T2', 'T1']);
       const fightStyle = g().fightingStyle; // 1二天 2单手 3双手 4双持 5法杖
       const skillLib = {
@@ -6203,7 +6515,7 @@
         T2: fightStyle ? `2${fightStyle}02`*1 : undefined,
         T1: fightStyle ? `2${fightStyle}01`*1 : undefined,
       };
-      const skillInfos = {
+      const skillInfos = autoSkill.prototype.skillInfos ??= {
         1101: { oc: 4, range: 10 },
         1111: { oc: 8, range: 10 },
         2101: { oc: 4, range: 5 },
@@ -6211,7 +6523,7 @@
         2203: { oc: 4, },
         2302: { range: 5 },
         2303: { range: 5 },
-        2403: { oc: 3, }
+        2403: { oc: 3, range: 5 },
       }
       const monsterStatus = g().battle.monsterStatus;
       for (let i in skillOrder) {
@@ -6231,14 +6543,12 @@
         if (option.skillOTOS && option.skillOTOS[skill] && skillOTOS[skill] >= 1) {
           continue;
         }
-        skillOTOS[skill]++;
-        setValue('skillOTOS', skillOTOS);
         let target = checkCondition(option[`skill${skill}Condition`], monsterStatus);
         if (!target) {
           continue;
         }
+        updateSkillOTOS(skill, skillOTOS);
         gE(id).click();
-
         clickMonster(getRangeCenter(target, skillInfos[id]?.range ?? 1).id);
         return true;
       }
@@ -6246,7 +6556,7 @@
     }
 
     function useDeSkill() { // 自动施法DEBUFF技能
-      const option = g().option;
+      const option = g().option??{};
       const monsterStatus = g().battle.monsterStatus;
       if (!option.debuffSkillSwitch || !checkCondition(option.debuffSkillCondition, monsterStatus)) { // 总开关是否开启
         return false;
@@ -6306,9 +6616,8 @@
         break;
       }
       // 获取目标
-      const option = g().option;
-      // TODO TBD 权重倍率 额外结合剩余turns数
-      const excludedRatio = 0.9
+      const option = g().option??{};
+      const excludedWeight = target => resolveRPNFormula(option.excludedWeightFormula[buff], target);
       let exclusiveBuffs;
       if (isAll && option.debuffAllExclusive) {
         exclusiveBuffs = Object.keys(option.debuffAllExclusive);
@@ -6321,7 +6630,7 @@
           return threshold >= 0 && current > threshold;
         }
         for (const exclusive of exclusiveBuffs) {
-          if (isDebuffed(target, exclusive)) return excludedRatio;
+          if (isDebuffed(target, exclusive)) return excludedWeight(target);
         }
         return 0;
       };
@@ -6336,7 +6645,7 @@
       let id;
       let minWeight = Number.MAX_SAFE_INTEGER;
       const condition = option[`debuffSkill${buff}${isAll ? 'All' : ''}Condition`];
-      const excludeCondition = target => checkCondition(condition, [target]) ? isDebuffed(target) : excludedRatio;
+      const excludeCondition = target => checkCondition(condition, [target]) ? isDebuffed(target) : excludedWeight(target);
       for (let i = 0; i < max; i++) {
         let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || buff === 'Si' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
         target = checkCondition(condition, [target]);
@@ -6373,6 +6682,7 @@
             return false;
         }
       }
+      updateSkillOTOS(skill.id);
       gE(skill.id).click();
       clickMonster(id);
       return true;
@@ -6389,7 +6699,7 @@
 
     function attack(selectStatusOnly=false) { // 自动打怪
       let range = g().fightingStyle === '1' ? 3 : 1;
-      const option = g().option;
+      const option = g().option??{};
       const monsters = g().battle.monsterStatus;
       let attackStatusOrder = option.attackStatusOrderValue?.split(',').map(x=>x*1) ?? [];
       attackStatusOrder = attackStatusOrder.concat([0,6,5,1,2,4,3].filter(x=> !(attackStatusOrder.includes(x))));
@@ -6409,7 +6719,7 @@
     }
 
     function onAttack(range, attackStatus, selectStatusOnly=false) {
-      const updateAbility = {
+      const updateAbility = onAttack.prototype.updateAbility ??= {
         4301: { //火
           111: [3, 4, 4, 5, 5, 5, 5, 5],
           112: [4, 4, 6, 6, 6, 6, 7, 7],
@@ -6448,7 +6758,7 @@
       // 使用物理普通攻击，跳过Offensive Magic
       // 否则按照属性攻击模式释放Spell > Offensive Magic
 
-      const option = g().option;
+      const option = g().option??{};
       const monsters = g().battle.monsterStatus;
       let target = monsters[0];
       const tryAttack = (skill) => {
@@ -6458,8 +6768,9 @@
         if (selectStatusOnly) {
           return true;
         }
-        if (skill) {
-          gE(skill)?.click();
+        if (skill && gE(skill)) {
+          updateSkillOTOS(skill);
+          gE(skill).click();
         }
         clickMonster(getRangeCenter(target, range, !attackStatus).id);
         return true;
@@ -6503,11 +6814,14 @@
       if (!tryAttack(skill)) {
         return false;
       }
-      const skillOTOS = getValue('skillOTOS', true) ?? {};
-      skillOTOS[skill] ??= 0;
-      skillOTOS[skill]++;
-      setValue('skillOTOS', skillOTOS);
       return true;
+    }
+
+    function updateSkillOTOS(id, skillOTOS) {
+      skillOTOS ??= getValue('skillOTOS', true) ?? {};
+      skillOTOS[id] ??= 0;
+      skillOTOS[id]++;
+      return setValue('skillOTOS', skillOTOS);
     }
 
     function getHPFromMonsterDB(mdb, name, lv) {
@@ -6548,7 +6862,8 @@
       const sec = Math.max(1, weights.length - 1);
       const max = 360 * 2 / 3;
       const colorTextList = [];
-      const weightBG = g().option.weightBackground
+      const option = g().option??{};
+      const weightBG = option.weightBackground;
       if (weightBG) {
         status.forEach(s => {
           const rank = weights.indexOf(s.finWeight);
@@ -6562,7 +6877,7 @@
         if (!getMonster(id) || !gE(monsterStateKeys.name, getMonster(id))) {
           return;
         }
-        if (g().option.displayWeightBackground && weightBG) {
+        if (option.displayWeightBackground && weightBG) {
           let colorText = colorTextList[rank];
           let remainAttemp = 10; // 避免无穷递归
           while (remainAttemp > 0 && colorText && colorText.indexOf(`<style_`) !== -1) {
@@ -6578,7 +6893,7 @@
           getMonster(id).style.cssText += `background: ${colorText};`;
         }
         gE(monsterStateKeys.name, getMonster(id)).style.cssText += 'display: flex; flex-direction: row;'
-        if (g().option.displayWeight) {
+        if (option.displayWeight) {
           gE(monsterStateKeys.name, getMonster(id)).innerHTML += `<div style='font-weight: bolder; right:0px; position: absolute;'>[${rank}|-${-rank + weights.length - 1}|${s.finWeight.toPrecision(s.finWeight >= 1 ? 5 : 4)}]</div>`;
         }
       });
@@ -6625,6 +6940,7 @@
         '#EXP': 0,
         '#Credit': 0,
       };
+      const option = g().option??{};
       let item, name, amount, regexp;
       for (let i = 0; i < battleLog.length; i++) {
         if (/^You gain \d+ (EXP|Credit)/.test(battleLog[i].textContent)) {
@@ -6637,7 +6953,7 @@
           name = item.textContent.match(/^\[(.*?)\]$/)[1];
           if (item.style.color === 'rgb(255, 0, 0)') {
             const quality = ['Crude', 'Fair', 'Average', 'Superior', 'Exquisite', 'Magnificent', 'Legendary', 'Peerless'];
-            for (let j = g().option.dropQuality; j < quality.length; j++) {
+            for (let j = option.dropQuality; j < quality.length; j++) {
               if (name.match(quality[j])) {
                 name = `Equipment of ${name.match(/^\w+/)[0]}`;
                 drop[name] = (name in drop) ? drop[name] + 1 : 1;
@@ -6664,7 +6980,7 @@
         }
       }
       const battle = g().battle;
-      if (g().option.recordEach && battle.roundNow === battle.roundAll) {
+      if (option.recordEach && battle.roundNow === battle.roundAll) {
         const old = getValue('dropOld', true) || [];
         drop.__name = getValue('battleCode', true).name;
         drop['#endTime'] = time(3);
@@ -6696,7 +7012,7 @@
     }
 
     function recordUsage(parm) {
-      const filter = g().option.record;
+      const filter = g().option?.record;
       if (!filter) {
         return;
       }
@@ -6891,7 +7207,8 @@
     }
 
     function recordUsage2() {
-      const filter = g().option.record;
+      const option = g().option??{};
+      const filter = option.record;
       if (!filter) {
         return;
       }
@@ -6903,7 +7220,7 @@
         stats.self._boss += g().bossAll;
       }
       const battle = g().battle;
-      if (g().option.recordEach && battle.roundNow === battle.roundAll) {
+      if (option.recordEach && battle.roundNow === battle.roundAll) {
         const old = getValue('statsOld', true) || [];
         stats.__name = getValue('battleCode', true).name;
         stats.self._endTime = time(3);
