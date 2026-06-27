@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.91.3
+// @version      2.91.26
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -49,8 +49,8 @@
     let ability = getValue('ability', true)??{};
     let lastResponsive = new Date().getTime();
 
-    const scriptVersion = '2.91';
-    let hvVersion;
+    const scriptVersion = Version(GM_info ? GM_info.script.version : '2.91');
+    let hvVersion = Version(gE('script[src*="hvc.js"]', document)?.src.match(/z\/(\d+)(.*)\/hvc.js/)?.slice(1,2));
 
     const _1s = 1000;
     const _1m = 60 * _1s;
@@ -67,10 +67,10 @@
     ];
     const monsterStateKeys = { obj: `div.btm1`, lv: `div.btm2`, name: `div.btm3`, bars: `div.btm4>div.btm5`, buffs: `div.btm6` };
     let monsterBuffSkillLib;
-    const setMonsterBuffSkillLib = (hvVersion) => { return {
+    const setMonsterBuffSkillLib = () => { return {
       // debuff skill ------------
       We: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 345], // ???
+        proficiency: ['Deprecating', 0, 345], // ???
         buff: 'Weakened',
         name: 'Weaken',
         img: 'weaken',
@@ -81,7 +81,7 @@
         description: "'The target has been weakened, making it deal less damage, and preventing it from scoring critical hits.'"
       },
       Im: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 30, 495], // ???
+        proficiency: ['Deprecating', 30, 495], // ???
         buff: 'Imperiled',
         name: 'Imperil',
         img: 'imperil',
@@ -89,10 +89,10 @@
         range: { 4204: [1, 1, 2, 3] },
         duration: { 4203: [10,11,12,13,14,15] },
         channeling: true,
-        description: hvVersion < 91 ? "'The target has been imperiled, reducing physical and magical mitigation as well as elemental mitigations.'" : "'The target has been imperiled, reducing physical and magical mitigation as well as elemental mitigation.'"
+        description: "'The target has been imperiled, reducing physical and magical mitigation as well as elemental mitigation.'"
       },
       Bl: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 30, 610], // ???
+        proficiency: ['Deprecating', 30, 610], // ???
         buff: 'Blinded',
         name: 'Blind',
         img: 'blind',
@@ -103,7 +103,7 @@
         description: "'The target has been blinded, reducing the chance of landing attacks and hitting with magic spells.'"
       },
       Sle: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 410], // ???
+        proficiency: ['Deprecating', 0, 410], // ???
         buff: 'Asleep',
         name: 'Sleep',
         img: 'sleep',
@@ -114,7 +114,7 @@
         description: "'The target has been lulled to sleep, preventing it from taking any actions. Any attacks against this target are guaranteed to hit, but can also wake it up.'"
       },
       Co: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 45, 620], // ???
+        proficiency: ['Deprecating', 45, 620], // ???
         buff: 'Confused',
         name: 'Confuse',
         img: 'confuse',
@@ -125,7 +125,7 @@
         description: "'The target has been confused, making it lunge out wildly and strike friends and foes alike.'"
       },
       Si: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 40, 600], // ???
+        proficiency: ['Deprecating', 40, 600], // ???
         buff: 'Silenced',
         name: 'Silence',
         img: 'silence',
@@ -136,18 +136,18 @@
         description: "'The target has been silenced, preventing it from using special attacks and magic.'"
       },
       MN: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 100, 700], // ???
-        buff: hvVersion < 91 ? 'Magically Snared' : 'Immobilized',
-        name: 'MagNet',
+        proficiency: ['Deprecating', 100, 700], // ???
+        buff: 'Immobilized',
+        name: 'Immobilize',
         img: 'magnet',
         id: '233',
         range: { 4212: [1, 1, 1, 2, 2, 3] },
         duration: { 4212: [10,11,12,13,14,15] },
         channeling: true,
-        description: hvVersion < 91 ? "'The target has been hit with a magic net, eliminating its chance to evade or resist attacks.'" : "'The target has been immobilized, eliminating its chance to evade and reducing its magic resistance.'"
+        description: "'The target has been immobilized, eliminating its chance to evade and reducing its magic resistance.'"
       },
       Slo: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 300], // ???
+        proficiency: ['Deprecating', 0, 300], // ???
         buff: 'Slowed',
         name: 'Slow',
         img: 'slow',
@@ -159,32 +159,32 @@
       },
       // debuff skills not checked ------------ ??
       Dr: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 300], // ???
+        proficiency: ['Deprecating', 0, 300], // ???
         buff: 'Vital Theft',
         name: 'Drain',
         img: 'drainhp',
         id: '211',
         duration: 10,
         channeling: true,
-        description: hvVersion < 91 ? "'Siphons off the target\'s life essence over time. This causes a damage-over-time effect, and returns a small amount of health to the player.'" : "'Siphons off the target\\'s life essence over time, and gives it to the player.'"
+        description: "'Siphons off the target\\'s life essence over time, and gives it to the player.'"
       },
       ET: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 300], // ???
+        proficiency: ['Deprecating', 0, 300], // ???
         name: 'Ether Theft',
         img: 'drainmp',
         duration: 10, // ??
-        description: hvVersion < 91 ? "'Siphons off the target\'s mana over time. This returns a small amount of mana to the player.'" : "'Siphons off the target\\'s mana over time, and gives it to the player.'"
+        description: "'Siphons off the target\\'s mana over time, and gives it to the player.'"
       },
       ST: {
-        proficiency: [hvVersion < 91 ? 'deprecating' : 'Deprecating', 0, 300], // ???
+        proficiency: ['Deprecating', 0, 300], // ???
         name: 'Spirit Theft',
         img: 'drainsp',
         duration: 10, // ??
-        description: hvVersion < 91 ? "'Siphons off the target\'s spirit over time. This returns a small amount of spirit to the player.'" : "'Siphons off the target\\'s spirit over time, and gives it to the player.'"
+        description: "'Siphons off the target\\'s spirit over time, and gives it to the player.'"
       },
       // elem attack debuff ------------ ??
       SS: {
-        proficiency: [hvVersion < 91 ? 'elemental' : 'Elemental', 0, 800], // ???
+        proficiency: ['Elemental', 0, 800], // ???
         name: 'Searing Skin',
         img: 'firedot',
         elem: 2,
@@ -193,7 +193,7 @@
         description: "'The skin of the target has been scorched, inhibiting its attack damage. Cold resistance is lowered.'"
       },
       FL: {
-        proficiency: [hvVersion < 91 ? 'elemental' : 'Elemental', 0, 800], // ???
+        proficiency: ['Elemental', 0, 800], // ???
         name: 'Freezing Limbs',
         img: 'coldslow',
         elem: 1,
@@ -202,7 +202,7 @@
         description: "'The limbs of the target have been frozen, causing slower movement. Wind resistance is lowered.'"
       },
       TA: {
-        proficiency: [hvVersion < 91 ? 'elemental' : 'Elemental', 0, 800], // ???
+        proficiency: ['Elemental', 0, 800], // ???
         name: 'Turbulent Air',
         img: 'windmiss',
         elem: 4,
@@ -211,7 +211,7 @@
         description: "'The air around the target has been upset, blowing up dust and increasing its miss chance. Elec resistance is lowered.'"
       },
       DB: {
-        proficiency: [hvVersion < 91 ? 'elemental' : 'Elemental', 0, 800], // ???
+        proficiency: ['Elemental', 0, 800], // ???
         name: 'Deep Burns',
         img: 'elecweak',
         elem: 3,
@@ -220,7 +220,7 @@
         description: "'Internal damage causes slower reactions and lowers evade and resist chance. Fire resistance is lowered.'"
       },
       BD: {
-        proficiency: [hvVersion < 91 ? 'forbidden' : 'Forbidden', 0, 800], // ???
+        proficiency: ['Forbidden', 0, 800], // ???
         name: 'Breached Defense',
         img: 'holybreach',
         elem: 6,
@@ -229,7 +229,7 @@
         description: "'The holy attack has penetrated the target defenses, making it take more damage. Dark resistance is lowered.'"
       },
       BA: {
-        proficiency: [hvVersion < 91 ? 'divine' : 'Divine', 0, 800], // ???
+        proficiency: ['Divine', 0, 800], // ???
         name: 'Blunted Attack',
         img: 'darknerf',
         elem: 5,
@@ -238,7 +238,7 @@
         description: "'The decaying effects of the spell has blunted the target offenses, making it deal less damage. Holy resistance is lowered.'"
       },
       BS: {
-        proficiency: [hvVersion < 91 ? 'divine' : 'Divine', 0, 800], // ???
+        proficiency: ['Divine', 0, 800], // ???
         name: 'Burning Soul',
         img: 'soulfire',
         duration: 7,
@@ -246,7 +246,7 @@
         description: "'The life essence of the target has been set ablaze, damaging its physical form over time.'"
       },
       RS: {
-        proficiency: [hvVersion < 91 ? 'forbidden' : 'Forbidden', 0, 800], // ???
+        proficiency: ['Forbidden', 0, 800], // ???
         name: 'Ripened Soul',
         img: 'ripesoul',
         duration: 7,
@@ -264,7 +264,7 @@
         name: 'Bleeding Wound',
         img: 'wpn_bleed',
         duration: 7,
-        description: hvVersion < 91 ? "'A gashing wound is making this target take damage over time.'" : "'Gashing wounds are making this target take damage over time.'"
+        description: "'Gashing wounds are making this target take damage over time.'"
       },
       Stun: {
         name: 'Stunned',
@@ -295,26 +295,26 @@
       FoS: {
         name: 'Fury of the Sisters',
         img: 'trio_furyofthesisters',
-        duration: hvVersion < 91 ? 777 :'permanent',
-        description: hvVersion < 91 ? "'The destruction of the world tree has infuriated its defenders, increasing their hit and crit chances.'" : "'The destruction of the world tree has infuriated its defenders, increasing their accuracy.'"
+        duration: 'permanent',
+        description: "'The destruction of the world tree has infuriated its defenders, increasing their accuracy.'"
       },
       LoF: {
         name: 'Lamentations of the Future',
         img: 'trio_skuld',
-        duration: hvVersion < 91 ? 777 :'permanent',
+        duration: 'permanent',
         description: "'The destruction of the future has increased the attack power of her allies.'"
       },
       SoP: {
         name: 'Screams of the Past',
         img: 'trio_urd',
-        duration: hvVersion < 91 ? 777 :'permanent',
+        duration: 'permanent',
         description: "'The destruction of the past has increased the defensive power of her allies.'"
       },
       WoP: {
         buff: 'Wails of the Present',
         name: 'Wailings of the Present',
         img: 'trio_verdandi',
-        duration: hvVersion < 91 ? 777 :'permanent',
+        duration: 'permanent',
         description: "'The destruction the present has increased the attack speed of her allies.'"
       },
     } };
@@ -411,10 +411,10 @@
         multiCharOperators: ['>=', '<=', '==', '!=', '&&', '||', '**'],
 
         test: {
-          isNumber: str=>/[0-9]/.test(str),
-          number: str=>/[.0-9]/.test(str),
-          isParam: str=>/[a-zA-Z_'",{}#]/.test(str),
-          param: str=>/[.a-zA-Z_'",{}#^~0-9]/.test(str),
+          isNumber: str => /[0-9]/.test(str),
+          number: str => /[.0-9]/.test(str),
+          isParam: str => /[a-zA-Z_'",{}#]/.test(str),
+          param: str => /[.a-zA-Z_'",{}#^~0-9]/.test(str),
         },
 
         isOperator: function (token) {
@@ -747,11 +747,11 @@
           function ontimer() {
             const now = new Date().getTime();
             const last = $ajax.getLast();
-            if (last && now - last >= $ajax.interval) {
+            if (!last || now - last >= $ajax.interval) {
               $ajax.next();
+              $ajax.setLast(now);
               return;
             }
-            $ajax.setLast(now);
             $ajax.tid = null;
             $ajax.next();
           };
@@ -779,14 +779,14 @@
           const text = r.responseText;
           if (r.status !== 200) {
             $ajax.error = `${r.status} ${r.statusText}: ${r.finalUrl}`;
-            r.context.onerror?.();
+            r.context.onerror?.(new Error($ajax.error));
           } else if (text === 'state lock limiter in effect') {
             if ($ajax.error !== text) {
               popup(`<p style="color: #f00; font-weight: bold;">${text}</p><p>Your connection speed is so fast that <br>you have reached the maximum connection limit.</p><p>Try again later.</p>`);
               console.error(`${text}\nYour connection speed is so fast that you have reached the maximum connection limit. Try again later.`);
             }
             $ajax.error = text;
-            r.context.onerror?.();
+            r.context.onerror?.(new Error($ajax.error));
           } else {
             r.context.onload?.(text);
             $ajax.next();
@@ -795,7 +795,7 @@
         onerror: function (r) {
           $ajax.conn--;
           $ajax.error = `${r.status} ${r.statusText}: ${r.finalUrl}`;
-          r.context.onerror?.();
+          r.context.onerror?.(new Error($ajax.error));
           $ajax.next();
         },
       };
@@ -828,22 +828,25 @@
       if (window.location.host !== 'e-hentai.org') {
         if (isMaintaining) {
           // 维护中? 过一个小时再刷新
-          (async function onwait() {
-            let remain = _1h;
+          (async function onwait() { try {
+            const body = document.body;
+            const blockTip = /Blocking requests for (\d+) seconds due to excessive request rate/;
+            let blocked = body.innerText?.match(blockTip)?.[1]*1;
+            let remain = isNaN(blocked) ? _1h/_1s : blocked;
             await until(() => {
-              document.title = `[M]${pad(Math.floor(remain/_1m))}:${pad(Math.floor((remain%_1m)/_1s))}`;
-              remain-=_1s;
+              document.title = `[M]${pad(Math.floor(remain/(_1m/_1s)))}:${pad(Math.floor(remain%(_1m/_1s)))}`;
+              try { if (!isNaN(blocked)) {
+                body.innerText = body.innerText.replace(blockTip, (...args) => args[0].replace(args[1], remain));
+              } } catch (err) { console.log(err) };
+              remain-=1;
               return remain <= 0;
             }, _1s);
             goto();
-          })();
+          } catch (err) { console.error(err)} })();
           return true;
         }
         setValue('url', window.location.origin);
-        const hvver = gE('script[src*="hvc.js"]', document).src.match(/z\/(\d+)(.*)\/hvc.js/);
-        hvVersion = hvver[1] * 1;
-        hvVersion.sub = hvver[2];
-        monsterBuffSkillLib = setMonsterBuffSkillLib(hvVersion);
+        monsterBuffSkillLib = setMonsterBuffSkillLib();
 
         // 补充记录（因写入冲突、网络卡顿等）未被记录的encounter链接
         if (window.location.href.indexOf(`?s=Battle&ss=ba`) !== -1) {
@@ -956,7 +959,7 @@
       // if no answer selected
       const answers = ['aj', 'fs', 'pp', 'ra', 'rd', 'ts'];
       answers.sort(Math.random);
-      const answer = `riddlesubmit=Submit+Answer` + answers.slice(0, Math.max(0, Math.min(6, option.riddleAnswerChoose))).map(ans=>`&riddleanswer[]=${ans}`).join('');
+      const answer = `riddlesubmit=Submit+Answer` + answers.slice(0, Math.max(0, Math.min(6, option.riddleAnswerChoose))).map(ans => `&riddleanswer[]=${ans}`).join('');
       const battle = gE('#battle_main', $doc(await $ajax.fetch(window.location.href, answer)));
       if (!battle) {
         console.error('ERROR: Failed fetch submit.');
@@ -997,7 +1000,7 @@
         return false;
       }
 
-      if (gE('#riddlecounter') || gE('#battle_main')) {
+      if (gE('#riddlecounter,#battle_main')) {
         if (!window.top.location.href.endsWith(`?s=Battle`)) {
           setValue('lastUrl', window.top.location.href);
         }
@@ -1033,7 +1036,7 @@
     } catch (err) { console.error('Opener reload or popup close failed:', err) } }
 
     function checkOption() {
-      g('version', GM_info ? GM_info.script.version : scriptVersion);
+      g('version', scriptVersion);
       if (!getValue('option')) {
         g('lang', window.prompt('请输入以下语言代码对应的数字\nPlease put in the number of your preferred language (0, 1 or 2)\n0.简体中文\n1.繁體中文\n2.English', 0) || 2);
         addStyle();
@@ -1041,15 +1044,20 @@
         gE('.hvAAButton').click();
         return false;
       }
-      loadOption();
-      writePortables();
 
-      const option = g().option??{};
+      let option = loadOption();
+      if (isFrame) {
+        g('option', option);
+      } else {
+        g('option', setValue('option', option));
+      }
+      writePortables();
+      option = g().option??{};
       g('lang', option.lang || '0');
       addStyle();
 
       // README等合并到主分支后再取消掉注释
-      // if (option.version.substr(0, 4) !== g().version.substr(0, 4)) {
+      // if (option.version.substr(0, 4) !== scriptVersion.ver.substr(0, 4)) {
       //   gE('.hvAAButton').click();
       //   if (_alert(1, 'hvAutoAttack版本更新，请重新设置\n强烈推荐【重置设置】后再设置。\n是否查看更新说明？', 'hvAutoAttack版本更新，請重新設置\n強烈推薦【重置設置】後再設置。\n是否查看更新說明？', 'hvAutoAttack version update, please reset\nIt\'s recommended to reset all configuration.\nDo you want to read the changelog?')) {
       //     $ajax.openNoFetch('https://github.com/dodying/UserJs/commits/master/HentaiVerse/hvAutoAttack/hvAutoAttack.user.js', true);
@@ -1069,7 +1077,7 @@
       const option = g().option??{};
       if (!option.portable) return;
       for (const key of portable) {
-        if (!(Object.keys(option.portable).includes)) continue;
+        if (!(Object.keys(option.portable).includes(key))) continue;
         setValue(key, getValue(key), true);
       }
     }
@@ -1174,15 +1182,34 @@
       return newArr;
     }
 
-    function splitOrders(orderValue, defaultOrder) {
-      const order = orderValue?.split(',') ?? [];
-      return unique(order.concat(defaultOrder ?? []));
+    function object2Order(orderValue, ...args) {
+      switch (typeof orderValue) {
+        case 'string':
+          return orderValue?.split(',') ?? [];
+        case 'number':
+        case 'boolean':
+          return [orderValue];
+        case 'function':
+          return object2Order(orderValue(...args));
+        case 'object':
+        case 'undefined':
+          if (!orderValue) return []; // null or undefined
+          if (Array.isArray(orderValue)) return orderValue;
+          break;
+        default:
+          break;
+      }
+      throw new Error('Unsupported typeof orderValue:', orderValue, typeof orderValue);
+    }
+
+    function splitOrders(orderValue, defaultOrder, ...args) {
+      return unique(object2Order(orderValue, ...args).concat(defaultOrder ?? []).map(v=>isNaN(v*1)?v:v*1));
     }
 
     function goto() { // 前进
       window.location.href = window.location.search ? window.location.pathname + window.location.search : window.location.href;
       setTimeout(goto, 5000);
-      setTimeout(()=>{ window.location.href = window.location.href }, 10000);
+      setTimeout(() => { window.location.href = window.location.href }, 10000);
       return true;
     }
 
@@ -1211,7 +1238,7 @@
     } catch (err) { console.error(err); }}
 
     async function waitPause(ms) { try {
-      return await until(()=>!getValue('disabled'), ms);
+      return await until(() => !getValue('disabled'), ms);
     } catch (err) { console.error(err); }}
 
     function setTimeoutOrExecute(resolve, ms) {
@@ -1308,14 +1335,13 @@
       const buttons = gE(`img[src*="startchallenge.png"], img[src*="startgrindfest.png"], img[src*="startchallenge_d.png"]`, 'all', doc);
       buttons.forEach(btn => {
         const tr = btn.parentNode.parentNode;
-        if ('challenge_d' === btn.getAttribute('src').match(`${unsafeWindow.IMG_URL}(.*)/start(.*).png`)[2]) {
+        if (btn.enabled = 'challenge_d' !== btn.getAttribute('src').match(`${unsafeWindow.IMG_URL}(.*)/start(.*).png`)[2]) {
+          const onclick = btn.getAttribute('onclick');
+          const match = onclick.match(/init_battle\((\d+)(,\d+)*\)/);
+          btn.id = site === 'gr' ? 'gr' : match[1] * 1;
+        } else {
           const key = site === 'ar' ? gE('td:nth-child(3)>div>div', tr).innerText.match(`Lv. (.*)`)[1]*1 : (Array.from(tr.parentNode.children).indexOf(tr)-1);
           btn.id = idMap[site][key];
-        } else {
-          const onclick = btn.getAttribute('onclick');
-          const match = hvVersion < 91 ? onclick.match(/init_battle\((\d+),\s*(\d+,)*'(.*?)'\)/) : onclick.match(/init_battle\((\d+)(,\d+)*\)/);
-          btn.token = match[3] ?? null;
-          btn.id = site === 'gr' ? 'gr' : match[1] * 1;
         }
         btn.cleared = site === 'gr' || gE('td:nth-child(2)>div>div', tr).innerText;
         if (option.skipUnclearedArena && site !== 'gr') {
@@ -1325,50 +1351,121 @@
       return buttons;
     }
 
-    function loadOption() {
-      let option = getValue('option', true);
+    function Version(...verArgs) {
+      if (!(this instanceof Version)) {
+        return new Version(...verArgs);
+      }
+      this.ver = verArgs.join('.');
+
+      Version.prototype.upto ??= function(...args) {
+        return this.compareWith(...args) >= 0;
+      }
+      Version.prototype.eq ??= function(...args) {
+        return this.compareWith(...args) === 0;
+      };
+      Version.prototype.compareWith ??= function(...args) {
+        return Version.compare(this, Version.asString(...args));
+      }
+      Version.asString ??= function(...args) {
+        return args[0] instanceof Version ? args[0].ver : args.join('.');
+      }
+      Version.compare ??= function(...args) {
+        const seg = args.slice(0, 2).map(arg => {
+          if (typeof arg === 'number') arg = String(arg);
+          if (arg instanceof Version) arg = arg.ver;
+          return arg.split('.');
+        });
+        const maxLen = Math.max(...seg.map(s => s.length));
+
+        for (let i = 0; i < maxLen; i++) {
+          const si = seg.map(s => s[i]);
+
+          const isEmpty = si.map(s => [undefined, ''].includes(s));
+
+          if (!isEmpty.some(x => !x)) continue;
+          if (isEmpty[0]) return -1;
+          if (isEmpty[1]) return 1;
+
+          const isNum = si.map(s => /^\d+$/.test(s));
+          if (isNum.some(x => !x)) {
+            if (!isNum[0] && isNum[1]) return -1;
+            if (isNum[0] && !isNum[1]) return 1;
+
+            if (si[0] < si[1]) return -1;
+            if (si[0] > si[1]) return 1;
+            continue;
+          }
+          const trim = si.map(s => s.replace(/^0+/, '') || '0');
+          const length = trim.map(t => t.length);
+          if (length[0] !== length[1]) return length[0] > length[1] ? 1 : -1;
+          for (let i = 0; i < length[0]; i++) {
+            if (trim[0][i] !== trim[1][i]) return trim[0][i] > trim[1][i] ? 1 : -1;
+          }
+        }
+        return 0;
+      }
+    }
+
+    function loadOption(option) {
+      option ??= getValue('option', true);
+      const version = Version(option.version);
+
+      if (!version.upto(scriptVersion)) { // 脚本升级时备份
+        const backups = getValue('backup', true) || {};
+        const autos = Object.values(backups).filter(b => b.auto && b.server === current);
+        autos.sort((a, b) => -Version.compare(a.version, b.version));
+        if (!Version(autos[0]?.version).upto(version)) {
+          backup();
+        }
+      }
+
+      // 迁移2.91.9及之前的权重背景配置
+      if (option.weightBackground && Object.values(option.weightBackground).some(Array.isArray)) {
+        option.weightBackground = Object.fromEntries(Object.entries(option.weightBackground).map(([k,w]) => [(k*1+9)%10,w[0]]));
+      }
 
       // 迁移2.90.162及之前的targetHp等到targetHpDecimal等
-      const version = option.version.split('.').map(v=>isNaN(v*1) ? v : v*1);
-      if (version[0] < 2 || version[1] < 90 || (version[1] === 90 && (isNaN(1*version[2]) || version[2]<=162))) {
+      if (!version.upto(2,90,162)) {
         option = JSON.parse(JSON.stringify(option).replace('targetHp', 'targetHpDecimal').replace('targetMp', 'targetMpDecimal').replace('targetSp', 'targetSpDecimal').replace('DecimalDecimal', 'Decimal'));
-        option.version = GM_info ? GM_info.script.version : scriptVersion;
+        option.version = scriptVersion.ver;
         g('version', option.version);
       }
       option = JSON.parse(JSON.stringify(option).replace('DecimalDecimal', 'Decimal'));
 
       // 迁移2.90.168及之前的channelSkill2Order_Cure的Name错误
       option.channelSkill2Order_Cure = option.channelSkill2Order_Cu;
-      option.channelSkill2Order_Cu = undefined;
+      delete option.channelSkill2Order_Cu;
       option.channelSkill2OrderName = option.channelSkill2OrderName?.replace('Cu', 'Cure').replace('Curere', 'Cure');
       // 迁移2.90.178及之前的debuff警报设置
       if (option.debuffSkillTurnAlert === true) {
         option.debuffSkillTurnAlert = 1;
       }
 
-      const aliasDict = {
+      const legacies = { // current <= legacy
         'debuffSkillImAll': 'debuffSkillAllIm',
         'debuffSkillWeAll': 'debuffSkillAllWk',
         'debuffSkillAllImCondition': 'debuffSkillImpCondition',
         'debuffSkillAllWeCondition': 'debuffSkillWkCondition',
+        'debuffSkillImAllCondition': 'debuffSkillAllImCondition',
+        'debuffSkillWeAllCondition': 'debuffSkillAllWeCondition',
         'battleUnresponsive_Alert': 'delayAlert',
         'battleUnresponsive_Reload': 'delayReload',
         'battleUnresponsive_Alt': 'delayAlt',
         'battleUnresponsiveTime_Alert': 'delayAlertTime',
         'battleUnresponsiveTime_Reload': 'delayReloadTime',
         'battleUnresponsiveTime_Alt': 'delayAltTime',
-        'lastUrl': 'lastHref',
       }
-      for (let key in aliasDict) {
-        const itemArray = key.split('_');
-        const alias = aliasDict[key];
-        if (itemArray.length === 1) {
-          option[key] ??= option[alias];
-          option[alias] = undefined;
+      for (let key in legacies) {
+        const array = key.split('_');
+        const legacy = legacies[key];
+        const data = option[legacy];
+        if (!data) continue;
+        if (array.length === 1) {
+          option[key] ??= data;
         } else {
-          option[itemArray[0]] ??= {};
-          option[itemArray[0]][itemArray[1]] ??= option[alias];
+          (option[array[0]] ??= {})[array[1]] ??= data;
         }
+        delete option[legacy];
       }
       // 迁移旧版本最后的慈悲条件为可配置条件
       const mercifulBlowCondition = option.skillT3Condition ?? { "0": [] };
@@ -1396,11 +1493,7 @@
         }
         option.skillT3Condition = newCondition;
       }
-      if (isFrame) {
-        g('option', option);
-      } else {
-        g('option', setValue('option', option));
-      }
+      return option;
     }
 
     function setPauseUI(parent) {
@@ -1563,6 +1656,7 @@
     }
 
     function getLocal(key, isLocalStorage, toJSON) {
+
       let value;
       if (isLocalStorage || typeof GM_getValue === 'undefined' || !GM_getValue(key, null)) {
         key = `hvAA-${key}`;
@@ -1708,7 +1802,7 @@
         '#hvAABox2{position:absolute;left:1075px;padding-top: 6px;}',
         '.hvAALog{font-size:20px;}',
         '.hvAAPauseUI{top:50px;left:1246px;position:absolute;z-index:9999; width:80px}',
-        '.hvAAButton{top:5px;left:' + ((isMaintaining||isEquipDetail)?'0':'1255') + 'px;position:absolute;z-index:9999;cursor:pointer;width:40px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
+        '.hvAAButton{top:5px;left:' + ((isMaintaining || isEquipDetail)?'0':'1255') + 'px;position:absolute;z-index:9999;cursor:pointer;width:40px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
         '#hvAABox{left:0;top:50px;font-size:16px!important;z-index:4;width:1238px;height:650px;position:absolute;text-align:left;background-color:#E3E0D1;border:1px solid #000;border-radius:10px;font-family:"Microsoft Yahei";}',
         '.hvAATablist{position:relative;left:14px;width:calc(100% - 55px);height:calc(100% - 85px);}',
         '.hvAATabmenu{position:absolute;left:-9px;}',
@@ -1724,7 +1818,7 @@
         '#hvAABox input[type=\'checkbox\']{top: 3px;}',
         '.hvAATab ul,.hvAATab ol{margin:0;}',
         '.hvAATab label{cursor:pointer;}',
-        '.hvAATab table{border:2px solid #000;border-collapse:collapse;margin:0 auto;}',
+        '.hvAATab table{border:2px solid #000;border-collapse:collapse;}',
         '.hvAATh>*{font-weight:bold;font-size:larger;}',
         '.hvAATab table>tbody>tr>*{border:1px solid #000;}',
         '#hvAATab-Drop tr>td:nth-child(1),#hvAATab-Usage tr>td:nth-child(1){text-align:left;}',
@@ -1736,8 +1830,10 @@
         '.hvAAGoto{cursor:pointer;text-decoration:underline;}',
         'input[type="text"], input[type="number"]{min-width:2ch;max-width:calc( 100% - 10px);text-overflow:ellipsis; width: 2ch;}',
         '.customizeInput{min-width:6ch;}',
+        '.customizeInput:not(.optionDefault){border: 2px solid!important}',
+        '.optionUnsaved{color:red;}',
         '.optionEdited{color:#5C0D11;}',
-        '.optionOrigin{color:unset!important;}',
+        '.optionDefault{color:unset!important;}',
         '.hvAATable {display: grid;width: fit-content;}',
         '.hvAATable>* {border: 1px solid;}',
         '.hvAANew{width:25px;height:25px;float:left;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAMCAYAAACX8hZLAAAAcElEQVQ4jbVRSQ4AIQjz/59mTiZIF3twmnCwFAq4FkeFXM+5vCzohYxjPMtfxS8CN6iqQ7TfE0wrODxVbzJNgoaTo4CmbBO1ZWICouQ0DHaL259MEzaU+w8pZOdSjcUgaPJDHCbO0A2kuAiuwPGQ+wBms12x8HExTwAAAABJRU5ErkJggg==) center no-repeat transparent;}',
@@ -1794,8 +1890,44 @@
       };
     }
 
+    function rmListItem(code) { // 同步删除界面显示对应的项
+      const configs = gE('#hvAATab-Tools > * > ul[class="hvAABackupList"] > li', 'all');
+      for (const config of configs) {
+        if (config.textContent === code) config.remove();
+      }
+    }
+
+    function backup(code, alert) {
+      const currentOption = getValue('option');
+      const auto = code ? undefined : `[auto backup for ${current}@${currentOption.version}] ${time(3)}`;
+      const backups = getValue('backup', true) || {};
+      code ??= auto;
+      if (code in backups) { // 覆写同名配置
+        if (!alert || _alert(1, alert)) {
+          delete backups[code];
+          rmListItem(code);
+        } else return;
+      }
+      backups[code] = getValue('option');
+      backups[code].auto = auto ? time(0) : undefined;
+      backups[code].server = current;
+      const autos = Object.keys(backups).filter(c => backups[c].auto);
+      autos.sort(a => -backups[a].auto);
+      let i = 0, max = 5;
+      for (const a of autos) {
+        if (backups[a].server !== current) continue;
+        i++;
+        if (i <= max) continue;
+        delete backups[a];
+      }
+      setValue('backup', backups);
+      if (!gE('#hvAABox')) return;
+      const li = gE('.hvAABackupList', gE('#hvAABox')).appendChild(cE('li'));
+      li.textContent = code;
+    }
+
     function optionBox() { // 配置界面
-      const option = g().option??{};
+      let option = g().option??{};
       const optionBox = gE('body').appendChild(cE('div'));
       optionBox.id = 'hvAABox';
       optionBox.innerHTML = [
@@ -1806,6 +1938,7 @@
         '  <h1 style="display:inline;">hvAutoAttack</h1>',
         '  <select name="lang"><option value="0">简体中文</option><option value="1">繁體中文</option><option value="2">English</option></select>',
         (option.optionStandalone ? isIsekai ? '<l0>当前为异世界单独配置</l0><l1>當前為異世界單獨配置</l1><l2>Using Isekai standalone option</l2>' : '<l0>当前为恒定世界单独配置</l0><l1>當前為恆定世界單獨配置</l1><l2>Using Persistent standalone option</l2>' : ''),
+        ' <l0>配置版本</l0><l1>配置版本</l1><l2>Option Version</l2><input name="version" type="text" disabled="true">',
         '</div>',
         '<div class="hvAATablist">',
 
@@ -1830,9 +1963,9 @@
         '<div class="hvAATab" id="hvAATab-Main">',
         '  <div><b><l0>异世界相关</l0><l1>異世界相關</l1><l2>Isekai</l2></b>: ',
         '    <input id="optionStandalone" type="checkbox"><label for="optionStandalone"><l0>两个世界使用不同的配置</l0><l1>兩個世界使用不同的配置</l1><l2>Use standalone options.</l2></label>; ',
-        '    <br><input id="isekai" type="checkbox"><label for="isekai"><l0>在任意页面停留</l0><l1>在任意頁面停留</l1><l2>While idle in any page for </l2><input class="hvAANumber" name="isekaiTime" type="number"><l0>秒后，自动切换恒定世界和异世界</l0><l1>秒後，自動切換恆定世界和異世界</l1><l2>s, auto switch between Isekai and Persistent</l2></label></div>',
+        '    <br><input id="isekai" type="checkbox"><label for="isekai"><l0>在任意页面停留</l0><l1>在任意頁面停留</l1><l2>While idle in any page for </l2><input class="hvAANumber" name="isekaiTime" placeholder="0" type="number"><l0>秒后，自动切换恒定世界和异世界</l0><l1>秒後，自動切換恆定世界和異世界</l1><l2>s, auto switch between Isekai and Persistent</l2></label></div>',
         '  <div>',
-        '    <b><l0>小马答题</l0><l1>小馬答題</l1><l2>RIDDLE</l2></b>: <input id="riddlePopup" type="checkbox"><label for="riddlePopup"><l0>弹窗答题(Firefox中可能导致报错)</l0><l1>弹窗答题(Firefox中可能導致報錯)</l1><l2>POPUP a window to answer(Might cause in Firefox)</l2></label>; <button class="testPopup"><l0>预处理</l0><l1>預處理</l1><l2>Pretreat</l2></button>',
+        '    <b><l0>小马答题</l0><l1>小馬答題</l1><l2>RIDDLE</l2></b>: <input id="riddlePopup" type="checkbox"><label for="riddlePopup"><l0>弹窗答题</l0><l1>弹窗答题</l1><l2>POPUP a window to answer</l2></label><l0>(Firefox中可能导致报错)</l0><l1>(Firefox中可能導致報錯)</l1><l2>(Might cause in Firefox)</l2>; <button class="testPopup"><l0>预处理</l0><l1>預處理</l1><l2>Pretreat</l2></button>',
         '    <div><l0>时间</l0><l1>時間</l1><l2>If ETR</l2> ≤ <input class="hvAANumber" name="riddleAnswerTime" placeholder="3" type="number"><l0>秒，提交当前选中答案 或 为空时随机选中</l0><l1>秒，提交當前選中答案 或 為空時隨機選中</l1><l2>s submit chosen answers or random </l2> <input class="hvAANumber" name="riddleAnswerChoose" placeholder="0" type="number"><l0>个答案并提交<br><a style="color:red;" href="https://ehwiki.org/wiki/RiddleMaster/Chinese#.E6.AD.A3.E7.A2.BA.E6.88.96.E9.8C.AF.E8.AA.A4">注意：错选小马比漏选小马的错误计数更多 - 所以有疑问时，最好不要猜测，留空就好</a></l0><l1>个答案並提交<br><a style="color:red;" href="https://ehwiki.org/wiki/RiddleMaster/Chinese#.E6.AD.A3.E7.A2.BA.E6.88.96.E9.8C.AF.E8.AA.A4">注意：錯選小馬比漏選小馬的錯誤計數更多 - 所以有疑問時，最好不要猜測，留空就好</a></l1><l2>answers if none is chosen.<br><a style="color:red;" href="https://ehwiki.org/wiki/RiddleMaster#Correct_or_Incorrect">Notice: Selecting a pony that is not in the picture will count more severe towards a penalty than missing one pony - so when in doubt, best not to guess but leave one blank</a></l2></div>',
         '  </div>',
         '  <div><b><l0>脚本行为</l0><l1>腳本行為</l1><l2>Script Activity</l2></b>',
@@ -1842,15 +1975,17 @@
         '      <input id="stepInButton" type="checkbox"><label for="stepInButton"><l0>步进按钮</l0><l1>步進按鈕</l1><l2>StepIn Button</l2></label>; ',
         '      <input id="stepInHotkey" type="checkbox"><label for="stepInHotkey"><l0>步进热键</l0><l1>步進熱鍵</l1><l2>StepIn Hotkey</l2>: <input class="text" name="stepInHotkeyStr" type="text"><input class="hvAANumber" name="stepInHotkeyCode" type="hidden" disabled="true"></label>',
         '  </div>',
-        ' <div><input id="altButton" type="checkbox"><label for="altButton">Alt<l0>切换按钮</l0><l1>切換按鈕</l1><l2>Switch Button</l2></label>; ',
-        '      <input id="altHotkey" type="checkbox"><label for="altHotkey"><l0>热键</l0><l1>熱鍵</l1><l2>Hotkey</l2>: <input class="text" name="altHotkeyStr" type="text"><input class="hvAANumber" name="altHotkeyCode" type="hidden" disabled="true"></label></div>',
+        ' <div><input id="altButton" type="checkbox"><label for="altButton"><l0>Alt切换按钮</l0><l1>Alt切換按鈕</l1><l2>Alt Switch Button</l2></label>; ',
+        '      <input id="altHotkey" type="checkbox"><label for="altHotkey"><l0>Alt切换热键</l0><l1>Alt切換熱鍵</l1><l2>Alt Switch Hotkey</l2>: <input class="text" name="altHotkeyStr" type="text"><input class="hvAANumber" name="altHotkeyCode" type="hidden" disabled="true"></label></div>',
         '    <div><l0>警告相关</l0><l1>警告相關</l1><l2>To Warn</l2>: ',
         '      <input id="alert" type="checkbox"><label for="alert"><l0>音频警报</l0><l1>音頻警報</l1><l2>Audio Alarms</l2></label>; ',
         '      <input id="notification" type="checkbox"><label for="notification"><l0>桌面通知</l0><l1>桌面通知</l1><l2>Notifications</l2></label> ',
-        '      <button class="testNotification"><l0>预处理</l0><l1>預處理</l1><l2>Pretreat</l2></button></div>',
-        '    <div><l0>掉落及数据记录</l0><l1>掉落及數據記錄</l1><l2>Drops and Usage Tracking</l2>: <input id="recordEach" type="checkbox"><label for="recordEach"><l0>单独记录每场战役</l0><l1>單獨記錄每場戰役</l1><l2>Record each battle separately</l2></label></div>',
+        '      <button class="testNotification"><l0>预处理</l0><l1>預處理</l1><l2>Pretreat</l2></button>',
+        '      <input id="focusNotification" placeholder="true" type="checkbox"><label for="focusNotification"><l0>桌面通知时聚焦页面（需要GM_notification）</l0><l1>桌面通知時聚焦頁面（需要GM_notification）</l1><l2>Focus while Notifications (Requires GM_notification)</l2></label></div>',
+        '    <div><l0>掉落及数据记录</l0><l1>掉落及數據記錄</l1><l2>Drops and Usage Tracking</l2>: <input id="recordEach" type="checkbox"><label for="recordEach"><l0>单独记录每场战役（建议使用便携数据模式以避免超出浏览器的localStorage配额限制，但请注意便携数据模式可能会显著增加硬盘读写量）</l0><l1>單獨記錄每場戰役（建議使用便攜數據模式以避免超出瀏覽器localStorage配額限制，但請注意便攜數據模式可能會顯著增加硬盤讀寫）</l1><l2>Record each battle separately (It is recommended to use portable mode to prevent exceeding the localStorage quota, but note that this may significantly increase disk read/write activity.)</l2></label></div>',
         '    <div><l0>延迟</l0><l1>延遲</l1><l2>Delay</l2>: 1. <l0>Buff/Debuff/其他技能</l0><l1>Buff/Debuff/其他技能</l1><l2>Skills&BUFF/DEBUFF Spells</l2>: <input class="hvAANumber" name="delay" placeholder="200" type="number">ms 2. <l01>其他</l01><l2>Other</l2>: <input class="hvAANumber" name="delay2" placeholder="30" type="number">ms (',
         '      <l0>说明: 单位毫秒，且在设定值基础上取其的50%-150%进行延迟，0表示不延迟</l0><l1>說明: 單位毫秒，且在設定值基礎上取其的50%-150%進行延遲，0表示不延遲</l1><l2>Note: unit milliseconds, and based on the set value multiply 50% -150% to delay, 0 means no delay</l2>)</div>',
+        '    <div><l0>频率指示符号</l0><l1>頻率指示符號</l1><l2>Frequency Signal</l2>: <input name="frequencySign1" type="text"> & <input name="frequencySign2" type="text"></div>',
         '  </div>',
         '  <div id="attackStatus" style="color:red;"><b>*<l0>默认攻击模式</l0><l1>默認攻擊模式</l1><l2>Default Attack Mode</l2></b>:',
         '    <select class="hvAANumber" name="attackStatus"><option value="-1"></option><option value="0">物理 / Physical</option><option value="1">火 / Fire</option><option value="2">冰 / Cold</option><option value="3">雷 / Elec</option><option value="4">风 / 風 / Wind</option><option value="5">圣 / 聖 / Divine</option><option value="6">暗 / Forbidden</option></select></div>',
@@ -1875,7 +2010,8 @@
         '       <div><input id="battleOrder_attack" value="Atk" type="checkbox"><label for="battleOrder_attack"><l0>自动攻击</l0><l1>自動攻擊</l1><l2>Attack</l2></label></div>',
         '    </div></div></div>',
 
-        '  <div><b><l0>次要攻击模式顺序(未配置的按照下面的顺序)</l0><l1>次要攻擊模式順序(未配置的按照下面的順序)</l1><l2>Attack Mode Order(Using order below as default if not configed)</l2></b>:',
+        '  <div><b><label for="attackStatusOrderName,attackStatusOrder_0,attackStatusOrder_1,attackStatusOrder_2,attackStatusOrder_3,attackStatusOrder_4,attackStatusOrder_5,attackStatusOrder_6,"><l0>次要攻击模式顺序</l0><l1>次要攻擊模式順序</l1><l2>Attack Mode Order</l2></label><l0>(未配置的按照下面的顺序)</l0><l1>(未配置的按照下面的順序)</l1><l2>(Using order below as default if not configed)</l2></b>:',
+        '    <input id="attackStatusSwitchByTier" type="checkbox"><label for="attackStatusSwitchByTier"><l0>先尝试完所有模式的高阶魔法技能再继续中阶和低阶</l0><l1>先嘗試完所有模式的高階魔法技能再繼續中階和低階</l1><l2>Try all 3rd Tier Magic for all Attack Mode then 2nd Tier and 1st Tier</l2></b></label>',
         '    <div class="attackStatusOrder"><input name="attackStatusOrderName" style="width:80%;" type="text" disabled="true"><input name="attackStatusOrderValue" style="width:80%;" type="hidden" disabled="true"><br>',
         '      <div class="hvAATable" style="display:grid; grid-template-columns:repeat(7, 1fr);">',
         '        <div><input id="attackStatusOrder_0" value="Phys,0" type="checkbox"><label for="attackStatusOrder_0"><l0>物理</l0><l1>物理</l1><l2>Physical</l2></label></div>',
@@ -1897,7 +2033,7 @@
         '    <div><label for="lowSkillCondition"><b><l0>低阶魔法技能使用条件</l0><l1>低階魔法技能使用條件</l1><l2>Conditions for 1st Tier Offensive Magic</l2></b>: {{lowSkillCondition}}</label></div>',
         '    <div><label for="middleSkillCondition"><b><l0>中阶魔法技能使用条件</l0><l1>中階魔法技能使用條件</l1><l2>Conditions for 2nd Tier Offensive Magic</l2></b>: {{middleSkillCondition}}</label></div>',
         '    <div><label for="highSkillCondition"><b><l0>高阶魔法技能使用条件</l0><l1>高階魔法技能使用條件</l1><l2>Conditions for 3rd Tier Offensive Magic</l2></b>: {{highSkillCondition}}</label></div>',
-        '    <div><input id="etherTap" type="checkbox"><label for="etherTap"><b><l0>以太水龙头</l0><l1>以太水龍頭</l1><l2>Ether Tap</l2></b></label>: {{etherTapCondition}}</div>',
+        '    <div><input id="etherTap" type="checkbox"><label for="etherTap"><b><l0>以太之触</l0><l1>以太之觸</l1><l2>Ether Tap</l2></b></label>: {{etherTapCondition}}</div>',
         '    <div><input id="turnOnSS" type="checkbox"><label for="turnOnSS"><b><l0>开启灵动架式</l0><l1>開啟靈動架勢</l1><l2>Turn on Spirit Stance</l2></b></label>: {{turnOnSSCondition}}</div>',
         '    <div><input id="turnOffSS" type="checkbox"><label for="turnOffSS"><b><l0>关闭灵动架式</l0><l1>關閉靈動架勢</l1><l2>Turn off Spirit Stance</l2></b></label>: {{turnOffSSCondition}}</div>',
         '    <div><input id="defend" type="checkbox"><label for="defend"><b>Defend</b></label>: {{defendCondition}}</div>',
@@ -1916,9 +2052,9 @@
         '  </div>',
         '  <div>',
         '    <div class="hvAATable" style="grid-template-columns: 1fr 1fr 1.5fr 2fr;"><div><b><l0>战斗页面停留</l0><l1>戰鬥頁面停留</l1><l2>If not active for </l2>: </b></div>',
-        '      <div><input id="battleUnresponsive_Alert" type="checkbox"><label for="battleUnresponsive_Alert"><input class="hvAANumber" name="battleUnresponsiveTime_Alert" type="number"> <l0>秒，警报</l0><l1>秒，警報</l1><l2>(s), alarm</l2></label></div>',
-        '      <div><input id="battleUnresponsive_Reload" type="checkbox"><label for="battleUnresponsive_Reload"><input class="hvAANumber" name="battleUnresponsiveTime_Reload" type="number"> <l0>秒，刷新页面</l0><l1>秒，刷新頁面</l1><l2>(s), reload page</l2></label></div>',
-        '      <div><input id="battleUnresponsive_Alt" type="checkbox"><label for="battleUnresponsive_Alt"><input class="hvAANumber" name="battleUnresponsiveTime_Alt" type="number"> <l0>秒，切换主服务器与alt服务器</l0><l1>秒，切換主服務器與alt服務器</l1><l2>(s), switch between alt.hentaiverse</l2></label></div>',
+        '      <div><input id="battleUnresponsive_Alert" type="checkbox"><label for="battleUnresponsive_Alert"><input class="hvAANumber" name="battleUnresponsiveTime_Alert" placeholder="1" type="number"> <l0>秒，警报</l0><l1>秒，警報</l1><l2>(s), alarm</l2></label></div>',
+        '      <div><input id="battleUnresponsive_Reload" type="checkbox"><label for="battleUnresponsive_Reload"><input class="hvAANumber" name="battleUnresponsiveTime_Reload" placeholder="1" type="number"> <l0>秒，刷新页面</l0><l1>秒，刷新頁面</l1><l2>(s), reload page</l2></label></div>',
+        '      <div><input id="battleUnresponsive_Alt" type="checkbox"><label for="battleUnresponsive_Alt"><input class="hvAANumber" name="battleUnresponsiveTime_Alt" placeholder="1" type="number"> <l0>秒，切换主服务器与alt服务器</l0><l1>秒，切換主服務器與alt服務器</l1><l2>(s), switch between alt.hentaiverse</l2></label></div>',
         '  </div>',
         '  </div>',
         '  </div>',
@@ -1932,7 +2068,7 @@
         '  <l0>遭遇战倒计时</l0><l1>遭遇戰倒計時</l1><l2>Wait for encounter first while count down</l2> ≤ <input class="hvAANumber" name="encounterWaitCD" placeholder="0" type="number">s<l0>时优先等待</l0><l1>時優先等待</l1><l2>.</l2>',
         '  </div>',
         '  <div><input id="idleArena" type="checkbox"><label for="idleArena"><b><l0>闲置竞技场</l0><l1>閒置競技場</l1><l2>Idle Arena</l2>: </b>',
-        '    <l0>在任意页面停留</l0><l1>在任意頁面停留</l1><l2>Idle in any page for </l2><input class="hvAANumber" name="idleArenaTime" type="number"><l0>秒后，开始竞技场</l0><l1>秒後，開始競技場</l1><l2> (s), start Arena</l2></label> <button class="idleArenaReset"><l01>重置</l01><l2>Reset</l2></button>;<br>',
+        '    <l0>在任意页面停留</l0><l1>在任意頁面停留</l1><l2>Idle in any page for </l2><input class="hvAANumber" name="idleArenaTime" placeholder="0" type="number"><l0>秒后，开始竞技场</l0><l1>秒後，開始競技場</l1><l2> (s), start Arena</l2></label> <button class="idleArenaReset"><l01>重置</l01><l2>Reset</l2></button>;<br>',
         '    <l0>进行的竞技场相对应等级</l0><l1>進行的競技場相對應等級</l1><l2>The levels of the Arena you want to complete</l2>:  ',
         '      <button class="hvAAShowLevels"><l0>显示更多</l0><l1>顯示更多</l1><l2>Show more</l2></button><button class="hvAALevelsClear"><l01>清空</l01><l2>Clear</l2></button><br>',
         '      <input name="idleArenaLevels" style="width:calc(100% - 20px);" type="text" disabled="true"><input name="idleArenaValue" style="width:98%;" type="hidden" disabled="true">',
@@ -1958,10 +2094,10 @@
         '  </div>',
         '  <div>',
         '    <input id="repair" type="checkbox"><label for="repair"><b>[R!]<l0>修复装备</l0><l1>修復裝備</l1><l2>Repair Equipment</l2></b></label>: ',
-        '    <l0>耐久度</l0><l1>耐久度</l1><l2>Durability</l2> ≤ <input class="hvAANumber" name="repairValue" type="number">% <l0>或 压榨届耐久度</l0><l1>或 壓榨屆耐久度</l1><l2>OR Grind Fest Durability</l2> ≤ <input class="hvAANumber" name="repairValueGF" type="number">%</br><input id="encounterRepair" type="checkbox"><label for="encounterRepair"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></label>',
+        '    <l0>耐久度</l0><l1>耐久度</l1><l2>Durability</l2> ≤ <input class="hvAANumber" name="repairValue" type="number">% <l0>或 压榨届耐久度</l0><l1>或 壓榨屆耐久度</l1><l2>OR Grind Fest Durability</l2> ≤ <input class="hvAANumber" name="repairValueGF" type="number">%<br><input id="repairCharm" type="checkbox"><label for="repairCharm"><l0>修复护石 (含压榨界)</l0><l1>修復護石 (含壓榨界)</l1><l2>Repair charm (including Grind Fest)</l2>;<input id="repairCharmGF" type="checkbox"><label for="repairCharmGF"><l0>压榨界修复护石</l0><l1>壓榨屆修復護石</l1><l2>Repair charm before Grind Fest</l2></label></label><br><input id="encounterRepair" type="checkbox"><label for="encounterRepair"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></label>',
         '  </div>',
         '  <div>',
-        '    <input id="equStorage" type="checkbox"><label for="equStorage"><b>[E!]<l0>装备库存</l0><l1>裝備庫存</l1><l2>Equipment Storage</l2></b></label> ≤ <input class="hvAANumber" style="width: 32px;" name="equStorageValue" placeholder="2000" type="number">; <input id="encounterEquStorage" type="checkbox"><label for="encounterEquStorage"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></label>',
+        '    <input id="equStorage" type="checkbox"><label for="equStorage"><b>[E!]<l0>装备库存</l0><l1>裝備庫存</l1><l2>Equipment Storage</l2></b></label> ≤ <input class="hvAANumber" style="width: 32px;" name="equStorageValue" placeholder="150" type="number">; <input id="encounterEquStorage" type="checkbox"><label for="encounterEquStorage"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></label>',
         '  </div>',
         '  <div>',
         '    <input id="checkSupply" type="checkbox"><label for="checkSupply"><b>[C!]<l0>检查物品库存</l0><l1>檢查物品庫存</l1><l2>Check is item needs supply</l2></b>;</label>',
@@ -2045,174 +2181,6 @@
         '      <div><input id="isCheckGF_61501" type="checkbox"><label for="isCheckGF_61501"><input class="hvAANumber" name="checkItemGF_61501" placeholder="0" type="number"><l0>羽毛碎片</l0><l1>羽毛碎片</l1><l2>Featherweight Shard</l2></label></div>',
         '    </div>',
         '  </div>',
-        '  <div style="text-decoration: line-through;">',
-        '    <input id="checkEnchant" type="checkbox"><label for="checkEnchant"><b><l0>（v091中已废弃）检查附魔</l0><l1>（v091中已廢棄）檢查附魔</l1><l2>(Obsolete in v091)Check enchant</l2></b>(<l0>请在库存检查设置中预留附魔所需份额</l0><l1>請在庫存檢查中預留附魔所需份額</l1><l2>Please includes portions in supply check</l2>);</label></br>',
-        '    <input id="enchantEncounter" type="checkbox"><label for="enchantEncounter"><l0>遭遇战前检查</l0><l1>遭遇戰前檢查</l1><l2>Check before encounter</l2></label>',
-        '    <div class="hvAATable" style="grid-template-columns: 2fr repeat(7, 1fr);">' ,
-        '      <div><span class="hvAATitle"><b><l0>阈值(分钟)</l0><l1>閾值(分鐘)</l1><l2>Thresholds(m)</l2></b></span></br></div>',
-        '      <div><l0>主手</l0><l1>主手</l1><l2>Main Hand</l2></div>',
-        '      <div><l0>副手</l0><l1>副手</l1><l2>Off Hand</l2></div>',
-        '      <div><l0>头盔</l0><l1>頭盔</l1><l2>Helmet</l2></div>',
-        '      <div><l0>身体</l0><l1>身體</l1><l2>Body</l2></div>',
-        '      <div><l0>手部</l0><l1>手部</l1><l2>Hands</l2></div>',
-        '      <div><l0>腿部</l0><l1>腿部</l1><l2>Legs</l2></div>',
-        '      <div><l0>脚部</l0><l1>腳部</l1><l2>Feet</l2></div>',
-        '      <div><l0>虚空</l0><l1>虛空</l1><l2>Voidseeker</l2></div>',
-        '      <div><input id="isEnchant_6100101" type="checkbox"><label for="isEnchant_6100101">:<input class="hvAANumber" name="enchant_6100101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6100102" type="checkbox"><label for="isEnchant_6100102">:<input class="hvAANumber" name="enchant_6100102" placeholder="0" type="number"></label></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div><l0>以太</l0><l1>以太</l1><l2>Aether</l2></div>',
-        '      <div><input id="isEnchant_6110101" type="checkbox"><label for="isEnchant_6110101">:<input class="hvAANumber" name="enchant_6110101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6110102" type="checkbox"><label for="isEnchant_6110102">:<input class="hvAANumber" name="enchant_6110102" placeholder="0" type="number"></label></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div><l0>羽毛</l0><l1>羽毛</l1><l2>Featherweight</l2></div>',
-        '      <div><input id="isEnchant_6150101" type="checkbox"><label for="isEnchant_6150101">:<input class="hvAANumber" name="enchant_6150101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6150102" type="checkbox"><label for="isEnchant_6150102">:<input class="hvAANumber" name="enchant_6150102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6150113" type="checkbox"><label for="isEnchant_6150113">:<input class="hvAANumber" name="enchant_6150113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6150111" type="checkbox"><label for="isEnchant_6150111">:<input class="hvAANumber" name="enchant_6150111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6150114" type="checkbox"><label for="isEnchant_6150114">:<input class="hvAANumber" name="enchant_6150114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6150112" type="checkbox"><label for="isEnchant_6150112">:<input class="hvAANumber" name="enchant_6150112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_6150115" type="checkbox"><label for="isEnchant_6150115">:<input class="hvAANumber" name="enchant_6150115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>火焰</l0><l1>火焰</l1><l2>Flames</l2></div>',
-        '      <div><input id="isEnchant_1210101" type="checkbox"><label for="isEnchant_1210101">:<input class="hvAANumber" name="enchant_1210101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1210102" type="checkbox"><label for="isEnchant_1210102">:<input class="hvAANumber" name="enchant_1210102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1210113" type="checkbox"><label for="isEnchant_1210113">:<input class="hvAANumber" name="enchant_1210113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1210111" type="checkbox"><label for="isEnchant_1210111">:<input class="hvAANumber" name="enchant_1210111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1210114" type="checkbox"><label for="isEnchant_1210114">:<input class="hvAANumber" name="enchant_1210114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1210112" type="checkbox"><label for="isEnchant_1210112">:<input class="hvAANumber" name="enchant_1210112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1210115" type="checkbox"><label for="isEnchant_1210115">:<input class="hvAANumber" name="enchant_1210115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>冰霜</l0><l1>冰霜</l1><l2>Frost</l2></div>',
-        '      <div><input id="isEnchant_1220101" type="checkbox"><label for="isEnchant_1220101">:<input class="hvAANumber" name="enchant_1220101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1220102" type="checkbox"><label for="isEnchant_1220102">:<input class="hvAANumber" name="enchant_1220102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1220113" type="checkbox"><label for="isEnchant_1220113">:<input class="hvAANumber" name="enchant_1220113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1220111" type="checkbox"><label for="isEnchant_1220111">:<input class="hvAANumber" name="enchant_1220111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1220114" type="checkbox"><label for="isEnchant_1220114">:<input class="hvAANumber" name="enchant_1220114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1220112" type="checkbox"><label for="isEnchant_1220112">:<input class="hvAANumber" name="enchant_1220112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1220115" type="checkbox"><label for="isEnchant_1220115">:<input class="hvAANumber" name="enchant_1220115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>雷电</l0><l1>雷電</l1><l2>Lightning</l2></div>',
-        '      <div><input id="isEnchant_1230101" type="checkbox"><label for="isEnchant_1230101">:<input class="hvAANumber" name="enchant_1230101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1230102" type="checkbox"><label for="isEnchant_1230102">:<input class="hvAANumber" name="enchant_1230102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1230113" type="checkbox"><label for="isEnchant_1230113">:<input class="hvAANumber" name="enchant_1230113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1230111" type="checkbox"><label for="isEnchant_1230111">:<input class="hvAANumber" name="enchant_1230111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1230114" type="checkbox"><label for="isEnchant_1230114">:<input class="hvAANumber" name="enchant_1230114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1230112" type="checkbox"><label for="isEnchant_1230112">:<input class="hvAANumber" name="enchant_1230112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1230115" type="checkbox"><label for="isEnchant_1230115">:<input class="hvAANumber" name="enchant_1230115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>风暴</l0><l1>風暴</l1><l2>Storm</l2></div>',
-        '      <div><input id="isEnchant_1240101" type="checkbox"><label for="isEnchant_1240101">:<input class="hvAANumber" name="enchant_1240101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1240102" type="checkbox"><label for="isEnchant_1240102">:<input class="hvAANumber" name="enchant_1240102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1240113" type="checkbox"><label for="isEnchant_1240113">:<input class="hvAANumber" name="enchant_1240113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1240111" type="checkbox"><label for="isEnchant_1240111">:<input class="hvAANumber" name="enchant_1240111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1240114" type="checkbox"><label for="isEnchant_1240114">:<input class="hvAANumber" name="enchant_1240114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1240112" type="checkbox"><label for="isEnchant_1240112">:<input class="hvAANumber" name="enchant_1240112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1240115" type="checkbox"><label for="isEnchant_1240115">:<input class="hvAANumber" name="enchant_1240115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>神圣</l0><l1>神聖</l1><l2>Divinity</l2></div>','      <div><input id="isEnchant_1250101" type="checkbox"><label for="isEnchant_1250101">:<input class="hvAANumber" name="enchant_1250101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1250102" type="checkbox"><label for="isEnchant_1250102">:<input class="hvAANumber" name="enchant_1250102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1250113" type="checkbox"><label for="isEnchant_1250113">:<input class="hvAANumber" name="enchant_1250113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1250111" type="checkbox"><label for="isEnchant_1250111">:<input class="hvAANumber" name="enchant_1250111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1250114" type="checkbox"><label for="isEnchant_1250114">:<input class="hvAANumber" name="enchant_1250114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1250112" type="checkbox"><label for="isEnchant_1250112">:<input class="hvAANumber" name="enchant_1250112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1250115" type="checkbox"><label for="isEnchant_1250115">:<input class="hvAANumber" name="enchant_1250115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>黑暗</l0><l1>黑暗</l1><l2>Darkness</l2></div>','      <div><input id="isEnchant_1260101" type="checkbox"><label for="isEnchant_1260101">:<input class="hvAANumber" name="enchant_1260101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1260102" type="checkbox"><label for="isEnchant_1260102">:<input class="hvAANumber" name="enchant_1260102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1260113" type="checkbox"><label for="isEnchant_1260113">:<input class="hvAANumber" name="enchant_1260113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1260111" type="checkbox"><label for="isEnchant_1260111">:<input class="hvAANumber" name="enchant_1260111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1260114" type="checkbox"><label for="isEnchant_1260114">:<input class="hvAANumber" name="enchant_1260114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1260112" type="checkbox"><label for="isEnchant_1260112">:<input class="hvAANumber" name="enchant_1260112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchant_1260115" type="checkbox"><label for="isEnchant_1260115">:<input class="hvAANumber" name="enchant_1260115" placeholder="0" type="number"></label></div>',
-        '    </div>',
-        '  </div>',
-        '  <div style="text-decoration: line-through;">',
-        '    <input id="checkEnchantGF" type="checkbox"><label for="checkEnchantGF"><b><l0>（v091中已废弃）压榨界使用额外的附魔检查</l0><l1>（v091中已廢棄）壓榨界使用額外的附魔檢查</l1><l2>(Obsolete in v091)Extra enchant check for Grind Fest</l2></b></br><l0>若压榨界使用额外库存检查，则在对应设置中预留附魔所需份额</l0><l1>若壓榨界使用額外庫存檢查，則在對應配置中預留附魔所需份額</l1><l2>Includes portions in extra supply check for Grind Fest instead if it\'s enabled.</l2></label>',
-        '    <div class="hvAATable" style="grid-template-columns: 2fr repeat(7, 1fr);">',
-        '      <div><span class="hvAATitle"><b><l0>阈值(分钟)</l0><l1>閾值(分鐘)</l1><l2>Thresholds(m)</l2></b></span></br></div>',
-        '      <div><l0>主手</l0><l1>主手</l1><l2>Main Hand</l2></div>',
-        '      <div><l0>副手</l0><l1>副手</l1><l2>Off Hand</l2></div>',
-        '      <div><l0>头盔</l0><l1>頭盔</l1><l2>Helmet</l2></div>',
-        '      <div><l0>身体</l0><l1>身體</l1><l2>Body</l2></div>',
-        '      <div><l0>手部</l0><l1>手部</l1><l2>Hands</l2></div>',
-        '      <div><l0>腿部</l0><l1>腿部</l1><l2>Legs</l2></div>',
-        '      <div><l0>脚部</l0><l1>腳部</l1><l2>Feet</l2></div>',
-        '      <div><l0>虚空</l0><l1>虛空</l1><l2>Voidseeker</l2></div>',
-        '      <div><input id="isEnchantGF_6100101" type="checkbox"><label for="isEnchantGF_6100101">:<input class="hvAANumber" name="enchantGF_6100101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6100102" type="checkbox"><label for="isEnchantGF_6100102">:<input class="hvAANumber" name="enchantGF_6100102" placeholder="0" type="number"></label></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div><l0>以太</l0><l1>以太</l1><l2>Aether</l2></div>',
-        '      <div><input id="isEnchantGF_6110101" type="checkbox"><label for="isEnchantGF_6110101">:<input class="hvAANumber" name="enchantGF_6110101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6110102" type="checkbox"><label for="isEnchantGF_6110102">:<input class="hvAANumber" name="enchantGF_6110102" placeholder="0" type="number"></label></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div></div>',
-        '      <div><l0>羽毛</l0><l1>羽毛</l1><l2>Featherweight</l2></div>',
-        '      <div><input id="isEnchantGF_6150101" type="checkbox"><label for="isEnchantGF_6150101">:<input class="hvAANumber" name="enchantGF_6150101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6150102" type="checkbox"><label for="isEnchantGF_6150102">:<input class="hvAANumber" name="enchantGF_6150102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6150113" type="checkbox"><label for="isEnchantGF_6150113">:<input class="hvAANumber" name="enchantGF_6150113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6150111" type="checkbox"><label for="isEnchantGF_6150111">:<input class="hvAANumber" name="enchantGF_6150111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6150114" type="checkbox"><label for="isEnchantGF_6150114">:<input class="hvAANumber" name="enchantGF_6150114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6150112" type="checkbox"><label for="isEnchantGF_6150112">:<input class="hvAANumber" name="enchantGF_6150112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_6150115" type="checkbox"><label for="isEnchantGF_6150115">:<input class="hvAANumber" name="enchantGF_6150115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>火焰</l0><l1>火焰</l1><l2>Flames</l2></div>',
-        '      <div><input id="isEnchantGF_1210101" type="checkbox"><label for="isEnchantGF_1210101">:<input class="hvAANumber" name="enchantGF_1210101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1210102" type="checkbox"><label for="isEnchantGF_1210102">:<input class="hvAANumber" name="enchantGF_1210102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1210113" type="checkbox"><label for="isEnchantGF_1210113">:<input class="hvAANumber" name="enchantGF_1210113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1210111" type="checkbox"><label for="isEnchantGF_1210111">:<input class="hvAANumber" name="enchantGF_1210111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1210114" type="checkbox"><label for="isEnchantGF_1210114">:<input class="hvAANumber" name="enchantGF_1210114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1210112" type="checkbox"><label for="isEnchantGF_1210112">:<input class="hvAANumber" name="enchantGF_1210112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1210115" type="checkbox"><label for="isEnchantGF_1210115">:<input class="hvAANumber" name="enchantGF_1210115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>冰霜</l0><l1>冰霜</l1><l2>Frost</l2></div>',
-        '      <div><input id="isEnchantGF_1220101" type="checkbox"><label for="isEnchantGF_1220101">:<input class="hvAANumber" name="enchantGF_1220101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1220102" type="checkbox"><label for="isEnchantGF_1220102">:<input class="hvAANumber" name="enchantGF_1220102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1220113" type="checkbox"><label for="isEnchantGF_1220113">:<input class="hvAANumber" name="enchantGF_1220113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1220111" type="checkbox"><label for="isEnchantGF_1220111">:<input class="hvAANumber" name="enchantGF_1220111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1220114" type="checkbox"><label for="isEnchantGF_1220114">:<input class="hvAANumber" name="enchantGF_1220114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1220112" type="checkbox"><label for="isEnchantGF_1220112">:<input class="hvAANumber" name="enchantGF_1220112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1220115" type="checkbox"><label for="isEnchantGF_1220115">:<input class="hvAANumber" name="enchantGF_1220115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>雷电</l0><l1>雷電</l1><l2>Lightning</l2></div>',
-        '      <div><input id="isEnchantGF_1230101" type="checkbox"><label for="isEnchantGF_1230101">:<input class="hvAANumber" name="enchantGF_1230101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1230102" type="checkbox"><label for="isEnchantGF_1230102">:<input class="hvAANumber" name="enchantGF_1230102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1230113" type="checkbox"><label for="isEnchantGF_1230113">:<input class="hvAANumber" name="enchantGF_1230113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1230111" type="checkbox"><label for="isEnchantGF_1230111">:<input class="hvAANumber" name="enchantGF_1230111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1230114" type="checkbox"><label for="isEnchantGF_1230114">:<input class="hvAANumber" name="enchantGF_1230114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1230112" type="checkbox"><label for="isEnchantGF_1230112">:<input class="hvAANumber" name="enchantGF_1230112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1230115" type="checkbox"><label for="isEnchantGF_1230115">:<input class="hvAANumber" name="enchantGF_1230115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>风暴</l0><l1>風暴</l1><l2>Storm</l2></div>',
-        '      <div><input id="isEnchantGF_1240101" type="checkbox"><label for="isEnchantGF_1240101">:<input class="hvAANumber" name="enchantGF_1240101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1240102" type="checkbox"><label for="isEnchantGF_1240102">:<input class="hvAANumber" name="enchantGF_1240102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1240113" type="checkbox"><label for="isEnchantGF_1240113">:<input class="hvAANumber" name="enchantGF_1240113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1240111" type="checkbox"><label for="isEnchantGF_1240111">:<input class="hvAANumber" name="enchantGF_1240111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1240114" type="checkbox"><label for="isEnchantGF_1240114">:<input class="hvAANumber" name="enchantGF_1240114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1240112" type="checkbox"><label for="isEnchantGF_1240112">:<input class="hvAANumber" name="enchantGF_1240112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1240115" type="checkbox"><label for="isEnchantGF_1240115">:<input class="hvAANumber" name="enchantGF_1240115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>神圣</l0><l1>神聖</l1><l2>Divinity</l2></div>','      <div><input id="isEnchantGF_1250101" type="checkbox"><label for="isEnchantGF_1250101">:<input class="hvAANumber" name="enchantGF_1250101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1250102" type="checkbox"><label for="isEnchantGF_1250102">:<input class="hvAANumber" name="enchantGF_1250102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1250113" type="checkbox"><label for="isEnchantGF_1250113">:<input class="hvAANumber" name="enchantGF_1250113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1250111" type="checkbox"><label for="isEnchantGF_1250111">:<input class="hvAANumber" name="enchantGF_1250111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1250114" type="checkbox"><label for="isEnchantGF_1250114">:<input class="hvAANumber" name="enchantGF_1250114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1250112" type="checkbox"><label for="isEnchantGF_1250112">:<input class="hvAANumber" name="enchantGF_1250112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1250115" type="checkbox"><label for="isEnchantGF_1250115">:<input class="hvAANumber" name="enchantGF_1250115" placeholder="0" type="number"></label></div>',
-        '      <div><l0>黑暗</l0><l1>黑暗</l1><l2>Darkness</l2></div>','      <div><input id="isEnchantGF_1260101" type="checkbox"><label for="isEnchantGF_1260101">:<input class="hvAANumber" name="enchantGF_1260101" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1260102" type="checkbox"><label for="isEnchantGF_1260102">:<input class="hvAANumber" name="enchantGF_1260102" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1260113" type="checkbox"><label for="isEnchantGF_1260113">:<input class="hvAANumber" name="enchantGF_1260113" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1260111" type="checkbox"><label for="isEnchantGF_1260111">:<input class="hvAANumber" name="enchantGF_1260111" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1260114" type="checkbox"><label for="isEnchantGF_1260114">:<input class="hvAANumber" name="enchantGF_1260114" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1260112" type="checkbox"><label for="isEnchantGF_1260112">:<input class="hvAANumber" name="enchantGF_1260112" placeholder="0" type="number"></label></div>',
-        '      <div><input id="isEnchantGF_1260115" type="checkbox"><label for="isEnchantGF_1260115">:<input class="hvAANumber" name="enchantGF_1260115" placeholder="0" type="number"></label></div>',
-        '    </div>',
-        '  </div>',
-
         '</div>',
 
         '<div class="hvAATab" id="hvAATab-Recovery">',
@@ -2345,7 +2313,7 @@
         '    <div><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Im" type="number"></div>',
         '    <div><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Co" type="number"></div>',
         '    <div><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_Dr" type="number"></div>',
-        '    <div><l0>魔磁网(MN)</l0><l1>魔磁網(MN)</l1><l2>MagNet</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_MN" type="number"></div>',
+        '    <div><l0>固定(MN)</l0><l1>固定(MN)</l1><l2>Immobilize(MagNet)</l2><input class="hvAANumber" placeholder="0" name="debuffSkillTurn_MN" type="number"></div>',
         '</div>',
         '  </div>',
 
@@ -2360,7 +2328,7 @@
         '    <div><input id="debuffSkillOrderAll_Slo" type="checkbox"><label for="debuffSkillOrderAll_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label></div>',
         '    <div><input id="debuffSkillOrderAll_Dr" type="checkbox"><label for="debuffSkillOrderAll_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label></div>',
         '    <div><input id="debuffSkillOrderAll_Im" type="checkbox"><label for="debuffSkillOrderAll_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label></div>',
-        '    <div><input id="debuffSkillOrderAll_MN" type="checkbox"><label for="debuffSkillOrderAll_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label></div>',
+        '    <div><input id="debuffSkillOrderAll_MN" type="checkbox"><label for="debuffSkillOrderAll_MN"><l0>固定(MN)</l0><l1>固定(MN)</l1><l2>Immobilize(MagNet)</l2></label></div>',
         '    <div><input id="debuffSkillOrderAll_Co" type="checkbox"><label for="debuffSkillOrderAll_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
         '  </div>',
         '  </div>',
@@ -2374,7 +2342,7 @@
         '    <div><input id="debuffAllExclusive_Slo" type="checkbox"><label for="debuffAllExclusive_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label></div>',
         '    <div><input id="debuffAllExclusive_Dr" type="checkbox"><label for="debuffAllExclusive_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label></div>',
         '    <div><input id="debuffAllExclusive_Im" type="checkbox"><label for="debuffAllExclusive_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label></div>',
-        '    <div><input id="debuffAllExclusive_MN" type="checkbox"><label for="debuffAllExclusive_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label></div>',
+        '    <div><input id="debuffAllExclusive_MN" type="checkbox"><label for="debuffAllExclusive_MN"><l0>固定(MN)</l0><l1>固定(MN)</l1><l2>Immobilize(MagNet)</l2></label></div>',
         '    <div><input id="debuffAllExclusive_Co" type="checkbox"><label for="debuffAllExclusive_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
         '  </div>',
         '  </div>',
@@ -2389,7 +2357,7 @@
         '    <div><input id="debuffSkillOrder_Slo" type="checkbox"><label for="debuffSkillOrder_Slo"><l0>缓慢(Slo)</l0><l1>緩慢(Slo)</l1><l2>Slow</l2></label></div>',
         '    <div><input id="debuffSkillOrder_Dr" type="checkbox"><label for="debuffSkillOrder_Dr"><l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></label></div>',
         '    <div><input id="debuffSkillOrder_Im" type="checkbox"><label for="debuffSkillOrder_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label></div>',
-        '    <div><input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label></div>',
+        '    <div><input id="debuffSkillOrder_MN" type="checkbox"><label for="debuffSkillOrder_MN"><l0>固定(MN)</l0><l1>固定(MN)</l1><l2>Immobilize(MagNet)</l2></label></div>',
         '    <div><input id="debuffSkillOrder_Co" type="checkbox"><label for="debuffSkillOrder_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label></div>',
         '  </div>',
         '  </div>',
@@ -2422,8 +2390,8 @@
         '  <div><input id="debuffSkill_Im" type="checkbox"><label for="debuffSkill_Im"><l0>陷危(Im)</l0><l1>陷危(Im)</l1><l2>Imperil</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Im" type="number">; EWF: <input name="excludedWeightFormula_Im" placeholder="900" type="text">{{debuffSkillImCondition}}</div>',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillImAll" type="checkbox"><label for="debuffSkillImAll"><l0>先给全体上陷危(Im)</l0><l1>先給全體上陷危(Im)</l1><l2>Imperil all enemies first.</l2></label><input id="debuffSkillImAllByIndex" type="checkbox"><label for="debuffSkillImAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillImAllCondition}}</div>',
 
-        '  <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold" type="number">; EWF: <input name="excludedWeightFormula_MN" placeholder="900" type="text">{{debuffSkillMNCondition}}</div>',
-        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillMNAll" type="checkbox"><label for="debuffSkillMNAll"><l0>先给全体上魔磁网/固定(MN)</l0><l1>先給全體上魔磁網/固定(MN)</l1><l2>MagNet/Immobilize all enemies first.</l2></label><input id="debuffSkillMNAllByIndex" type="checkbox"><label for="debuffSkillMNAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillMNAllCondition}}</div>',
+        '  <div><input id="debuffSkill_MN" type="checkbox"><label for="debuffSkill_MN"><l0>固定(MN)</l0><l1>固定(MN)</l1><l2>Immobilize(MagNet)</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_MN" type="number">; EWF: <input name="excludedWeightFormula_MN" placeholder="900" type="text">{{debuffSkillMNCondition}}</div>',
+        '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillMNAll" type="checkbox"><label for="debuffSkillMNAll"><l0>先给全体上固定(MN)</l0><l1>先給全體上固定(MN)</l1><l2>Immobilize(MagNet) all enemies first.</l2></label><input id="debuffSkillMNAllByIndex" type="checkbox"><label for="debuffSkillMNAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillMNAllCondition}}</div>',
 
         '  <div><input id="debuffSkill_Co" type="checkbox"><label for="debuffSkill_Co"><l0>混乱(Co)</l0><l1>混亂(Co)</l1><l2>Confuse</l2></label><l0>阈值: </l0><l1>閾值: </l1><l2>Threshold: </l2><input class="hvAANumber" placeholder="0" name="debuffSkillThreshold_Co" type="number">; EWF: <input name="excludedWeightFormula_Co" placeholder="900" type="text">{{debuffSkillCoCondition}}</div>',
         '  <div><l01>特殊</l01><l2>Special</l2><input id="debuffSkillCoAll" type="checkbox"><label for="debuffSkillCoAll"><l0>先给全体上混乱(Co)</l0><l1>先給全體上混亂(Co)</l1><l2>Confuse all enemies first.</l2></label><input id="debuffSkillCoAllByIndex" type="checkbox"><label for="debuffSkillCoAllByIndex"><l0>按照顺序而非权重</l0><l1>按照順序而非權重</l1><l2>By index instead of weight</l2></label>{{debuffSkillCoAllCondition}}</div>',
@@ -2481,7 +2449,12 @@
         '<div class="hvAATab" id="hvAATab-Alarm">',
         '  <span class="hvAATitle"><l0>自定义警报</l0><l1>自定義警報</l1><l2>Alarm</l2></span><br>',
         '  <l0>注意：留空则使用默认音频，建议每个用户使用自定义音频</l0><l1>注意：留空則使用默認音頻，建議每個用戶使用自定義音頻</l1><l2>Note: Leave the box blank to use default audio, it\'s recommended for all user to use custom audio.</l2>',
-        '  <div><input id="audioEnable_Common" type="checkbox"><label for="audioEnable_Common"><l01>通用</l01><l2>Common</l2>: <input name="audio_Common" type="text"></label><br><input id="audioEnable_Error" type="checkbox"><label for="audioEnable_Error"><l0>错误</l0><l1>錯誤</l1><l2>Error</l2>: <input name="audio_Error" type="text"></label><br><input id="audioEnable_Defeat" type="checkbox"><label for="audioEnable_Defeat"><l0>失败</l0><l1>失敗</l1><l2>Defeat</l2>: <input name="audio_Defeat" type="text"></label><br><input id="audioEnable_Riddle" type="checkbox"><label for="audioEnable_Riddle"><l0>答题</l0><l1>答題</l1><l2>Riddle</l2>: <input name="audio_Riddle" type="text"></label><br><input id="audioEnable_Victory" type="checkbox"><label for="audioEnable_Victory"><l0>胜利</l0><l1>勝利</l1><l2>Victory</l2>: <input name="audio_Victory" type="text"></label></div>',
+        '  <div>',
+        '    <input id="audioEnable_Common" type="checkbox"><label for="audioEnable_Common"><l01>通用</l01><l2>Common</l2>: <input name="audio_Common" placeholder="https://github.com/dodying/UserJs/raw/master/HentaiVerse/hvAutoAttack/Common.ogg" type="text"></label><br>',
+        '    <input id="audioEnable_Error" type="checkbox"><label for="audioEnable_Error"><l0>错误</l0><l1>錯誤</l1><l2>Error</l2>: <input name="audio_Error" placeholder="https://github.com/dodying/UserJs/raw/master/HentaiVerse/hvAutoAttack/Error.ogg" type="text"></label><br>',
+        '    <input id="audioEnable_Defeat" type="checkbox"><label for="audioEnable_Defeat"><l0>失败</l0><l1>失敗</l1><l2>Defeat</l2>: <input name="audio_Defeat" placeholder="https://github.com/dodying/UserJs/raw/master/HentaiVerse/hvAutoAttack/Defeat.ogg" type="text"></label><br>',
+        '    <input id="audioEnable_Riddle" type="checkbox"><label for="audioEnable_Riddle"><l0>答题</l0><l1>答題</l1><l2>Riddle</l2>: <input name="audio_Riddle"  placeholder="https://github.com/dodying/UserJs/raw/master/HentaiVerse/hvAutoAttack/Riddle.ogg" type="text"></label><br>',
+        '    <input id="audioEnable_Victory" type="checkbox"><label for="audioEnable_Victory"><l0>胜利</l0><l1>勝利</l1><l2>Victory</l2>: <input name="audio_Victory"  placeholder="https://github.com/dodying/UserJs/raw/master/HentaiVerse/hvAutoAttack/Victory.ogg" type="text"></label></div>',
         '  <div><l0>请将将要测试的音频文件的地址填入这里</l0><l1>請將將要測試的音頻文件的地址填入這裡</l1><l2>Plz put in the audio file address you want to test</l2>: <br><input class="hvAADebug" name="audio_Text" type="text"></div></div>',
 
         '<div class="hvAATab" id="hvAATab-Rule">',
@@ -2490,7 +2463,7 @@
         '    <l0>初始权重系数(>0:低血量优先;<0:高血量优先)</l0><l1>初始權重係數(>0:低血量優先;<0:高血量優先)</l1><l2>BaseHpRatio(>0:low hp first;<0:high hp first)</l2><input class="hvAANumber" name="baseHpRatio" placeholder="1" type="number"><br>',
         '    <l0>不可命中目标的权重公式</l0><l1>不可名中目標的權重公式</l1><l2>Unreachable Target Weight Formula</l2>: <input name="unreachableWeight" placeholder="1000" type="text"><br>',
         '    <l0>BOSS:Yggdrasil额外权重</l0><l1>BOSS:Yggdrasil額外權重</l1><l2>BOSS:Yggdrasil Extra Weight</l2></b><input class="hvAANumber" name="YggdrasilExtraWeight" placeholder="-1000" type="number"><br>',
-        '    <input id="cacheMonsterHP" type="checkbox"><label for="cacheMonsterHP"><l0>启用HP缓存</l0><l1>啟用HP緩存</l1><l2>Use HP Cache</l2></label><button class="clearMonsterHPCache"><l0>清空缓存</l0><l1>清空緩存</l1><l2>Clear HP Cache</l2></button><input id="portable_monsterDB" type="checkbox"><label for="portable_monsterDB"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2></label><input id="portable_monsterMID" type="checkbox" style="display:none"></div>',
+        '    <input id="cacheMonsterHP" type="checkbox"><label for="cacheMonsterHP"><l0>启用HP缓存</l0><l1>啟用HP緩存</l1><l2>Use HP Cache</l2></label><button class="clearMonsterHPCache"><l0>清空缓存</l0><l1>清空緩存</l1><l2>Clear HP Cache</l2></button><input id="portable_monsterDB" type="checkbox"><label for="portable_monsterDB"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2><l0>注意：便携数据模式可能会显著增加硬盘读写</l0><l1>注意：便攜數據模式可能會顯著增加硬盤讀寫</l1><l2>Notice：portable mode may significantly increase hard disk I/O</l2></label><input id="portable_monsterMID" type="checkbox" style="display:none"></div>',
         '  <div><b>2. <l0>初始权重与下述各Buff权重相加</l0><l1>初始權重與下述各Buff權重相加</l1><l2>PW(X) = BaseHpWeight + Accumulated_Weight_of_Deprecating_Spells_In_Effect(X)</l2></b><br>',
         '    <div class="hvAATable" style="grid-template-columns:repeat(6, 1fr);">',
         '      <div><input class="hvAANumber" name="weight_We" placeholder="12" type="number"> <l0>虚弱(We)</l0><l1>虛弱(We)</l1><l2>Weaken</l2></div>',
@@ -2505,7 +2478,7 @@
         '      <div><input class="hvAANumber" name="weight_Dr" placeholder="2" type="number"> <l0>枯竭(Dr)</l0><l1>枯竭(Dr)</l1><l2>Drain</l2></div>',
         '      <div><input class="hvAANumber" name="weight_ET" placeholder="2" type="number"> <l0>以太窃取(ET)</l0><l1>以太竊取(ET)</l1><l2>Ether Theft</l2></div>',
         '      <div><input class="hvAANumber" name="weight_ST" placeholder="2" type="number"> <l0>灵力窃取(ST)</l0><l1>靈力竊取(ST)</l1><l2>Spirit Theft</l2></div>',
-        '      <div><input class="hvAANumber" name="weight_MN" placeholder="7" type="number"> <l0>魔磁网/固定(MN)</l0><l1>魔磁網/固定(MN)</l1><l2>MagNet/Immobilize</l2></div>',
+        '      <div><input class="hvAANumber" name="weight_MN" placeholder="7" type="number"> <l0>固定(MN)</l0><l1>固定(MN)</l1><l2>Immobilize(MagNet)</l2></div>',
         '      <div><input class="hvAANumber" name="weight_Po" placeholder="-10" type="number"> <l0>流动毒性(Po)</l0><l1>流动毒性(Po)</l1><l2>Spreading Poison</l2></div>',
         '      <div><input class="hvAANumber" name="weight_Stun" placeholder="290" type="number"> <l0>眩晕(St)</l0><l1>眩暈(St)</l1><l2>Stunned</l2></div>',
         '      <div><input class="hvAANumber" name="weight_CM" placeholder="-20" type="number"> <l0>魔力合流()</l0><l1>魔力合流(CM)</l1><l2>Coalesced Mana</l2></div>',
@@ -2546,28 +2519,28 @@
         '    <input id="displayWeightBackground" type="checkbox"><label for="displayWeightBackground"><l0>显示优先级背景色</l0><l1>顯示優先級背景色</l1><l2>DIsplay Priority Background Color</l2></label></br>',
         '    <l0>CSS格式或可eval执行的公式（可用&lt;rank&gt;, &lt;all&gt;指代优先级和总优先级数量, &lt;style_x&gt;指代第x个的相同配置值），例如：</l0><l1>CSS格式或可eval執行的公式（可用&lt;rank&gt;, &lt;all&gt;指代優先級和總優先級數量, &lt;style_x&gt;指代第x個的相同配置值）：例如</l1><l2>CSS or eval executable formula(use &lt;rank&gt; and &lt;all&gt; to refer to priority rank and total rank count, &lt;style_x&gt; to refer to the same option value of option No.x)Such as: </l2><br>`hsl(${Math.round(240*&lt;rank&gt;/Math.max(1,&lt;all&gt;-1))}deg 50% 50%)`<br>',
         '    <div class="hvAATable" style="grid-template-columns: repeat(1, 0.05fr 1fr);width:100%;">',
-        '    <div>&nbsp;&nbsp;1.</div><div><input class="customizeInput" name="weightBackground_1" type="text"></div>',
-        '    <div>&nbsp;&nbsp;2.</div><div><input class="customizeInput" name="weightBackground_2" type="text"></div>',
-        '    <div>&nbsp;&nbsp;3.</div><div><input class="customizeInput" name="weightBackground_3" type="text"></div>',
-        '    <div>&nbsp;&nbsp;4.</div><div><input class="customizeInput" name="weightBackground_4" type="text"></div>',
-        '    <div>&nbsp;&nbsp;5.</div><div><input class="customizeInput" name="weightBackground_5" type="text"></div>',
-        '    <div>&nbsp;&nbsp;6.</div><div><input class="customizeInput" name="weightBackground_6" type="text"></div>',
-        '    <div>&nbsp;&nbsp;7.</div><div><input class="customizeInput" name="weightBackground_7" type="text"></div>',
-        '    <div>&nbsp;&nbsp;8.</div><div><input class="customizeInput" name="weightBackground_8" type="text"></div>',
-        '    <div>&nbsp;&nbsp;9.</div><div><input class="customizeInput" name="weightBackground_9" type="text"></div>',
-        '    <div>10.</div><div><input class="customizeInput" name="weightBackground_0" type="text"></div>',
+        '    <div>&nbsp;&nbsp;1.</div><div><input name="weightBackground_0" type="text"></div>',
+        '    <div>&nbsp;&nbsp;2.</div><div><input name="weightBackground_1" type="text"></div>',
+        '    <div>&nbsp;&nbsp;3.</div><div><input name="weightBackground_2" type="text"></div>',
+        '    <div>&nbsp;&nbsp;4.</div><div><input name="weightBackground_3" type="text"></div>',
+        '    <div>&nbsp;&nbsp;5.</div><div><input name="weightBackground_4" type="text"></div>',
+        '    <div>&nbsp;&nbsp;6.</div><div><input name="weightBackground_5" type="text"></div>',
+        '    <div>&nbsp;&nbsp;7.</div><div><input name="weightBackground_6" type="text"></div>',
+        '    <div>&nbsp;&nbsp;8.</div><div><input name="weightBackground_7" type="text"></div>',
+        '    <div>&nbsp;&nbsp;9.</div><div><input name="weightBackground_8" type="text"></div>',
+        '    <div>10.</div><div><input name="weightBackground_9" type="text"></div>',
         '  </div>',
         '  </div>',
         '  <div>PS. <l0>如果你对各Buff权重有特别见解，请务必</l0><l1>如果你對各Buff權重有特別見解，請務必</l1><l2>If you have any suggestions, please </l2><a class="hvAAGoto" name="hvAATab-Feedback"><l0>告诉我</l0><l1>告訴我</l1><l2>let me know</l2></a>.<br><l0>参考公式为：</l0><l1>參考公式為：</l1><l2>Basic Weight Calculation as: </l2>PW(X) = Log10(<br>HP/MaxHPOnField/(1+CentralAttackDamageExtraRatio)<br>  *[HPActualEffectivenessRate:∏(1-debuff),debuff=Im|PA|Bl|Co|Dr|MN|St]<br>  /[DMGActualEffectivenessRate:∏(1-debuff),debuff=We|Bl|Slo|Si|Sl|Co|Dr|MN|St]<br>)</div>',
         '</div>',
 
         '<div class="hvAATab" id="hvAATab-Drop">',
-        '  <div><button class="reDropMonitor"><l0>重置掉落监测</l0><l1>重置掉落監測</l1><l2>Reset Drops Tracking</l2></button><input id="portable_drop" type="checkbox"><label for="portable_drop"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2></label><input id="portable_dropOld" type="checkbox" style="display:none"></div>',
+        '  <div><button class="reDropMonitor"><l0>重置掉落监测</l0><l1>重置掉落監測</l1><l2>Reset Drops Tracking</l2></button><input id="portable_drop" type="checkbox"><label for="portable_drop"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2><l0>注意：便携数据模式可能会显著增加硬盘读写</l0><l1>注意：便攜數據模式可能會顯著增加硬盤讀寫</l1><l2>Notice：portable mode may significantly increase hard disk I/O</l2></label><input id="portable_dropOld" type="checkbox" style="display:none"></div>',
         '  <div class="hvAACenter"><l0>记录装备的最低品质</l0><l1>記錄裝備的最低品質</l1><l2>Minimum drop quality</l2>: <select name="dropQuality"><option value="0">Crude</option><option value="1">Fair</option><option value="2">Average</option><option value="3">Superior</option><option value="4">Exquisite</option><option value="5">Magnificent</option><option value="6">Legendary</option><option value="7">Peerless</option></select></div>',
         '  <table class="hvAACenter"></table></div>',
 
         '<div class="hvAATab" id="hvAATab-Usage">',
-        '  <div><button class="reRecordUsage"><l0>重置数据记录</l0><l1>重置數據記錄</l1><l2>Reset Usage Tracking</l2></button><input id="portable_stats" type="checkbox"><label for="portable_stats"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2></label><input id="portable_statsOld" type="checkbox" style="display:none"></div>',
+        '  <div><button class="reRecordUsage"><l0>重置数据记录</l0><l1>重置數據記錄</l1><l2>Reset Usage Tracking</l2></button><input id="portable_stats" type="checkbox"><label for="portable_stats"><l0>使用便携数据模式（导出脚本数据时将包含）</l0><l1>使用便攜數據模式（導出腳本數據時將包含）</l1><l2>Portable Mode (will be included while exporting script datas)</l2><l0>注意：便携数据模式可能会显著增加硬盘读写</l0><l1>注意：便攜數據模式可能會顯著增加硬盤讀寫</l1><l2>Notice：portable mode may significantly increase hard disk I/O</l2></label><input id="portable_statsOld" type="checkbox" style="display:none"></div>',
         '  <div><b><l0>自身</l0><l1>自身</l1><l2>Self</l2></b>',
         '  <div class="hvAATable" style="grid-template-columns: repeat(10, 1fr);">' ,
         '    <div><input id="record_turn" type="checkbox"><label for="record_turn"><l0></l0><l1></l1><l2></l2>Turns</label></div>',
@@ -2607,12 +2580,12 @@
         '  <table></table>',
         '</div>',
 
-        '<div class="hvAATab hvAACenter" id="hvAATab-Tools">',
+        '<div class="hvAATab" id="hvAATab-Tools">',
         '  <div><span class="hvAATitle"><l0>当前状况</l0><l1>當前狀況</l1><l2>Current status</l2></span>: ',
         '    <l0>如果脚本长期暂停且网络无问题，请点击</l0><l1>如果腳本長期暫停且網絡無問題，請點擊</l1><l2>If the script does not work and you are sure that it\'s not because of your internet, click</l2><button class="hvAAFix"><l0>尝试修复</l0><l1>嘗試修復</l1><l2>Try to fix</l2></button><br>',
         '    <l0>战役模式</l0><l1>戰役模式</l1><l2>Battle type</l2>: <select class="hvAADebug" name="roundType"><option></option><option value="ar">The Arena</option><option value="rb">Ring of Blood</option><option value="gr">GrindFest</option><option value="iw">Item World</option><option value="ba">Encounter</option><option value="tw">The Tower</option></select> <l0>当前回合</l0><l1>當前回合</l1><l2>Current round</l2>: <input name="roundNow" class="hvAADebug hvAANumber" type="number"> <l0>总回合</l0><l1>總回合</l1><l2>Total rounds</l2>: <input name="roundAll" class="hvAADebug hvAANumber" type="number"></div>',
         '  <div class="hvAAQuickSite"><input id="showQuickSite" type="checkbox"><label for="showQuickSite"><span class="hvAATitle"><l0>快捷站点</l0><l1>快捷站點</l1><l2>Quick Site</l2></span></label><button class="quickSiteAdd"><l01>新增</l01><l2>Add</l2></button><br>',
-        '    <l0>注意: 留空“姓名”一栏则表示删除该行，修改后请保存</l0><l1>注意: 留空“姓名”一欄則表示刪除該行，修改後請保存</l1><l2>Note: The "name" input box left blank will be deleted, after change please save in time.</l2>',
+        '    <l0>注意: 留空“名称”一栏则表示删除该行，修改后请保存</l0><l1>注意: 留空“名稱”一欄則表示刪除該行，修改後請保存</l1><l2>Note: The "name" input box left blank will be deleted, after change please save in time.</l2>',
         '    <table><tbody><tr class="hvAATh"><td><l0>图标</l0><l1>圖標</l1><l2>ICON</l2></td><td><l0>名称</l0><l1>名稱</l1><l2>Name</l2></td><td><l0>链接</l0><l1>鏈接</l1><l2>Link</l2></td></tr></tbody></table></div>',
         '  <div><span class="hvAATitle"><l0>备份与还原</l0><l1>備份與還原</l1><l2>Backup and Restore</l2></span></br><button class="hvAABackup"><l0>备份设置</l0><l1>備份設置</l1><l2>Backup Confiuration</l2></button><button class="hvAARestore"><l0>还原设置</l0><l1>還原設置</l1><l2>Restore Confiuration</l2></button><button class="hvAADelete"><l0>删除设置</l0><l1>刪除設置</l1><l2>Delete Confiuration</l2></button><ul class="hvAABackupList"></ul></div>',
         '  <div><span class="hvAATitle"><l0>导入与导出</l0><l1>導入與導出</l1><l2>Import and Export</l2></span></br><button class="hvAAExport"><l0>导出设置</l0><l1>導出設置</l1><l2>Export Confiuration</l2></button><button class="hvAAImport"><l0>导入设置</l0><l1>導入設置</l1><l2>Import Confiuration</l2></button><textarea class="hvAAConfig"></textarea></div>',
@@ -2629,17 +2602,18 @@
         '</div>',
         '</div>',
 
-        '<div class="hvAAButtonBox hvAACenter">',
-        '  <button class="hvAAReset"><l0>重置设置</l0><l1>重置設置</l1><l2>Reset</l2></button><button class="hvAAApply"><l0>应用</l0><l1>應用</l1><l2>Apply</l2></button><button class="hvAACancel"><l01>取消</l01><l2>Cancel</l2></button>',
+        '<div class="hvAAButtonBox hvAACenter" style="display:grid; grid-template-columns: repeat(8, 1fr)">',
+        '  <div></div><div></div><button class="hvAAApply"><l0>应用</l0><l1>應用</l1><l2>Apply</l2></button><button class="hvAACancel"><l0>关闭</l0><l1>關閉</l1><l2>Close</l2></button><button class="hvAAReset"><l0>撤销</l0><l1>撤銷</l1><l2>Revert</l2></button><button class="hvAADefault"><l0>默认</l0><l1>默認</l1><l2>Default</l2></button><div></div><div></div>',
         '</div>',
       ].join('').replace(/{{(.*?)}}/g, '<div class="customize" name="$1"></div>');
 
       gE('#hvAATab-Main').style.zIndex = 1;
       optionBox.style.display = 'none';
       gE('select[name="lang"]').value = g().lang;
+      bindEvents();
+      loadOptionUIData();
 
-      // 绑定事件
-      (function bindEvents() {
+      function bindEvents() {
         gE('select[name="lang"]', optionBox).onchange = function () { // 选择语言
           gE('.hvAA-LangStyle').textContent = `l${this.value}{display:inline!important;}`;
           if (/^[01]$/.test(this.value)) {
@@ -2788,13 +2762,13 @@
           const select = gE('select[name="groupChoose"]', customizeBox);
           select.textContent = '';
           for (let i = 0; i <= group.length; i++) {
-            const option = select.appendChild(cE('option'));
+            const optionUI = select.appendChild(cE('option'));
             if (i === group.length) {
-              option.value = 'new';
-              option.textContent = 'new';
+              optionUI.value = 'new';
+              optionUI.textContent = 'new';
             } else {
-              option.value = i + 1;
-              option.textContent = i + 1;
+              optionUI.value = i + 1;
+              optionUI.textContent = i + 1;
             }
           }
         }
@@ -2816,7 +2790,7 @@
           gE('.customizeBox').style.zIndex = 20;
           gE('.customizeBox').style.top = `${position.bottom - bodyPosition.top}px`;
           gE('.customizeBox').style.left = `${position.left - bodyPosition.left}px`;
-          gE('.customizeBox').style.cssText += `display: block; height: ${gE('.customizeGroup', 'all', g().customizeTarget).length * 30 + 30}px;`
+          gE('.customizeBox').style.cssText += `display: block; height: ${gE('.customizeGroup', 'all', g().customizeTarget).length * 30 + 60}px;`
         };
         // 标签页-主要选项
         gE('input[name="pauseHotkeyStr"]', optionBox).onkeyup = function (e) {
@@ -2906,7 +2880,7 @@
           // 标签页-其他技能
           '.skillOrder': 'name="skillOrderValue"',
           // 标签页-,
-          '.infusionOrder': 'name = "infusionOrderName"',
+          '.infusionOrder': 'name="infusionOrderName"',
         }
         const isGetOrderFromId = ['.buffSkillOrder', '.debuffSkillOrder', '.debuffSkillOrderAll', '.skillOrder', '.infusionOrder'];
         for (let ui in orderValues) {
@@ -2915,9 +2889,7 @@
 
         // 标签页-警报
         gE('input[name="audio_Text"]', optionBox).onchange = function () {
-          if (this.value === '') {
-            return;
-          }
+          if (this.value === '') return;
           if (!/^http(s)?:|^ftp:|^data:audio/.test(this.value)) {
             _alert(0, '地址必须以"http:","https:","ftp:","data:audio"开头', '地址必須以"http:","https:","ftp:","data:audio"開頭', 'The address must start with "http:", "https:", "ftp:", and "data:audio"');
             return;
@@ -2979,27 +2951,9 @@
           this.style.height = `${this.scrollHeight}px`;
           this.select();
         };
-        function rmListItem(code) { // 同步删除界面显示对应的项
-          const configs = gE('#hvAATab-Tools > * > ul[class="hvAABackupList"] > li', 'all');
-          for (const config of configs) {
-            if (config.textContent == code) {
-              config.remove();
-            }
-          }
-        }
         gE('.hvAABackup', optionBox).onclick = function () {
-          const code = _alert(2, '请输入当前配置代号（或默认使用当前时间）', '請輸入當前配置代號（或默認使用當前時間）', 'Please put in a name for the current configuration (or use current time as default)') || time(3);
-          const backups = getValue('backup', true) || {};
-          if (code in backups) { // 覆写同名配置
-            if (_alert(1, '是否覆盖已有的同名配置？', '是否覆蓋已有的同名配置？', 'Do you want to overwrite the configuration with the same name?')) {
-              delete backups[code];
-              rmListItem(code);
-            } else return;
-          }
-          backups[code] = getValue('option');
-          setValue('backup', backups);
-          const li = gE('.hvAABackupList', optionBox).appendChild(cE('li'));
-          li.textContent = code;
+          const code = _alert(2, '请输入当前配置代号（或默认使用当前时间）', '請輸入當前配置代號（或默認使用當前時間）', 'Please put in a name for the current configuration (or use current time as default)');
+          backup(code, '是否覆盖已有的同名配置？', '是否覆蓋已有的同名配置？', 'Do you want to overwrite the configuration with the same name?')
         };
         gE('.hvAARestore', optionBox).onclick = function () {
           const code = _alert(2, '请输入配置代号', '請輸入配置代號', 'Please put in a name for a configuration');
@@ -3025,110 +2979,46 @@
           gE('.hvAAConfig').value = typeof t === 'string' ? t : JSON.stringify(t);
         };
         gE('.hvAAImport', optionBox).onclick = function () {
-          const option = JSON.parse(gE('.hvAAConfig').value);
-          if (!option) {
+          const optionImport = JSON.parse(gE('.hvAAConfig').value);
+          if (!optionImport) {
             return;
           }
           if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-            setValue('option', option);
+            setValue('option', optionImport);
             goto();
           }
         };
-        gE('.hvAAReset', optionBox).onclick = function () {
-          if (_alert(1, '是否重置', '是否重置', 'Whether to reset')) {
-            const option = getValue('option');
-            const newOption = {};
-            setValue('option', Object.fromEntries(excludeStandalone.option.map(ex => [ex, option[ex]])));
-            if (_alert(1, '已重置，是否刷新', '已重置，是否刷新', 'Reseted. Page reload?')) {
-              goto();
-            }
+        function alertDiffs(...lang) {
+          const diffs = getOptionDiff(option);
+          return diffs ? _alert(1, ...lang.map(str=>str + diffs)) : true;
+        }
+        gE('.hvAADefault', optionBox).onclick = function () {
+          if (getOptionDiff() && !alertDiffs('有未保存的选项，是否仍要设置为默认值', '有未保存的選項，是否仍要設置為默認值', 'Unsaved changes detected, continue to set options as default')) {
+            return;
           }
+          loadOptionUIData({});
+        };
+        gE('.hvAAReset', optionBox).onclick = function () {
+          if (!alertDiffs('是否撤销未保存的更改', '是否撤銷未保存的更改', 'Whether to revert unsaved changes')) {
+            return;
+          }
+          loadOptionUIData(option);
         };
         gE('.hvAAApply', optionBox).onclick = function () {
-          if (gE('select[name="attackStatus"] option[value="-1"]:checked', optionBox) || !gE('select[name="attackStatus"] option:checked', optionBox)) {
+          if (gE('select[name="attackStatus"] option[value="-1"]:checked', optionBox) ||
+              !gE('select[name="attackStatus"] option:checked', optionBox)) {
             _alert(0, '请选择攻击模式', '請選擇攻擊模式', 'Please select the attack mode');
             gE('.hvAATabmenu>span[name="Main"]').click();
             gE('#attackStatus', optionBox).style.border = '1px solid red';
-            setTimeout(() => {
-              gE('#attackStatus', optionBox).style.border = '';
-            }, 0.5 * _1s);
+            setTimeout(() => { gE('#attackStatus', optionBox).style.border = ''; }, 0.5 * _1s);
             return;
           }
+
           const arenaPrev = g().option?.idleArenaValue;
-          const _option = {
-            version: g().version,
-          };
-          let inputs = gE('input,select', 'all', optionBox);
-          let itemName, itemArray, itemValue, i;
-          for (i = 0; i < inputs.length; i++) {
-            if (inputs[i].className === 'hvAADebug') {
-              continue;
-            } else if (inputs[i].type === 'number' || inputs[i].className === 'hvAANumber') {
-              itemName = inputs[i].name;
-              itemValue = inputs[i].value ? inputs[i].value * 1 : '';
-              if (isNaN(itemValue)) {
-                continue;
-              }
-            } else if (inputs[i].type === 'text' || inputs[i].type === 'hidden') {
-              itemName = inputs[i].name;
-              itemValue = inputs[i].value || '';
-              if (itemValue === '') {
-                continue;
-              }
-            } else if (inputs[i].type === 'checkbox') {
-              itemName = inputs[i].id;
-              itemValue = inputs[i].checked;
-              if (itemValue === false) {
-                if (!inputs[i].placeholder) {
-                  continue;
-                }
-                itemValue = 0;
-              }
-            } else if (inputs[i].type === 'select-one') {
-              itemName = inputs[i].name;
-              itemValue = inputs[i].value;
-            }
-            itemArray = itemName.split('_');
-            if (itemArray.length === 1) {
-              _option[itemName] = itemValue;
-              if (inputs[i].placeholder && (_option[itemName] === '' || _option[itemName] === inputs[i].placeholder || _option[itemName] === inputs[i].placeholder * 1) || (_option[itemName] === true && inputs[i].placeholder)) {
-                delete _option[itemName]
-              }
-            } else {
-              if (!(itemArray[0] in _option)) {
-                _option[itemArray[0]] = {};
-              }
-              if (inputs[i].className === 'customizeInput') {
-                if (typeof _option[itemArray[0]][itemArray[1]] === 'undefined') {
-                  _option[itemArray[0]][itemArray[1]] = [];
-                }
-                _option[itemArray[0]][itemArray[1]].push(itemValue);
-              } else {
-                _option[itemArray[0]][itemArray[1]] = itemValue;
-                if (inputs[i].placeholder && (_option[itemArray[0]][itemArray[1]] === '' || _option[itemArray[0]][itemArray[1]] === inputs[i].placeholder || _option[itemArray[0]][itemArray[1]] === inputs[i].placeholder * 1 || (_option[itemArray[0]][itemArray[1]] === true && inputs[i].placeholder))) {
-                  delete _option[itemArray[0]][itemArray[1]]
-                }
-              }
-              if (!Object.keys(_option[itemArray[0]]).length) {
-                delete _option[itemArray[0]]
-              }
-            }
-          }
-          inputs = gE('.hvAAQuickSite input[type="text"], .hvAAQuickSite input[type="number"]', 'all', optionBox);
-          for (i = 0; 3 * i < inputs.length; i++) {
-            if (i === 0 && inputs.length !== 0) {
-              _option.quickSite = [];
-            }
-            if (inputs[3 * i + 1].value === '') {
-              continue;
-            }
-            _option.quickSite.push({
-              fav: inputs[3 * i].value,
-              name: inputs[3 * i + 1].value,
-              url: inputs[3 * i + 2].value,
-            });
-          }
+
+          const _option = getCurrentUIOption();
           setValue('option', _option);
+
           optionBox.style.display = 'none';
           // 清除不再需要的portable数据
           for (const key of portable) {
@@ -3151,92 +3041,223 @@
         gE('.hvAACancel', optionBox).onclick = function () {
           optionBox.style.display = 'none';
         };
-      })();
+      };
 
-      // 加载UI数据
-      if (option) {
-        let i, j, k;
+      function getOptionDiff(...options) {
+        options[0] ??= formatOption({}, true); // default
+        options[1] ??= formatOption(loadOption(getCurrentUIOption()), true); // from UI
+        diffData.prototype.excludes = 'version';
+        const diffs = diffData(options);
+        const lang = g().lang;
+        return diffs ? '\n'+Object.entries(diffData(options)).map(([key,data])=> {
+          let defaultStr = ['默认','默認','Default'][lang];
+          switch (gE(`[name="${key}"],[id="${key}"]`, optionBox)?.type) {
+            case 'hidden': return;
+            case 'checkbox':
+              defaultStr = 'false';
+              break;
+          }
+          return `${Array.from(gE(`label[for="${key}"], label[for*="${key},"]`, 'all', optionBox)).map(x=>x?.innerText).reduce((acc,cur)=>(acc??'')+(cur??''), '') || key}: ${data.map(d=>d?String(d):defaultStr)?.join(' -> ')}`
+        }).filter(d=>d!==undefined).join('\n') : undefined;
+
+        function diffData(datas, parents) {
+          let json = datas.map(JSON.stringify);
+          if (unique(json).length === 1) return undefined;
+          if (datas.some(d=> !['object', 'undefined'].includes(typeof d))) {
+            const diff = {};
+            diff[parents] = datas;
+            return diff;
+          }
+          const keys = datas.map(data=>data?Object.keys(data):undefined);
+          let differents;
+          unique(keys.reduce((acc,cur) => (acc??[]).concat(cur??[]),[])).forEach(key=>{
+            if ([diffData.prototype.excludes, ...diffData.prototype.excludes].includes(key)) return;
+            let datasSub = datas.map(data => data?.[key]);
+            key = parents?`${parents}_${key}`:key;
+            const diff = diffData(datasSub, key);
+            if (!diff) return;
+            differents = {...(differents??={}), ...diff};
+          });
+          return differents;
+        }
+      }
+
+      function getCurrentUIOption() {
+        const _option = { version: scriptVersion.ver };
+        let name, array, value, type;
+        for (const input of gE('input,select', 'all', optionBox)) {
+          [name, type, value] = [input.name, input.type, input.value];
+          switch(input.className) {
+            case 'hvAADebug': continue;
+            case 'hvAANumber': type = 'number';
+          }
+          switch (type) {
+            case 'number':
+              value = (value || (value === 0)) ? value * 1 : '';
+              if (isNaN(value)) continue;
+              break;
+            case 'text': case 'hidden':
+              value = value || '';
+              if (['', 'undefined'].includes(value)) continue;
+              break;
+            case 'checkbox':
+              [name, value] = [input.id, input.checked];
+              if (value === false) {
+                if (!input.placeholder) continue;
+                value = 0;
+              }
+              break;
+            case 'select-one':
+              break;
+          }
+          if (['', 'undefined', input.placeholder, input.placeholder*1, !!input.placeholder].includes(value))
+          {
+            continue;
+          }
+
+          if ((array = name.split('_')).length === 1) {
+            _option[name] = value;
+            continue;
+          }
+          if (input.className === 'customizeInput') {
+            ((_option[array[0]] ??= {})[array[1]]??=[]).push(value);
+          } else {
+            (_option[array[0]] ??= {})[array[1]] = value;
+          }
+        }
+
+        const inputs = gE('.hvAAQuickSite input[type="text"], .hvAAQuickSite input[type="number"]', 'all', optionBox);
+        if (inputs.length) _option.quickSite = [];
+        for (let i = 0; i < inputs.length; i += 3) {
+          const [fav, name, url] = Array.from(inputs).slice(i,i+3).map(input => input.value);
+          if (name === '') continue;
+          _option.quickSite.push({ fav, name, url });
+        }
+        return _option;
+      }
+
+      function formatOption(option, skipUI) {
+        for (const obj in option) {
+          if (gE(`[name="${obj}"],[id="${obj}"]`, optionBox)) continue;
+          if (option[obj] instanceof Object) {
+            let found = false;
+            for (const key in option[obj]) {
+              if (found ||= gE(`[name="${obj}_${key}"],[id="${obj}_${key}"]`, optionBox)) continue;
+              console.log(`Legacy option deleted: ${obj}_${key}`);
+              delete option[obj][key];
+            }
+            if (!found) delete option[obj];
+            continue;
+          }
+          console.log(`Legacy option deleted: ${obj}`);
+          delete option[obj];
+        }
+
         const inputs = gE('input,select', 'all', optionBox);
-        const displayNotDefault = function (input, value) {
+        const displayCheckBoxNotDefault = function (input) {
           if (!gE(`label[for="${input.id}"]`) || input.placeholder === undefined) {
             return;
           }
-          if (!!value !== !!input.placeholder) {
+          if (!!input.checked !== !!input.placeholder) {
             gE(`label[for="${input.id}"]`).classList.add('optionEdited');
           } else {
             gE(`label[for="${input.id}"]`).classList.remove('optionEdited');
           }
         }
-        let itemName, itemArray, itemValue, _html;
-        for (i = 0; i < inputs.length; i++) {
-          if (inputs[i].className === 'hvAADebug') {
+        let name, array, value, type, placeholder, num;
+        function formatValue(value, placeholder) {
+          if (['', undefined].includes(value) && placeholder) {
+            value = placeholder;
+          }
+          switch (type) {
+            case 'text':
+            case 'hidden':
+            case 'select-one':
+            case 'number':
+              num = value * 1;
+              return (!isNaN(num)) ? num : value;
+            case 'checkbox':
+              return value ? true : undefined;
+            default:
+              return value;
+          }
+        }
+
+        for (const input of inputs) {
+          [name, type, placeholder] = [input.name || input.id, input.type, input.placeholder];
+          switch(input.className) {
+            case 'hvAADebug': continue;
+            case 'hvAANumber': type = type === 'text' ? 'number' : type;
+          }
+          [array, value] = [name.split('_'), undefined];
+          if (array.length === 1) {
+            value = formatValue(option[name], placeholder);
+            if (value || value === 0) option[name] = value;
+          } else if (input.className !== 'hvAACustomize') {
+            value = formatValue(option[array[0]]?.[array[1]], placeholder);
+            if (value || value === 0) (option[array[0]] ??= {})[array[1]] = value;
+          }
+          if (type !== 'checkbox' && ![placeholder * 1, placeholder].includes(value)) {
+            value = value === undefined ? '' : value;
+          }
+          if (skipUI) continue;
+          switch (type) {
+            case 'select-one' :
+            case 'text':
+            case 'hidden':
+            case 'number':
+              input.value = value;
+              customizeInputAutoFit(input);
+              break;
+            case 'checkbox':
+              input.checked = !!value;
+              displayCheckBoxNotDefault(input);
+              input.addEventListener('change', () => displayCheckBoxNotDefault(input));
+          }
+        }
+
+        return option;
+      }
+
+      function loadOptionUIData(uiOption) {
+        let isCache = !uiOption;
+        uiOption ??= option;
+        if (!uiOption) return;
+        uiOption = formatOption(uiOption);
+
+        const customizes = gE('.customize', 'all', optionBox);
+        customizes.forEach(n=> { while(n.firstChild) { n.removeChild(n.firstChild); }});
+        for (let customize of customizes) {
+          const name = customize.getAttribute('name');
+          if (!(name in uiOption)) {
+            const group = customize.appendChild(cE('div'));
+            group.className = 'customizeGroup';
+            group.innerHTML = `1. `;
+            const input = group.appendChild(cE('input'));
+            input.type = 'text';
+            input.className = 'customizeInput';
+            input.name = `${name}_0`;
+            customizeInputAutoFit(input, true);
             continue;
           }
-          itemName = inputs[i].name || inputs[i].id;
-          if (typeof option[itemName] !== 'undefined') {
-            itemValue = option[itemName];
-          } else {
-            itemArray = itemName.split('_');
-            itemValue = '';
-            if (itemArray.length === 2 && inputs[i].className !== 'hvAACustomize') {
-              option[itemArray[0]] ??= {}
-              itemValue = option[itemArray[0]][itemArray[1]];
-              if ((itemValue === '' || itemValue === undefined) && inputs[i].placeholder) {
-                itemValue = inputs[i].placeholder;
-                const num = itemValue * 1;
-                if ((inputs[i].type === 'number' || inputs[i].classList.contains('hvAANumber')) && !isNaN(num)) {
-                  itemValue = num;
-                }
-                option[itemArray[0]][itemArray[1]] = itemValue;
-              }
-            }
-          }
-          if (inputs[i].type === 'text' || inputs[i].type === 'hidden' || inputs[i].type === 'select-one' || inputs[i].type === 'number' || (inputs[i].type === 'text' && inputs[i].classList.contains('hvAANumber'))) {
-            if ((itemValue === '' || itemValue === undefined) && inputs[i].placeholder) {
-              itemValue = inputs[i].placeholder;
-              const num = itemValue * 1;
-              if (inputs[i].type === 'number' || inputs[i].classList.contains('hvAANumber') && !isNaN(num)) {
-                itemValue = num;
-              }
-              option[itemName] = itemValue;
-            } else if (itemValue !== inputs[i].placeholder * 1 && itemValue !== inputs[i].placeholder) {
-              inputs[i].value = itemValue;
-            }
-            if (inputs[i].type !== 'select-one' && !inputs[i].disabled) {
-              customizeInputAutoFit(inputs[i]);
-            }
-          } else if (inputs[i].type === 'checkbox') {
-            if (itemValue === '' && inputs[i].placeholder) {
-              itemValue = !!inputs[i].placeholder;
-              option[itemName] = itemValue;
-            }
-            inputs[i].checked = itemValue;
-            displayNotDefault(inputs[i], itemValue);
-            inputs[i].addEventListener('change', function() {
-              displayNotDefault(this, this.checked);
-            });
-          }
-        }
-        g('option', option);
-        const customize = gE('.customize', 'all', optionBox);
-        for (i = 0; i < customize.length; i++) {
-          itemName = customize[i].getAttribute('name');
-          if (itemName in option) {
-            for (j in option[itemName]) {
-              const group = customize[i].appendChild(cE('div'));
-              group.className = 'customizeGroup';
-              group.innerHTML = `${j * 1 + 1}. `;
-              for (k = 0; k < option[itemName][j].length; k++) {
-                const input = group.appendChild(cE('input'));
-                input.type = 'text';
-                input.className = 'customizeInput';
-                input.name = `${itemName}_${j}`;
-                input.value = option[itemName][j][k];
-                customizeInputAutoFit(input);
-              }
+          for (const j in uiOption[name]) {
+            const group = customize.appendChild(cE('div'));
+            group.className = 'customizeGroup';
+            group.innerHTML = `${j * 1 + 1}. `;
+            for (let k = 0; k < uiOption[name][j].length; k++) {
+              const input = group.appendChild(cE('input'));
+              input.type = 'text';
+              input.className = 'customizeInput';
+              input.name = `${name}_${j}`;
+              input.value = uiOption[name][j][k];
+              customizeInputAutoFit(input, k === uiOption[name][j].length-1);
             }
           }
         }
+
+        if (!isCache) return;
+        g('option', uiOption);
+        let _html;
         if (option.quickSite) {
           _html = '<tr class="hvAATh"><td><l0>图标</l0><l1>圖標</l1><l2>ICON</l2></td><td><l0>名称</l0><l1>名稱</l1><l2>Name</l2></td><td><l0>链接</l0><l1>鏈接</l1><l2>Link</l2></td></tr>';
           option.quickSite.forEach((i) => {
@@ -3244,32 +3265,92 @@
           });
           gE('.hvAAQuickSite>table>tbody', optionBox).innerHTML = _html;
         }
+
         if (getValue('backup')) {
           const backups = getValue('backup', true);
           _html = '';
-          for (i in backups) {
+          for (const i in backups) {
             _html = `${_html}<li>${i}</li>`;
           }
           gE('.hvAABackupList', optionBox).innerHTML = _html;
         }
-      }
+      };
     }
 
-    function customizeInputAutoFit(input) {
-      customizerInpuFit(input);
-      input.addEventListener('input', function(event) {
-        customizerInpuFit(input);
+    function customizeInputAutoFit(input, isLastCustomizeInput) {
+      if (input.type === 'select-one' || input.disabled && input.name !== 'version') return;
+      customizerInpuFit(input, isLastCustomizeInput);
+      input.addEventListener('input', event => customizerInpuFit(input, true));
+      input.addEventListener('keydown', function(event) {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const currentGroup = input.parentNode;
+        let nextGroup = event.shiftKey ? currentGroup.previousElementSibling : currentGroup.nextElementSibling;
+        if (!nextGroup && !event.shiftKey) {
+          const nextGroupIndex = input.name.match(/_(\d+)$/)[1]*1+1;
+          nextGroup = input.parentNode.parentNode.appendChild(cE('div'));
+          nextGroup.className = 'customizeGroup';
+          nextGroup.innerHTML = `${nextGroupIndex+1}. `
+
+          const newInput = nextGroup.appendChild(cE('input'));
+          newInput.type = 'text';
+          newInput.className = 'customizeInput';
+          newInput.name = input.name.replace(/_(\d+)$/, (...f)=>`_${nextGroupIndex}`);
+          customizeInputAutoFit(newInput, true);
+
+          const select = gE('.customizeBox select[name="groupChoose"]');
+          if (select) {
+            const selectOptions = gE('option', 'all', select);
+            const prevSelected = select.value;
+            const optionUI = select.appendChild(cE('option'));
+            selectOptions[selectOptions.length-1].value = nextGroupIndex+1;
+            selectOptions[selectOptions.length-1].textContent = nextGroupIndex+1;
+            optionUI.value = 'new';
+            optionUI.textContent = 'new';
+            select.value = prevSelected;
+          }
+        }
+        ((nextGroup?gE(event.shiftKey ? '.customizeInput:last-child' : '.customizeInput:first-child', nextGroup):undefined)??gE('.customizeInput:first-child', currentGroup)).focus()
       });
     }
 
-    function customizerInpuFit(input) {
+    function customizerInpuFit(input, dynamic=false) {
       if (input.value === input.placeholder) {
-        input.classList.add('optionOrigin');
+        input.classList.add('optionDefault');
       } else {
-        input.classList.remove('optionOrigin');
+        input.classList.remove('optionDefault');
       }
-      let length = input.value.length || input.placeholder?.length;
-      input.style.cssText += `width:${length+1}ch;`
+      autoResizeInput(input);
+      if (!input.classList.contains('customizeInput') || !dynamic) return;
+      if (input.nextElementSibling || !input.value) return;
+      const newInput = input.parentNode.appendChild(cE('input'));
+      newInput.type = 'text';
+      newInput.className = 'customizeInput';
+      newInput.name = input.getAttribute('name');
+      customizeInputAutoFit(newInput);
+    }
+
+    function autoResizeInput(input) {
+      const measure = cE('span');
+      const styles = window.getComputedStyle(input);
+      measure.style.cssText = `
+        visibility: hidden;
+        white-space: pre;
+        font-family: ${styles.fontFamily};
+        font-size: ${styles.fontSize};
+        font-weight: ${styles.fontWeight};
+        letter-spacing: ${styles.letterSpacing};
+        padding: ${styles.padding};
+        border: ${styles.border};
+        box-sizing: ${styles.boxSizing};
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    `;
+      measure.textContent = input.value;
+      document.body.appendChild(measure);
+      input.style.width = measure.offsetWidth + 'px';
+      document.body.removeChild(measure);
     }
 
     function creatCustomizeBox() { // 自定义条件界面
@@ -3330,7 +3411,9 @@
         '<option value="_isCd_">isCd</option>',
         '<option value="_spirit">spirit</option>',
         '<option value="_buffTurn_">buffTurn</option>',
+        '<option value="_buffStack_">buffStack</option>',
         '<option value="">- - - -</option>',
+        '<option value="_targetBuffStack_">targetBuffStack</option>',
         '<option value="_targetBuffTurn_">targetBuffTurn</option>',
         '<option value="_targetIsAlive">targetIsAlive</option>',
         '<option value="_targetHp">targetHp</option>',
@@ -3394,20 +3477,35 @@
         let groupChoose = selects[0].value;
         let group;
         if (groupChoose === 'new') {
-          groupChoose = gE('option', 'all', selects[0]).length;
+          const select = gE('select[name="groupChoose"]', customizeBox);
+          const selectOptions = gE('option', 'all', select);
+          groupChoose = selectOptions.length;
           group = target.appendChild(cE('div'));
           group.className = 'customizeGroup';
           group.innerHTML = `${groupChoose}. `;
           selects[0].click();
+          const prevSelected = select.value;
+          const optionUI = select.appendChild(cE('option'));
+          selectOptions[selectOptions.length-1].value = groupChoose;
+          selectOptions[selectOptions.length-1].textContent = groupChoose;
+          optionUI.value = 'new';
+          optionUI.textContent = 'new';
+          select.value = prevSelected;
         } else {
           group = gE('.customizeGroup', 'all', target)[groupChoose - 1];
         }
-        const input = group.appendChild(cE('input'));
+        const items = gE('*', 'all', group);
+        let input;
+        for (let i = items.length-1; i >= 0; i--) {
+          if (items[i].value) break;
+          input = items[i];
+        }
+        input ??= group.appendChild(cE('input'));
         input.type = 'text';
         input.className = 'customizeInput';
         input.name = `${target.getAttribute('name')}_${groupChoose - 1}`;
         input.value = `${selects[1].value} ${selects[2].value} ${selects[3].value}`;
-        customizeInputAutoFit(input);
+        customizeInputAutoFit(input, true);
       };
 
       function attr(target) {
@@ -3553,7 +3651,7 @@
       //   GM_notification({
       //     text: notification.text,
       //     image: `${window.location.origin}${unsafeWindow.IMG_URL}hentaiverse.png`,
-      //     highlight: true,
+      //     highlight: g().option?.focusNotification,
       //     timeout: 1000 * notification.time,
       //   });
       // }
@@ -3586,7 +3684,7 @@
     }
 
     function returnValueGetter(paramResultsGetter, targetGetter) {
-      let minmaxModes = returnValueGetter.prototype.minmaxModes ??= (()=> {
+      let minmaxModes = returnValueGetter.prototype.minmaxModes ??= (() => {
         const modes = ['min', 'max', 'count', 'sum'];
         const flags = ['a', 'ag', 'g'];
         return flags.reduce((result, f) => result.concat(modes.map(m => f + m)), []);
@@ -3681,7 +3779,10 @@
           return gE('#ckey_spirit[src*="spirit_a"]') ? 1 : 0;
         },
         buffTurn(...img) {
-          return getBuffTurnFromImg(getBuff(imgArray2img(img)));
+          return getBuffTurnFromImg(getBuff(imgArray2img(...img)));
+        },
+        buffStack(...img) {
+          return getBuffStackFromImg(getBuff(imgArray2img(...img)));
         },
         hpDecimal() {
           return g().hp / 100;
@@ -3699,19 +3800,24 @@
       let currentGroup=null;
       const func = {
         ...returnValueGetter.prototype.func,
-        targetBuffTurn(...img) {
-          const getBuffTurn = (t, i) => getBuffTurnFromImg(getBuff(imgArray2img(i), getMonsterID(t)));
+        targetBuffStack(...img) {
+          const getter = (t, i) => getBuffStackFromImg(getBuff(imgArray2img(i), getMonsterID(t)));
           let param = minmaxModes.includes(img[0]) ? img.shift() : undefined;
-          return switchMaxMin(param, t=>getBuffTurn(t, img));
+          return switchMaxMin(param, t => getter(t, img));
+        },
+        targetBuffTurn(...img) {
+          const getter = (t, i) => getBuffTurnFromImg(getBuff(imgArray2img(i), getMonsterID(t)));
+          let param = minmaxModes.includes(img[0]) ? img.shift() : undefined;
+          return switchMaxMin(param, t => getter(t, img));
         },
         targetOrder(param) {
-          return switchMaxMin(param, t=>t.order);
+          return switchMaxMin(param, t => t.order);
         },
         targetWeight(param) {
-          return switchMaxMin(param, t=>t.finWeight);
+          return switchMaxMin(param, t => t.finWeight);
         },
         targetRank(param) {
-          return switchMaxMin(param, t=>Object.entries(g().battle.monsterStatus).find(([k, v]) => v.order === t.order)[0] * 1);
+          return switchMaxMin(param, t => Object.entries(g().battle.monsterStatus).find(([k, v]) => v.order === t.order)[0] * 1);
         },
         targetName(param) {
           param ??= targetGetter();
@@ -3719,7 +3825,7 @@
           return gE(`.btm3>div>div`, mon).innerText.replace(' ', '_');
         },
         targetBossType(param) {
-          return switchMaxMin(param, t=> {
+          return switchMaxMin(param, t => {
             const name = func.targetName(t);
             switch(name.replace('_', ' ')) {
               case 'Manbearpig':
@@ -3767,29 +3873,29 @@
             }});
         },
         targetIsAlive(param) {
-          return switchMaxMin(param, t=>t.isDead ? 0 : 1);
+          return switchMaxMin(param, t => t.isDead ? 0 : 1);
         },
         targetHp(param) {
-          return switchMaxMin(param, t=>Math.floor(func.targetHpDecimal(t) * 100));
+          return switchMaxMin(param, t => Math.floor(func.targetHpDecimal() * 100));
         },
         targetMp(param) {
-          return switchMaxMin(param, t=>Math.floor(func.targetMpDecimal(t) * 100));
+          return switchMaxMin(param, t => Math.floor(func.targetMpDecimal() * 100));
         },
         targetSp(param) {
-          return switchMaxMin(param, t=>Math.floor(func.targetSpDecimal(t) * 100));
+          return switchMaxMin(param, t => Math.floor(func.targetSpDecimal() * 100));
         },
         targetHpDecimal(param) {
-          return switchMaxMin(param, t=>t.hpNow / t.hp);
+          return switchMaxMin(param, t => t.hpNow / t.hp);
         },
         targetMpDecimal(param) {
-          return switchMaxMin(param, t=>t.mpNow);
+          return switchMaxMin(param, t => t.mpNow);
         },
         targetSpDecimal(param) {
-          return switchMaxMin(param, t=>t.spNow);
+          return switchMaxMin(param, t => t.spNow);
         },
         targetGroup(...args) {
           const groupMode = args.shift();
-          const numArgs = args.map(arg=> arg === '' ? -1 : parseInt(arg));
+          const numArgs = args.map(arg => arg === '' ? -1 : parseInt(arg));
           if (numArgs.some(isNaN)) throw new Error(`Error args for targetGroup, args: ${args}.`);
           const currentTarget = targetGetter();
           const targets = g().battle.monsterStatus;
@@ -3813,7 +3919,7 @@
                 // 对称范围. 只有单参数的 `targetGroup_r_[r1]` 时会是该情况，双参数的`targetGroup_r_[r1]_`时range2在param split后赋值为 ''，然后在numArgs中赋值为-1
                 rangeDown ??= rangeUp;
                 // >= 10 的，视作反方向。即 10 <=> -1 <=> ''(省略但有_分割)
-                [rangeUp, rangeDown] = [rangeUp, rangeDown].map(r=> r >= 10 ? 9-r : r );
+                [rangeUp, rangeDown] = [rangeUp, rangeDown].map(r => r >= 10 ? 9 - r : r );
                 const center = currentTarget.order;
                 const [startOrder, endOrder] = [center-rangeUp, center+rangeDown];
                 currentGroup = targets.filter(t => t.order >= startOrder && t.order <= endOrder);
@@ -3829,7 +3935,7 @@
                   endOrder = 10;
                 }
                 // 检查当前评估的怪物是否在区间内
-                if (groupMode!=='oa' && (currentTarget.order < startOrder || currentTarget.order > endOrder)) {
+                if (groupMode !== 'oa' && (currentTarget.order < startOrder || currentTarget.order > endOrder)) {
                   currentGroup = null;
                 } else {
                   // 检查该区间内是否有活怪带有此 Buff
@@ -3864,7 +3970,7 @@
           case 'min':
             return Math.min(...targets.map(defaultResult));
           default:
-            if (param !== undefined) console.warn(`Unknown param ${param} for switchMaxMin, fallback to default.`);
+            if (param !== undefined) console.warn(`Unknown param`, param, `for switchMaxMin, fallback to default.`);
             return defaultResult(targetGetter());
         }
       }
@@ -3932,6 +4038,7 @@
     function handleRPNFormula(formula, returnValue) {
       let k, isDebug, result;
       if (!formula) return 0;
+      if (!isNaN(formula*1)) return formula * 1; // 纯数字直接处理
       k = formula.replace(/,\s*(.*)\s*,/, (match, p1) => {
         switch (p1) {
           case '>':
@@ -3974,14 +4081,14 @@
         }
       }).replace('_1h', '_onehanded').replace('_2h', '_twohanded');
       isDebug = k.match(/^@/);
-      result = $RPN.evaluate(k.replace(/^@/, ''), (str)=>returnValue(str, isDebug));
+      result = $RPN.evaluate(k.replace(/^@/, ''), str => returnValue(str, isDebug));
       if (isDebug) console.log([k], result, returnValue.paramResultsGetter());
       return result;
     }
 
     function resolveRPNFormula(formula, target) {
       let paramResults={};
-      const returnValue = returnValueGetter(() => paramResults, ()=>target);
+      const returnValue = returnValueGetter(() => paramResults, () => target);
       return handleRPNFormula(formula, returnValue);
     }
 
@@ -3991,8 +4098,8 @@
       if (!parms || !Object.keys(parms).length) {
         return targets[0];
       }
-      const returnValue = returnValueGetter(() => paramResults, ()=>target);
-      for (i in parms) { for (target of targets.filter(t=>!t.isDead)) {
+      const returnValue = returnValueGetter(() => paramResults, () => target);
+      for (i in parms) { for (target of targets.filter(t => !t.isDead)) {
         paramResults={};
         let parmResult = true;
         for (j = 0; j < parms[i].length; j++) {
@@ -4159,16 +4266,45 @@
       } catch (err) { console.error(err); }}
     } catch (err) { console.error(err); }}
 
+    function getTodayEncounter(encounter) { return encounter.filter(e => time(2, e.time) === time(2)); }
+
+    function getLocalEncounter(encounter = []) {
+      encounter = [ ... getValue('encounter', true) ?? [], ... getLocal('encounter', true, true) ?? [], ...encounter ];
+      const uniqued = [];
+      while (encounter.length) {
+        const item = encounter.pop();
+        const existed = uniqued.find(x => x.time === item.time || x.url === item.url);
+        if (existed) {
+          if (existed.encountered !== item.encountered) {
+            existed.encountered ||= item.encountered;
+          }
+          continue;
+        }
+        uniqued.unshift(item);
+      }
+      return getTodayEncounter(uniqued);
+    }
+
     function setEncounter(encounter) {
+      encounter = getLocalEncounter(encounter);
+      setLocal('encounter', encounter, true);
       return g('encounter', setValue('encounter', encounter));
     }
 
     function getEncounter() {
-      const getToday = (encounter) => encounter.filter(e => time(2, e.time) === time(2));
       const current = g().encounter ?? [];
-      let encounter = getValue('encounter', true) ?? [];
+      let last = 0;
+      current.forEach(e=> {
+        if (e.encountered > last) last = e.encountered;
+        if (e.time > last) last = e.time;
+      });
+      let encounter = ((time(0) - last) >= (_1h * 0.5)) ? getLocal('encounter', true, true) : current;
+      if (!encounter || !last) {
+        encounter = getValue('encounter', true) ?? [];
+        setEncounter(encounter);
+      }
       if (JSON.stringify(current) === JSON.stringify(encounter)) {
-        return getToday(encounter);
+        return getTodayEncounter(encounter);
       }
       let dict = {};
       for (let e of current) {
@@ -4190,7 +4326,7 @@
         dict[key].time = Math.max(dict[key].time, e.time);
         dict[key].encountered = (e.encountered || dict[key].encountered) ? Math.max(dict[key].encountered ?? 0, e.encountered ?? 0) : undefined;
       }
-      return getToday(Object.values(dict)).sort((x, y) => x.time < y.time ? 1 : x.time > y.time ? -1 : 0);
+      return getTodayEncounter(Object.values(dict)).sort((x, y) => x.time < y.time ? 1 : x.time > y.time ? -1 : 0);
     }
 
     async function asyncSetProficiency() { try {
@@ -4198,19 +4334,10 @@
       $async.logSwitch(arguments);
       const doc = $doc(await $ajax.insert('?s=Character'));
       const proficiency = {};
-      if (hvVersion < 91) {
-        const regex = /<div><div class="fc2 far fcb"><div>(.*) <\/div><\/div><\/div>\n\t<div><div class="fc2 fal fcb"><div>&nbsp;(.*)<\/div><\/div><\/div>/;
-        const profs = gE('#stats_pane .stats_page:last-child .st2:last-child', doc).innerHTML.match( new RegExp(regex, regex.flags + 'g'));
-        profs.forEach(p=>{
-          const exec = p.match(regex);
-          proficiency[exec[2]] = exec[1]*1;
-        });
-      } else {
-        gE('#stats_scrollable table:last-child tr', 'all', doc).forEach((tr) => {
-          const exec = tr.innerHTML.match(/<td>(.*)<\/td>.*<td>(.*)<\/td>/);
-          proficiency[exec[2]] = exec[1]*1;
-        });
-      }
+      gE('#stats_scrollable table:last-child tr', 'all', doc).forEach((tr) => {
+        const exec = tr.innerHTML.match(/<td>(.*)<\/td>.*<td>(.*)<\/td>/);
+        proficiency[exec[2]] = exec[1]*1;
+      });
       localStorage.setItem(`hvAA-${current}_proficiency`, JSON.stringify(proficiency));
       $async.logSwitch(arguments);
     } catch (err) { console.error(err); }}
@@ -4237,9 +4364,9 @@
         // 'DW Accuracy': { id: 2302, unlock: [50, 150], level: 0 },
         // 'DW Crit': { id: 2303, unlock: [250], level: 0 },
         // 'Staff Spell Damage': { id: 2501, unlock: [0, 100, 200], level: 0 },
-        // 'Staff Accuracy': { id: 2502, unlock: hvVersion < 91 ? [50, 150, 300] : [50, 150], level: 0 },
+        // 'Staff Accuracy': { id: 2502, unlock: [50, 150], level: 0 },
         // 'Staff Damage': { id: 2503, unlock: [0], level: 0 },
-        // 'Cloth Spellacc': { id: 3101, unlock: hvVersion < 91 ? [0, 120, 240] : [120], level: 0 },
+        // 'Cloth Spellacc': { id: 3101, unlock: [120], level: 0 },
         // 'Cloth Spellcrit': { id: 3102, unlock: [0, 40, 90, 130, 190], level: 0 },
         // 'Cloth Castspeed': { id: 3103, unlock: [150, 250], level: 0 },
         // 'Cloth MP': { id: 3104, unlock: [0, 60, 110, 170, 230, 290, 350], level: 0 },
@@ -4259,8 +4386,7 @@
         'Faster Blind': { id: 4206, unlock: [120, 215, 275], level: 0 },
         'Mind Control': { id: 4207, unlock: [80, 130, 170], level: 0 },
         'Better Silence': { id: 4211, unlock: [120, 170, 215], level: 0 },
-        'Better MagNet': hvVersion < 91 ? { id: 4212, unlock: [250, 295, 340, 370, 400], level: 0 } : undefined,
-        'Better Immobilize': hvVersion < 91 ? undefined : { id: 4212, unlock: [250, 295, 340, 370, 400], level: 0 },
+        'Better Immobilize': { id: 4212, unlock: [250, 295, 340, 370, 400], level: 0 },
         'Better Slow': { id: 4213, unlock: [30, 50, 75, 105, 135], level: 0 },
         // 'Better Drain': { id: 4216, unlock: [20, 50, 90], level: 0 },
         // 'Faster Drain': { id: 4217, unlock: [30, 70, 110, 150, 200], level: 0 },
@@ -4322,7 +4448,7 @@
         (async () => { try {
           let perk = stamina.perk;
           if (perk && !Array.isArray(perk)) {
-            perk = Object.keys(perk).map(id=>id*1);
+            perk = Object.keys(perk).map(id => id*1);
           }
           if (!perk?.length) {
             perk = undefined;
@@ -4475,83 +4601,6 @@
       return !needs.length;
     }
 
-    //     async function asyncCheckEnchant(isGrindFest) {
-    //       try {
-    //         if (hvVersion >= 91) return true;
-    //         $async.logSwitch(arguments);
-    //         const option = g().option??{};
-    //         const [isEnchant, thresholds] = isGrindFest && option.checkEnchantGF ? [option.isEnchantGF, option.enchantGF] : [option.isEnchant, option.enchant];
-    //         if (!isEnchant) return true;
-    //         await waitPause();
-
-    //         const enchant = {};
-    //         Object.keys(isEnchant).forEach(id => {
-    //           if (!isEnchant[id]) return;
-    //           const item = Math.floor(id/100);
-    //           const slot = id % 100;
-    //           (enchant[slot] ??= {})[item] = thresholds[id];
-    //         });
-
-    //         const url = `?s=Forge&ss=re`;
-    //         const enchant_data= {
-    //           "Voidseeker's Blessing" : { Weapon: 'vseek', item:61001, }, // 'Voidseeker Shard'
-    //           'Suffused Aether' : { Weapon: 'ether', item:61101, }, // 'Aether Shard'
-    //           'Featherweight Charm' : { Weapon: 'feath', Armor: 'feath', item:61501, }, // 'Featherweight Shard'
-    //           'Infused Flames' : { Weapon: 'sfire', Armor: 'pfire', item:12101, }, // 'Infusion of Flames'
-    //           'Infused Frost' : { Weapon: 'scold', Armor: 'pcold', item:12201, }, // 'Infusion of Frost'
-    //           'Infused Lightning' : { Weapon: 'selec', Armor: 'pelec', item:12301, }, // 'Infusion of Lightning'
-    //           'Infused Storms' : { Weapon: 'swind', Armor: 'pwind', item:12401, }, // 'Infusion of Storms'
-    //           'Infused Divinity' : { Weapon: 'sholy', Armor: 'pholy', item:12501, }, // 'Infusion of Divinity'
-    //           'Infused Darkness' : { Weapon: 'sdark', Armor: 'pdark', item:12601, }, // 'Infusion of Darkness'
-    //         }
-    //         const item2Enchant = {
-    //           61001: "Voidseeker's Blessing",
-    //           61101: 'Suffused Aether',
-    //           61501: 'Featherweight Charm',
-    //           12101: 'Infused Flames',
-    //           12201: 'Infused Frost',
-    //           12301: 'Infused Lightning',
-    //           12401: 'Infused Storms',
-    //           12501: 'Infused Divinity',
-    //           12601: 'Infused Darkness',
-    //         }
-    //         const d = $doc(await $ajax.insert(`?s=Character&ss=eq`));
-    //         const eqps = {};
-    //         Array.from(gE('.eqb', 'all', d)).forEach(eqb=> {
-    //           const slot = eqb.getAttribute('onclick').match(`equip_slot=(.*)'`)[1] * 1;
-    //           const id = gE('div[onmouseover*="equips.set"]', eqb)?.id.replace('e', '') * 1;
-    //           eqps[id]=slot;
-    //         });
-    //         const doc = $doc(await $ajax.insert(url));
-    //         const eqpdoc = await $ajax.insert(gE('#mainpane>script[src]', doc).src);
-    //         const json = JSON.parse(eqpdoc.match(/{.*}/)[0]);
-    //         await Promise.all(Array.from(gE('.eqp>[id]', 'all', doc)).map(e => (async eqp => { try {
-    //           const id = eqp.id.match(/\d+/)[0];
-    //           const slot = eqps[id];
-    //           const data = json[id];
-    //           if (!enchant[slot]) return;
-    //           const enchanted = {};
-    //           Array.from(gE('#ee>span', 'all', $doc(await $ajax.insert(`equip/${id}/${data.k}`))))?.forEach(s=> {
-    //             const info = s.innerHTML.match(/(.*) \[(\d+)m\]/);
-    //             enchanted[enchant_data[info[1]].item] = info[2]*1
-    //             return;
-    //           });
-    //           let type = data.d.match(`<div class=\"eq e.\"><div>.* *(Armor|Weapon|Shield|Staff).*</div><div>Condition`)[1];
-    //           type = (type === 'Shield') ? 'Armor' : (type === 'Staff' ? 'Weapon' : type);
-    //           return await Promise.all(Object.keys(enchant[slot]).map(i => (async item => { try {
-    //             const threshold = enchant[slot][item];
-    //             const current = enchanted[item] ?? 0;
-    //             const enc = enchant_data[item2Enchant[item]][type];
-    //             if (!enc) return;
-    //             if (current && current >= threshold) return;
-    //             const failed = $doc(await $ajax.insert(`?s=Forge&ss=en`, `select_item=${id}&enchantment=${enc}`))?.innerText;
-    //             if (failed) {
-    //               console.error(failed, ':', data.t, ':', enc, '=', current, '>?', threshold, '=', current >= threshold);
-    //             }
-    //           } catch (err) { console.error(err); }})(i)));
-    //         } catch (err) { console.error(err); }})(e)));
-    //       } catch (err) { console.error(err); }; return false; }
-
     async function asyncCheckRepair(isGrindFestStandalone) { try {
       const option = g().option??{};
       if (!option.repair) {
@@ -4561,43 +4610,31 @@
       $async.logSwitch(arguments);
       let eqps;
       const threshold = isGrindFestStandalone ? option.repairValueGF : option.repairValue;
-      if (!threshold) { // skip because default repair has been checked before idleArena>GF
+      const repairCharm = isGrindFestStandalone ? option.repairCharmGF || option.repairCharm : option.repairCharm;
+      if (threshold === undefined || threshold < 0) { // skip because default repair has been checked before idleArena>GF
         $async.logSwitch(arguments);
         return true;
       }
-      if (hvVersion < 91) {
-        const url = `?s=Forge&ss=re`;
-        const doc = $doc(await $ajax.insert(url));
-        const eqpdoc = await $ajax.insert(gE('#mainpane>script[src]', doc).src);
-        const json = JSON.parse(eqpdoc.match(/{.*}/)[0]);
-        eqps = await Promise.all(Array.from(gE('.eqp>[id]', 'all', doc)).map(async eqp => { try {
-          const id = eqp.id.match(/\d+/)[0];
-          const condition = 1 * json[id].d.match(/Condition: \d+ \/ \d+ \((\d+)%\)/)[1];
-          if (condition > threshold) {
-            return;
-          }
-          const after = $doc(await $ajax.insert(url, `select_item=${id}`));
-          return gE('.messagebox_error', )?.innerText ? undefined : json[id].t;
-        } catch (err) { console.error(err); }}));
-      } else {
-        const url = `?s=Bazaar&ss=am&screen=repair&filter=equipped`;
-        const doc = $doc(await $ajax.insert(url));
-        if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
-          $async.logSwitch(arguments);
-          return undefined;
-        }
-        const token = gE('#equipform>input[name="postoken"]', doc).value;
-        eqps = await Promise.all(Array.from(gE('#equiplist>table>tbody>tr:not(.eqselall):not(.eqtplabel)', 'all', doc)).map(async eqp => { try {
-          const id = gE('input', eqp).value;
-          const condition = 1 * gE('td:last-child', eqp).textContent.replace('%', '');
-          if (condition > threshold) {
-            return;
-          }
-          const after = $doc(await $ajax.insert(url, `&eqids[]=${id}&postoken=${token}&replace_charms=on`));
-          return gE(`#e${id}`, after) ? gE('.lc', eqp).childNodes[2].textContent : undefined;
-        } catch (err) { console.error(err); }}));
+
+      const url = `?s=Bazaar&ss=am&screen=repair&filter=equipped`;
+      let [doc, equiped] = Array.from(await Promise.all([$ajax.insert(url), $ajax.insert(`?s=Character&ss=eq`)])).map($doc);
+      if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
+        $async.logSwitch(arguments);
+        return undefined;
       }
-      eqps = eqps.filter(e=>e);
+      const token = gE('#equipform>input[name="postoken"]', doc).value;
+      const [material, materialNames] = doc.body.innerHTML.match(/const eqitems=(\{.*\});/)[1].split(/; const itemdata=/).map(JSON.parse);
+      equiped = Array.from(gE('[onmouseover*="equips.set("]', 'all', equiped)).map(eq=>eq.getAttribute('onmouseover').match(/equips.set\((\d+),/)[1]);
+      eqps = await Promise.all(Array.from(gE('#equiplist>table>tbody>tr:not(.eqselall):not(.eqtplabel)', 'all', doc)).map(async eqp => { try {
+        const id = gE('input', eqp).value;
+        if (!equiped.includes(id)) return;
+        const condition = 1 * gE('td:last-child', eqp).textContent.replace('%', '');
+        const needRepairCharm = repairCharm && Object.keys(material[id].m).some(m => materialNames[m].n.includes('Charm'));
+        if (condition > threshold && !needRepairCharm) return;
+        const after = $doc(await $ajax.insert(url, `&eqids[]=${id}&postoken=${token}&replace_charms=on`));
+        return gE(`#e${id}`, after) ? gE('.lc', eqp).childNodes[2].textContent : undefined;
+      } catch (err) { console.error(err); }}));
+      eqps = eqps.filter(e => e);
       if (eqps.length) {
         console.log('equips need repair:\n', eqps.join('\n '));
         switch(option.lang * 1) {
@@ -4626,23 +4663,15 @@
       await waitPause();
       $async.logSwitch(arguments);
       let count;
-      if (hvVersion < 91) {
-        const url = `?s=Character&ss=in`;
-        const doc = $doc(await $ajax.insert(url));
-        if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
-          $async.logSwitch(arguments);
-          return false;
-        }
-        count = gE('#eqinv_bot>div>div>div', doc).innerText.match(/: (\d+) \/ \d+/)[1];
-      } else {
-        const url = `?s=Bazaar&ss=am`;
-        const doc = $doc(await $ajax.insert(url));
-        if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
-          $async.logSwitch(arguments);
-          return false;
-        }
-        count = gE('#equipblurb>table>tbody>tr>td:nth-child(2)', doc).innerText;
+
+      const url = `?s=Bazaar&ss=am`;
+      const doc = $doc(await $ajax.insert(url));
+      if (gE('#riddlecounter', doc) || gE('#battle_main', doc)) {
+        $async.logSwitch(arguments);
+        return false;
       }
+      count = gE('#equipblurb>table>tbody>tr>td:nth-child(2)', doc).innerText;
+
       $async.logSwitch(arguments);
       return count * 1 <= option.equStorageValue;
     } catch (err) { console.error(err); }; return false; }
@@ -4716,7 +4745,7 @@
       const option = g().option??{};
       let now = time(0);
       let hours = Math.floor(now / _1h);
-      let [current, punish] = await getCurrentStamina();
+      let [current, punish] = await until(getCurrentStamina, _1m);
       const stmNR = current + 24 - (hours % 24);
       cost ??= 0;
       if (punish && option.staminaRatio) {
@@ -4807,7 +4836,7 @@
     async function onEncounter() { try {
       const option = g().option??{};
       await until( // perhaps network connect not available
-        async ()=>await $ajax.insert(location) && (!option.checkURLBeforeNewRound || await $ajax.insert(option.checkURLBeforeNewRound)),
+        async () => await $ajax.insert(location) && (!option.checkURLBeforeNewRound || await $ajax.insert(option.checkURLBeforeNewRound)),
         option.checkURLBeforeNewRoundRetry
       );
       $async.logSwitchStrict('updateEncounter', true);
@@ -4848,15 +4877,17 @@
       let arena = getValue('arena', true) ?? {};
       const isToday = arena.date && time(2, arena.date) === time(2);
       if (forceUpdateToken || !isToday || !arena.isOptionUpdated) {
-        arena.token = {};
+        arena.enabled = [];
         await Promise.all(['gr', 'ar', 'rb'].map(s => (async site => { try {
           const doc = $doc(await $ajax.insert(`?s=Battle&ss=${site}`));
           getStartBattleButtons(doc, site).forEach(btn => {
+            if (!btn.enabled) return;
             if (btn.cleared) {
-              arena.token[btn.id] = btn.token;
+              arena.enabled.push(btn.id);
               return;
             }
-            delete arena.token[btn.id];
+            const index = arena.enabled.indexOf(btn.id);
+            if (index !== -1) arena.enabled.splice(index, 1);
           });
         } catch (err) { console.error(err); }})(s)));
       }
@@ -4871,7 +4902,7 @@
         arena.array = option.idleArenaValue?.split(',') ?? [];
         arena.array.reverse();
       }
-      arena.arrayDone = arena.arrayDone.filter(id => id === 'gr' || !Object.keys(arena.token).includes(id.toString()));
+      arena.arrayDone = arena.arrayDone.filter(id => id === 'gr' || !arena.enabled?.includes(id.toString()));
       $async.logSwitch(arguments);
       return setValue('arena', arena);
     } catch (err) { console.error(err); }}
@@ -4897,19 +4928,21 @@
       $async.logSwitch(arguments);
       const array = [...arena.array];
       const RBundone = [];
+      if (!arena.enabled?.length) {
+        arena.enabled = (await updateArena(true)).enabled;
+      }
       while (array.length > 0) {
-        id = array.pop() * 1;
-        id = isNaN(id) ? 'gr' : id;
+        id = array.pop();
         if (arena.arrayDone?.includes(id)) {
           id = undefined;
           continue;
         }
-        if (arena.token[id] !== undefined) {
+        if (arena.enabled.includes(id)) {
           break;
         }
         if (id >= 105) {
-          arena.token = (await updateArena(true)).token;
-          if (arena.token[id] !== undefined) {
+          arena.enabled = (await updateArena(true)).enabled;
+          if (arena.enabled.includes(id)) {
             break;
           }
         }
@@ -4933,11 +4966,12 @@
       let stamina = getValue('stamina', true);
       [stamina.current, stamina.punish] = await getCurrentStamina();
       stamina.time = time(0);
-      for (let id in staminaCost) {
-        staminaCost[id] *= (isIsekai ? 2 : 1) * (stamina.current >= 60 ? 0.03 : 0.02);
+      for (let idx in staminaCost) {
+        staminaCost[idx] *= (isIsekai ? 2 : 1) * (stamina.current >= 60 ? 0.03 : 0.02);
       }
 
       let query;
+      id = isNaN(id) ? 'gr' : id;
       if (id !== 'gr') {
         query = id >= 105 ? 'rb' : 'ar';
       } else {
@@ -4961,17 +4995,12 @@
         $async.logSwitch(arguments);
         return;
       }
-      let token = arena.token[id];
-      if (hvVersion < 91) {
-        token = `&inittoken=${token}`;
-      } else {
-        token = `&postoken=${gE('#initform>input[name="postoken"]', $doc(await $ajax.insert(query))).value}`;
-      }
+      let token = `&postoken=${gE('#initform>input[name="postoken"]', $doc(await $ajax.insert(query))).value}`;
       await waitPause();
       writeArenaStart();
-      await until(async ()=>!option.checkURLBeforeNewRound || await $ajax.insert(option.checkURLBeforeNewRound), option.checkURLBeforeNewRoundRetry);
+      await until(async () => !option.checkURLBeforeNewRound || await $ajax.insert(option.checkURLBeforeNewRound), option.checkURLBeforeNewRoundRetry);
       // await asyncCheckEnchant(id === 'gr');
-      await until(async ()=>await $ajax.insert(query, `initid=${id === 'gr' ? 1 : id}${token}`), option.checkURLBeforeNewRoundRetry);
+      await until(async () => await $ajax.insert(query, `initid=${id === 'gr' ? 1 : id}${token}`), option.checkURLBeforeNewRoundRetry);
       stamina.lastCost = id === 'gr' ? undefined : cost;
       setValue('stamina', stamina);
       if (option.altBattleFirst && await $ajax.insert(location.replace('hentaiverse.org', 'alt.hentaiverse.org').replace('alt.alt', 'alt'))) {
@@ -5139,13 +5168,14 @@
         `${getBattleTypeDisplay()}`, // 战役模式显示
         `R${battle.roundNow}/${battle.roundAll}:T${currentTurn}`,
         `TPS: ${g().runSpeed}`,
-        `<l0>敌人</l0><l1>敌人</l1><l2>Monsters</l2>: ${g().monsterAlive}/${g().monsterAll}`,
+        `<l0>敌人</l0><l1>敵人</l1><l2>Monsters</l2>: ${g().monsterAlive}/${g().monsterAll}`,
       ].join(`<br>`);
       if (!battle.roundAll) {
         pauseChange();
         $debug.shiftLog();
       }
-      document.title = `${getBattleTypeDisplay(true)}:R${battle.roundNow}/${battle.roundAll}:T${currentTurn}@${g().runSpeed}tps,${g().monsterAlive}/${g().monsterAll}`;
+      const option = g().option??{};
+      document.title = `${currentTurn%2?option.frequencySign1??'':option.frequencySign2??''}${getBattleTypeDisplay(true)}:R${battle.roundNow}/${battle.roundAll}:T${currentTurn}@${g().runSpeed}tps,${g().monsterAlive}/${g().monsterAll}`;
       setValue('battle', battle);
       if (!battle.monsterStatus || battle.monsterStatus.length !== g().monsterAll) {
         fixMonsterStatus();
@@ -5153,10 +5183,11 @@
       countMonsterHP();
       displayMonsterWeight();
       displayPlayStatePercentage();
-      const option = g().option??{};
       if (getValue('disabled')) { // 如果禁用
         document.title = _alert(-1, 'hvAutoAttack暂停中', 'hvAutoAttack暫停中', 'hvAutoAttack Paused');
-        gE('#hvAABox2>button').innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(option.pauseHotkey && option.pauseHotkeyStr) ? `(${option.pauseHotkeyStr})` : '' }<l012>`;
+        const pauseChange = gE('#hvAABox2>button.pauseChange');
+        if (!pauseChange) return;
+        pauseChange.innerHTML = `<l0 style="color:red;">继续</l0><l1 style="color:red;">繼續</l1><l2 style="color:red;">Continue</l2><l012 style="color:red;">${(option.pauseHotkey && option.pauseHotkeyStr) ? `(${option.pauseHotkeyStr})` : '' }<l012>`;
         return;
       }
       battle = getValue('battle', true);
@@ -5171,10 +5202,10 @@
         return;
       }
       const taskList = {
-        'Cure': ()=>autoRecover(true),
+        'Cure': () => autoRecover(true),
         'Pause': autoPause,
-        'SSDisable': ()=>autoSS(true),
-        'Rec': ()=>autoRecover(false),
+        'SSDisable': () => autoSS(true),
+        'Rec': () => autoRecover(false),
         'Scroll': useScroll,
         'Infus': useInfusions,
         'Def': autoDefend,
@@ -5182,7 +5213,7 @@
         'Buff': useBuffSkill,
         'Debuff': useDeSkill,
         'Focus': autoFocus,
-        'SS': ()=>autoSS(false),
+        'SS': () => autoSS(false),
         'Skill': autoSkill,
         'Atk': attack,
       };
@@ -5205,16 +5236,24 @@
       }
     }
 
+    function matchBuffImg(buff) {
+      return buff?.getAttribute('onmouseover').match(/\(\s*'(?:[^']*?\(x(\d+)\)[^']*?|[^']*?)'\s*,\s*'.*'\s*,\s*(\d+)\s*\)/);
+    }
+
+    function getBuffStackFromImg(buff) {
+      return (matchBuffImg(buff)?.[1] ?? 1)*1;
+    }
+
     function getBuffTurnFromImg(buff) {
-      let duration = buff?.getAttribute('onmouseover').match(/\(.*,.*,(\s*)(.*?)\)$/)[2];
-      if (!duration) {
-        duration = 0;
-      } else if (["'permanent'", '-', "'-'"].includes(duration)) {
-        duration = Infinity;
-      } else {
-        duration *= 1;
+      let duration = matchBuffImg(buff)?.[2];
+      switch (true) {
+        case !duration:
+          return 0;
+        case ["'permanent'", '-', "'-'"].includes(duration):
+          return Infinity;
+        default:
+          return duration * 1;
       }
-      return duration;
     }
 
     function getMonsterID(s) {
@@ -5338,17 +5377,17 @@
     async function checkResponsive() {
       const option = g().option??{};
       const battleUnresponsive = {
-        'Alert': { method: ()=>setAlarm('BattleUnresponsive') },
+        'Alert': { method: () => setAlarm('BattleUnresponsive') },
         'Reload': { method: goto },
         'Alt': { method: gotoAlt }
       }
       let min = Infinity;
-      for (let t in option.battleUnresponsive) {
-        if (!option.battleUnresponsive[t] || !battleUnresponsive[t]) {
+      for (let t in battleUnresponsive) {
+        if (!option.battleUnresponsive?.[t] || !battleUnresponsive[t]) {
           delete battleUnresponsive[t];
           continue;
         }
-        battleUnresponsive[t].time = Math.max(1, option.battleUnresponsiveTime[t]) * _1s;
+        battleUnresponsive[t].time = Math.max(1, option.battleUnresponsiveTime?.[t]??1) * _1s;
         min = Math.min(min, battleUnresponsive[t].time);
       }
       if (!Object.keys(battleUnresponsive).length) return;
@@ -5436,7 +5475,7 @@
           let url = option.checkURLBeforeNewRound;
           if (url) {
             lastResponsive = Infinity;
-            await until(async ()=>{ try {
+            await until(async () => { try {
               await waitPause();
               return await $ajax.insert(url,undefined,undefined,{},{},true);
             } catch (err) { console.error('Connect failed:', url) }}, option.checkURLBeforeNewRoundRetry*_1s);
@@ -5466,7 +5505,10 @@
           }
           ['#battle_right', '#battle_left'].forEach(selector => { gE('#battle_main').replaceChild(gE(selector, doc), gE(selector)); });
           unsafeWindow.battle = undefined;
-          await loadUnsafeWindowBattle();
+          if (!await loadUnsafeWindowBattle()) {
+            setExitBattleTimeout('Defeat');
+            return;
+          }
           document.dispatchEvent(new Event('DOMContentLoaded'));
           newRound(true);
           onStepInDone();
@@ -5521,14 +5563,14 @@
       const sharable = ${JSON.stringify(sharable)};
       const monsterStateKeys = ${JSON.stringify(monsterStateKeys)};
       const ability = ${JSON.stringify(ability)};
-      const hvVersion = ${JSON.stringify(hvVersion)};
       const monsterBuffSkillLib = ${JSON.stringify(monsterBuffSkillLib)};
+      const hvVersion = Version(${hvVersion.ver});
       // funciton
       ${[updateMonsterEffects, fixMonsterStatus,
          getMonsterID, getMonster, getMonster, getBuff,
          getValue, setValue, delValue,
          getLocal, setLocal, delLocal,
-         gE, cE].map(f=>f.toString()).join(';')};
+         gE, cE, Version].map(f => f.toString()).join(';')};
       `;
       gE('head').appendChild(fakeApiCall);
       const fakeApiResponse = cE('script');
@@ -5558,7 +5600,7 @@
       if (!(typeof GM_getValue === 'undefined' ? debuffAutoFill : option.debuffAutoFill)) return;
       let battle = getValue('battle', true);
       if (!battle?.monsterStatus) return;
-      if (battle.monsterStatus.map(m=>getMonster(getMonsterID(m))).filter(mon=>mon===null).length) {
+      if (battle.monsterStatus.map(m => getMonster(getMonsterID(m))).filter(mon => mon === null).length) {
         fixMonsterStatus();
         battle = getValue('battle', true);
       }
@@ -5747,20 +5789,7 @@
 
       // update proficiency
       const proficiency = battle.proficiency ?? {};
-      const ptypes = hvVersion < 91 ? {
-        'cloth armor': 'cloth armor',
-        'deprecating magic' : 'deprecating',
-        'divine': 'divine',
-        'dual wielding' : 'dual wielding',
-        'elemental': 'elemental',
-        'forbidden': 'forbidden',
-        'heavy armor': 'heavy armor',
-        'light armor': 'light armor',
-        'one-handed weapon': 'one-handed',
-        'staff': 'staff',
-        'supportive magic' : 'supportive',
-        'two-handed weapon': 'two-handed',
-      } :{
+      const ptypes = {
         'cloth armor': 'Cloth Armor',
         'deprecating magic' : 'Deprecating',
         'divine': 'Divine',
@@ -5839,7 +5868,7 @@
             // 获取新增时间（忽略非新增的情况）
             let [delta, added] = [turns - rec[effect].t, rec[effect].d];
             if (delta > 0) {
-              added = hvVersion < 91 ? turns : rec[effect].t ? delta : added;
+              added = rec[effect].t ? delta : added;
             }
             // 获取基础、熟练度计算倍率、熟练度，设置及初始化主要数据
             let [duration, base, profRatio, prof, channelingRatio] = getDuration(skill, channeling);
@@ -5902,7 +5931,7 @@
             if (savedEffects[name]) savedEffects[name][effect].channeling ??= channelingRatio;
             if (effects.includes(effect)) continue; // updated directly above
             if (!duration) { console.log('duration undefined saved effect:', effect, savedEffects[effect]) }
-            if (hvVersion >= 91 && savedEffects[effect]) {
+            if (savedEffects[effect]) {
               const turn = (savedEffects[effect].turns??0) * 1;
               if (isNewTurn && !isNaN(turn)) duration = turn + (duration ?? 0);
             }
@@ -5935,8 +5964,13 @@
     }
 
     async function loadUnsafeWindowBattle() { try {
-      unsafeWindow.battle = await until(()=>new unsafeWindow.Battle(), 300);
+      unsafeWindow.battle = await until(() => gE('#vbd') ? true : new unsafeWindow.Battle(), 300);
+      if (!unsafeWindow.battle && gE('#vbd')) {
+        console.log('Initialization of unsafeWindow.battle stoped due to defeated.');
+        return false;
+      }
       unsafeWindow.battle.clear_infopane();
+      return true;
     } catch (err) { console.error(err); }}
 
     function newRound(isNew) { // New Round
@@ -6015,28 +6049,29 @@
         const monsterDB = getValue('monsterDB', true) ?? {};
         const monsterMID = getValue('monsterMID', true) ?? {};
         for (let i = battleLog.length - 2; i > battleLog.length - 2 - g().monsterAll; i--) {
-          let mid = battleLog[i].textContent.match(/MID=(\d+)/)[1] * 1;
-          let name = battleLog[i].textContent.match(/MID=(\d+) \((.*)\) LV/)[2];
-          let lv = battleLog[i].textContent.match(/LV=(\d+)/)[1] * 1;
           let hp = battleLog[i].textContent.match(/HP=(\d+)$/)[1] * 1;
           if (isNaN(hp)) {
             hp = getHPFromMonsterDB(monsterDB, monsterNames[order], monsterLvs[order]) ?? monsterStatus[monsterStatus.length - 1].hp;
           }
-          if (name && lv && mid) {
-            monsterDB[name] ??= {};
-            if (monsterDB[name].mid && monsterDB[name].mid !== mid) { // 名称被其他mid被占用
-              monsterMID[monsterDB[name].mid] = JSON.parse(JSON.stringify(monsterDB[name])); // 将之前mid的数据进行另外备份
-              monsterDB[name] = {}; // 重置该名称的数据
-            }
-            if (monsterMID[mid]) {
-              monsterDB[name] = JSON.parse(JSON.stringify(monsterMID[mid])); // 将之前备份的mid的数据进行恢复
-              delete monsterMID[mid];
-            }
-            monsterDB[name].mid = mid;
-            monsterDB[name][lv] = hp;
-          }
           monsterStatus[order] = { order, hp };
           order++;
+
+          if (!option.cacheMonsterHP) continue;
+          let lv = battleLog[i].textContent.match(/LV=(\d+)/)[1] * 1;
+          let [_, mid, name] = battleLog[i].textContent.match(/MID=(\d+) \((.*)\) LV/);
+          mid*=1;
+          if (!name || isNaN(lv) || isNaN(mid)) continue;
+          monsterDB[name] ??= {};
+          if (monsterDB[name].mid && monsterDB[name].mid !== mid) { // 名称被其他mid被占用
+            monsterMID[monsterDB[name].mid] = JSON.parse(JSON.stringify(monsterDB[name])); // 将之前mid的数据进行另外备份
+            monsterDB[name] = {}; // 重置该名称的数据
+          }
+          if (monsterMID[mid]) {
+            monsterDB[name] = JSON.parse(JSON.stringify(monsterMID[mid])); // 将之前备份的mid的数据进行恢复
+            delete monsterMID[mid];
+          }
+          monsterDB[name].mid = mid;
+          monsterDB[name][lv] = hp;
         }
         if (option.cacheMonsterHP) {
           setValue('monsterDB', monsterDB);
@@ -6089,6 +6124,7 @@
       const monsterStatus = battle.monsterStatus;
       const hpArray = [];
       for (i = 0; i < monsterHp.length; i++) {
+        monsterStatus[i] ??= {};
         if (gE('img[src*="nbardead.png"]', monsterHp[i])) {
           monsterStatus[i].isDead = true;
           monsterStatus[i].hpNow = Infinity;
@@ -6138,7 +6174,7 @@
           unknown = Array.from(unknown).filter(buff => {
             const img = buff.src.match(/\/y\/e\/(.*)\.png/)[1];
             return !(Object.keys(known).includes(img));
-          }).map(buff=>`${buff.getAttribute('onmouseover').match(/^battle.set_infopane_effect\('(.+)', ?'.*', ?.+\)/)[1]}: ${buff.src.match(/\/y\/e\/(.*)\.png/)[1]}`);
+          }).map(buff => `${buff.getAttribute('onmouseover').match(/^battle.set_infopane_effect\('(.+)', *'.*',.+\)/)[1]}: ${buff.src.match(/\/y\/e\/(.*)\.png/)[1]}`);
           if (unknown.length) {
             console.log('unsupported buff weight:', unknown);
           }
@@ -6489,7 +6525,9 @@
     async function clickMonster(id) {
       if (!unsafeWindow.battle) {
         console.log('loadUnsafeWindowBattle before click monster');
-        await loadUnsafeWindowBattle();
+        if (!await loadUnsafeWindowBattle()) {
+          return;
+        }
       }
       getMonster(id).click();
     }
@@ -6663,7 +6701,7 @@
         return false;
       }
       const imgs = gE('img', 'all', gE(monsterStateKeys.buffs, getMonster(id)));
-      const buffs = Object.fromEntries(Array.from(imgs).map(img=> [img.src.match(/\/y\/e\/(.*)\.png/)[1], img]));
+      const buffs = Object.fromEntries(Array.from(imgs).map(img => [img.src.match(/\/y\/e\/(.*)\.png/)[1], img]));
       // 已有buff小于6个
       // 未开启debuff失败警告
       // buff剩余持续时间大于等于警报时间
@@ -6689,36 +6727,37 @@
     }
 
     function getCurrentAttackStatus() {
-      if (g().attackStatusCurrent === undefined) {
+      let current = g().attackStatusCurrent;
+      if (current === undefined) { // first stack of condition
         attack(true);
+        current = g().attackStatusCurrent
+        g('attackStatusCurrent', undefined);
       }
-      const current = g().attackStatusCurrent;
-      g('attackStatusCurrent', undefined);
       return current;
     }
 
     function attack(selectStatusOnly=false) { // 自动打怪
-      let range = g().fightingStyle === '1' ? 3 : 1;
       const option = g().option??{};
       const monsters = g().battle.monsterStatus;
-      let attackStatusOrder = option.attackStatusOrderValue?.split(',').map(x=>x*1) ?? [];
-      attackStatusOrder = attackStatusOrder.concat([0,6,5,1,2,4,3].filter(x=> !(attackStatusOrder.includes(x))));
       if (option.attackStatusSwitch) {
-        for (const status of attackStatusOrder) {
-          if (!option.attackStatusSwitch[status]) continue;
-          const current = g().attackStatusCurrent;
-          g('attackStatusCurrent', status);
-          if (checkCondition(option[`attackStatusSwitchCondition${status}`], monsters) && onAttack(range, status, selectStatusOnly)) {
-            return true;
+
+        let tier = option.attackStatusSwitchByTier ? 3 : undefined;
+        const order = splitOrders(option.attackStatusOrderValue, [0,6,5,1,2,4,3]);
+        while (tier === undefined || tier-- !== 0) {
+          for (const status of order) {
+            if (!option.attackStatusSwitch[status]) continue;
+            g('attackStatusCurrent', status);
+            if (!checkCondition(option[`attackStatusSwitchCondition${status}`], monsters)) continue;
+            if (onAttack(status, selectStatusOnly, tier)) return true;
           }
-          g('attackStatusCurrent', current);
+          if (tier === undefined) break;
         }
       }
-      g('attackStatusCurrent', 0);
-      return onAttack(range, g().attackStatus, selectStatusOnly);
+      g('attackStatusCurrent', g().attackStatus);
+      return onAttack(g().attackStatus, selectStatusOnly);
     }
 
-    function onAttack(range, attackStatus, selectStatusOnly=false) {
+    function onAttack(attackStatus, selectStatusOnly=false, tier=undefined) {
       const updateAbility = onAttack.prototype.updateAbility ??= {
         4301: { //火
           111: [3, 4, 4, 5, 5, 5, 5, 5],
@@ -6750,18 +6789,54 @@
         4503: { 153: [7, 8, 9, 10] },
       }
 
-      // 如果
-      // 1. 开启了自动以太水龙头
-      // 2. 目标怪在魔力合流状态中
-      // 3. 未获得以太水龙头*2 或 *1
-      // 4. 满足条件
-      // 使用物理普通攻击，跳过Offensive Magic
-      // 否则按照属性攻击模式释放Spell > Offensive Magic
-
       const option = g().option??{};
       const monsters = g().battle.monsterStatus;
       let target = monsters[0];
-      const tryAttack = (skill) => {
+
+      // 如果
+      // 1. 开启了自动以太之触
+      // 2. 目标怪在魔力合流状态中
+      // 3. 满足条件
+      // 使用物理普通攻击，跳过Offensive Magic
+      // 否则按照属性攻击模式释放Spell > Offensive Magic
+      let range = 1;
+      // 1. physical
+      if (attackStatus === 0) {
+        range = g().fightingStyle === '1' ? 3 : 1;
+        return tryAttack();
+      }
+      // 2. etherTap
+      if (option.etherTap && getBuff('coalescemana', getMonsterID(target))) {
+        const expiring = [getBuffStackFromImg, getBuffTurnFromImg].map(getter => getter(getBuff('wpn_et')) <= 1).reduce((acc, cur) => acc || cur);
+        if (expiring && checkCondition(option.etherTapCondition)) {
+          return tryAttack();
+        }
+      }
+      // 3.0 try check skill condition
+      const skill = 1 * (() => {
+        const conditions = [option.lowSkillCondition, option.middleSkillCondition, option.highSkillCondition];
+        for (let lv = tier ?? 2; lv >= 0; lv--) {
+          let id = `1${attackStatus}${lv+1}`*1;
+          if (isOn(id) && (target = checkCondition(conditions[lv], monsters))) return id;
+          if (tier) return 0;
+        }
+      })();
+      // 3.a no skill available
+      if (!skill) {
+        if (tier) return false;
+        return tryAttack();
+      }
+      // 3.b cast skill
+      for (let ab in updateAbility) {
+        const ranges = updateAbility[ab][skill];
+        if (!ranges) continue;
+        const ability = getValue('ability', true);
+        range = ranges[ability ? ability[ab] ?? 0 : 0];
+        break;
+      }
+      return tryAttack(skill);
+
+      function tryAttack (skill) {
         if (!target || target.isDead) {
           return false;
         }
@@ -6772,49 +6847,9 @@
           updateSkillOTOS(skill);
           gE(skill).click();
         }
-        clickMonster(getRangeCenter(target, range, !attackStatus).id);
+        clickMonster(getRangeCenter(target, range ?? 1, !attackStatus).id);
         return true;
       };
-      // 1. physical
-      if (attackStatus === 0) {
-        return tryAttack();
-      }
-
-      // 2. etherTap
-      if (option.etherTap && getBuff('coalescemana', getMonsterID(target))
-          && (!gE('#pane_effects>img[onmouseover*="Ether Tap (x2)"]') || getBuff(`wpn_et"][id*="effect_expire`))
-          && checkCondition(option.etherTapCondition)) {
-        return tryAttack();
-      }
-      // 2.5 try check skill condition
-      const skill = 1 * (() => {
-        let lv = 3;
-        for (let condition of [option.highSkillCondition, option.middleSkillCondition, option.lowSkillCondition]) {
-          let id = `1${attackStatus}${lv--}`;
-          target = checkCondition(condition, monsters);
-          if (target && isOn(id)) {
-            return id;
-          }
-        }
-      })();
-      // 3. no skill available
-      if (!skill) {
-        return tryAttack();
-      }
-      // 4. cast skill
-      for (let ab in updateAbility) {
-        const ranges = updateAbility[ab][skill];
-        if (!ranges) {
-          continue;
-        }
-        const ability = getValue('ability', true);
-        range = ranges[ability ? ability[ab] ?? 0 : 0];
-        break;
-      }
-      if (!tryAttack(skill)) {
-        return false;
-      }
-      return true;
     }
 
     function updateSkillOTOS(id, skillOTOS) {
@@ -6824,10 +6859,9 @@
       return setValue('skillOTOS', skillOTOS);
     }
 
+    // TODO TBD 根据lv模糊推测（一般数据都是等级逐渐提升的，可能可以直接用缓存而不需要推测，异世界新赛季时可以自动刷新缓存?）
     function getHPFromMonsterDB(mdb, name, lv) {
-      let hp = (mdb && mdb[name]) ? mdb[name][lv] : undefined;
-      // TODO TBD 根据lv模糊推测（一般数据都是等级逐渐提升的，可能可以直接用缓存而不需要推测，异世界新赛季时可以自动刷新缓存?）
-      return hp;
+      return mdb?.[name]?.[lv]
     }
 
     function fixMonsterStatus() { // 修复monsterStatus
@@ -6865,11 +6899,9 @@
       const option = g().option??{};
       const weightBG = option.weightBackground;
       if (weightBG) {
-        status.forEach(s => {
-          const rank = weights.indexOf(s.finWeight);
-          let colorText = (weightBG[rank + 1] ?? [])[0];
-          colorTextList[rank] = colorText;
-        });
+        for (let i = 0; i < weights.length; i++) {
+          colorTextList[i] = weightBG[i];
+        }
       }
       status.forEach(s => {
         const rank = weights.indexOf(s.finWeight);
@@ -6882,7 +6914,7 @@
           let remainAttemp = 10; // 避免无穷递归
           while (remainAttemp > 0 && colorText && colorText.indexOf(`<style_`) !== -1) {
             for (let i = 0; i < colorTextList.length; i++) {
-              colorText = colorText.replace(`<style_${i + 1}>`, colorTextList[i]);
+              colorText = colorText.replace(`<style_${i+1}>`, colorTextList[i]);
             }
             remainAttemp--;
           }
