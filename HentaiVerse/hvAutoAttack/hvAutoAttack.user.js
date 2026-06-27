@@ -5237,7 +5237,7 @@
     }
 
     function matchBuffImg(buff) {
-      return buff?.getAttribute('onmouseover').match(/\(\s*'(?:[^']*?\(x(\d+)\)[^']*?|[^']*?)'\s*,\s*'.*'\s*,\s*(\d+)\s*\)/);
+      return buff?.getAttribute('onmouseover').match(/\(\s*'(?:[^']*?\(x(\d+)\)[^']*?|[^']*?)'\s*,\s*'.*'\s*,\s*(.*?)\s*\)/);
     }
 
     function getBuffStackFromImg(buff) {
@@ -5249,7 +5249,7 @@
       switch (true) {
         case !duration:
           return 0;
-        case ["'permanent'", '-', "'-'"].includes(duration):
+        case ["'permanent'", "'autocast'", '-', "'-'"].includes(duration):
           return Infinity;
         default:
           return duration * 1;
