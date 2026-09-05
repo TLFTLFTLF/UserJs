@@ -2051,7 +2051,7 @@
       'l0, l1, l01, l2 {display:none;}', // l0: 简体 l1: 繁体 l01:简繁体共用 l2: 英文
       '#hvAABox2{position:absolute;left:1075px;padding-top: 6px;}',
       '.hvAALog{font-size:20px;}',
-      '.hvAAPauseUI{top:30px;left:1246px;position:absolute;z-index:9999; width:80px}',
+      '.hvAAPauseUI{top:50px;left:1246px;position:absolute;z-index:9999; width:80px}',
       '.hvAAButton{top:5px;left:' + ((isMaintaining || isEquipDetail)?'0':'1255') + 'px;position:absolute;z-index:9999;cursor:pointer;width:40px;height:24px;background:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAADi0lEQVRIiZVWPYgUZxj+dvGEk7vsNdPYCMul2J15n+d991PIMkWmOEyMyRW2FoJIUojYp5ADFbZJkyISY3EqKGpgz+Ma4bqrUojICaIsKGIXSSJcsZuD3RT3zWZucquXDwYG5n2f9/d5vnFuHwfAZySfAXgN4DXJzTiOj+3H90OnkmXZAe/9FMm3JJ8AuBGepyRfle2yLDvgnKt8EDVJkq8B3DGzjve+1m63p0n2AVzJbUh2SG455yre+5qZ/aCq983sxMfATwHYJvlCVYckHwFYVdURgO8LAS6RHJJcM7N1VR0CeE5yAGBxT3AR+QrA3wA20tQOq+pFkgOS90Tk85J51Xs9qaorqjoAcC6KohmSGyQHcRx/kbdv7AHgDskXaWqH0zSddc5Voyia2SOXapqmswsLvpam6ez8/Pwn+YcoimYAvARw04XZ5N8qZtZR1aGqXnTOVSd0cRd42U5EzqvqSFWX2u32tPd+yjnnXNiCGslHJAf7ybwM7r2vAdgWkYdZls157w+NK/DeT7Xb7WkAqyTvlZHjOD5oxgtmtqrKLsmze1VJsquqKwsLO9vnnKvkJHpLsq+qo/JAd8BtneTvqvqTiPwoIu9EZKUUpGpmi2Y2UtU+yTdJkhx1JJ8FEl0pruK/TrwA4F2r1WrkgI1G4wjJP0XkdLF9WaZzZnZZVa8GMj5xgf43JvXczFZbLb1ebgnJn0nenjQbEVkG0JsUYOykyi6Aa+XoQTJuTRr8OADJzVBOh+SlckYkz5L8Q0TquXOj0fhURN6r6pkSeAXAUsDaJPnYxXF8jOQrklskh97ryZJTVURWAPwF4DqAX0TkvRl/zTKdK2aeJMnxICFbAHrNZtOKVVdIrrVa2t1jz6sicprkbQC3VPVMGTzMpQvgQY63i8lBFddVdVCk/6TZlMFzopFci+P44H+YHCR3CODc/wUvDPY7ksMg9buZrKr3ATwvyoT3vrafzPP3er1eA9Azs7tjJhcqOBHkeSOKohkROR9K7prZYqnnlSRJjofhb4vIt/V6vUbyN1Xtt1qtb1zpZqs45xyAxXAnvCQ5FJGHqrpiZiMzu5xnHlZxCOABybXw3gvgp/Zq3/gA+BLATVVdyrJsbods2lfVq7lN4crMtapjZndD5pPBixWFLTgU7uQ3AJ6KyLKILAdy9sp25bZMBC//JSRJcjQIYg9Aj+TjZrNp+/mb+Ad711sdZZ1k/QAAAABJRU5ErkJggg==) center no-repeat transparent;}',
       '#hvAABox{left:0;top:50px;font-size:16px!important;z-index:4;width:1238px;height:650px;position:absolute;text-align:left;background-color:#E3E0D1;border:1px solid #000;border-radius:10px;font-family:"Microsoft Yahei";}',
       '#hvAABox a {display: unset!important;}',
@@ -2096,7 +2096,7 @@
       '.hvAAConfig{width:100%;height:16px;}',
       '.hvAAButtonBox{position:relative;top:0px;}',
       '.hvAAPauseUI>.encounterUI{font-weight:bold;position:unset;font-size:10pt;text-decoration:none;}',
-      '.encounterUI{font-weight:bold;font-size:10pt;position:absolute;top:58px;left:1240px;text-decoration:none;}',
+      '.encounterUI{font-weight:bold;font-size:10pt;position:absolute;top:30px;left:1240px;text-decoration:none;}',
       '.quickSiteBar{position:absolute;top:0px;left:1290px;font-size:18px;text-align:left;width:165px;height:calc(100% - 10px);display:flex;flex-direction:column;flex-wrap:wrap;}',
       '.quickSiteBar>span{display:block;max-height:24px;overflow:hidden;text-overflow:ellipsis;}',
       '.quickSiteBar>span>a{text-decoration:none;}',
@@ -4656,14 +4656,14 @@
         time: 3,
       },
     }[e];
-    if (typeof GM_notification !== 'undefined') {
-      GM_notification({
-        text: notification.text,
-        image: `${window.location.origin}${unsafeWindow.IMG_URL}hentaiverse.png`,
-        highlight: getOption().focusNotification,
-        timeout: notification.time * _1s,
-      });
-    }
+    // if (typeof GM_notification !== 'undefined') {
+    //   GM_notification({
+    //     text: notification.text,
+    //     image: `${window.location.origin}${unsafeWindow.IMG_URL}hentaiverse.png`,
+    //     highlight: getOption().focusNotification,
+    //     timeout: notification.time * _1s,
+    //   });
+    // }
     if (window.Notification && window.Notification.permission !== 'denied') {
       window.Notification.requestPermission((status) => {
         if (status === 'granted') {
@@ -8215,6 +8215,9 @@ pmin/pmax 见 https://ehwiki.org/wiki/Spells#Deprecating_Magic
     if (!isOn(skill.id)) { // 技能不可用
       return false;
     }
+    if (!g('option').debuffSkill[buff]) {
+      return false;
+    }
     // 获取范围
     let skillRange = 1;
     let ab;
@@ -8247,20 +8250,21 @@ pmin/pmax 见 https://ehwiki.org/wiki/Spells#Deprecating_Magic
       return 0;
     };
     let debuffByIndex = isAll && option[`debuffSkill${buff}AllByIndex`];
-    let monsterStatus = g().battle.monsterStatus;
+    let monsterStatus = g().battle.monsterStatus.filter(monster => !monster.isDead);
+    let holdDrain = (target) => g().attackStatus === 5 && !isDebuffed(target, 'BS') || g().attackStatus === 6 && !isDebuffed(target, 'RS');
     if (debuffByIndex) {
       monsterStatus = JSON.parse(JSON.stringify(monsterStatus)).sortBy(x => x.order);
     }
-    let max = isAll ? monsterStatus.length : 1;
+    let max = isAll ? ((buff === 'Sle' || buff === 'Co') ? monsterStatus.length - 1 : monsterStatus.length) : 1;
     let id;
     let minWeight = Number.MAX_SAFE_INTEGER;
     const condition = option[`debuffSkill${buff}${isAll ? 'All' : ''}Condition`];
     setBattleSkillParam(skill.id, { debuff: buff, ...isAll ? { all: skill.id, debuffAll: buff, range: skillRange }: { }});
     const excludeCondition = target => checkCondition(condition, [target]) ? isDebuffed(target) : excludedWeight(target);
     for (const i of range(max)) {
-      let target = buff === 'Dr' ? monsterStatus[max - i - 1] : monsterStatus[i];
+      let target = (buff === 'Sle' || buff === 'Co' || buff === 'We' || buff === 'Si' || (buff === 'Dr' && g('option').baseHpRatio > 0)) ? monsterStatus[monsterStatus.length - 1 - i] : monsterStatus[i];
       target = checkCondition(condition, [target]);
-      if (!target || target.isDead || isDebuffed(target)) continue;
+      if (!target || isDebuffed(target) || (buff === 'Dr' && holdDrain(target))) continue;
       const center = getRangeCenter(target, skillRange, false, excludeCondition, debuffByIndex);
       if (!id || center.weight < minWeight) {
         minWeight = center.weight;
