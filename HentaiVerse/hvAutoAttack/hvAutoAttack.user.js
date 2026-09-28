@@ -6,7 +6,7 @@
 // @description  HV auto attack script, for the first user, should configure before use it.
 // @description:zh-CN HV自动打怪脚本，初次使用，请先设置好选项，请确认字体设置正常
 // @description:zh-TW HV自動打怪腳本，初次使用，請先設置好選項，請確認字體設置正常
-// @version      2.91.235
+// @version      2.91.240
 // @author       dodying
 // @namespace    https://github.com/dodying/
 // @supportURL   https://github.com/dodying/UserJs/issues
@@ -1258,7 +1258,9 @@
       if (isRaw) return option;
       g.version = script.scriptVersion;
       if (!forIsekaiEncounter && !option) {
+        if (isFrame) return false;
         lang = window.prompt('请输入以下语言代码对应的数字\nPlease put in the number of your preferred language (0, 1 or 2)\n0.简体中文\n1.繁體中文\n2.English', 0) || 2;
+        option = g.option = { lang };
         addStyle();
         UI.alert('请设置hvAutoAttack', '請設置hvAutoAttack', 'Please config this script');
         gE('.hvAAButton').click();
@@ -1752,16 +1754,25 @@
       return value;
     }
 
+    // 读取 GM 存储，并规范化到当前 realm。
+    // 脚本中所有 GM_getValue 调用都应经过此函数。
+    function getRealmNormalizedGMValue(key) {
+      const v = GM_getValue(key);
+      if (v === null || typeof v !== 'object' || v instanceof Object) return v;
+      try { return JSON.parse(JSON.stringify(v)); }
+      catch { return v; }
+    }
+
     function getLocal(key, isLocalStorage) {
       let value, gmValue;
       isLocalStorage ||= typeof GM_getValue === 'undefined';
-      if (isLocalStorage || ((gmValue = GM_getValue(key)) === undefined)) {
+      if (isLocalStorage || ((gmValue = getRealmNormalizedGMValue(key)) === undefined)) {
         key = `hvAA-${key}`;
         return window.localStorage[key];
       }
       if (!isLocalStorage) return gmValue;
       key = `hvAA-${key}`;
-      if ((value = window.localStorage[key]) === undefined) return GM_getValue(key);
+      if ((value = window.localStorage[key]) === undefined) return getRealmNormalizedGMValue(key);
       return value;
     }
 
@@ -2724,8 +2735,9 @@
                   ': <br>',
                   UI.expendData(UIDatas.staminaCheck, (id, names, v) => `${UI.hidden(UI.for(`stamina${id}`, UI.l('精力: ', '精力: ', 'Stamina: ')+names))}${id === 'LowWithReNat' ? UI.b('<br>[S!!]') : ''}${names}: ${id === 'Low' ? 'Min(85, ' : ''}${UI.number(`stamina${id}`, v)}${id === 'Low' ? ')' : ''};`),
                   '<br>',
-                  `${UI.labeled(`restoreStamina`, UI.l('战前恢复', '戰前恢復', 'Restore stamina'))}`,
-                  `${UI.labeled(`staminaRatio`, UI.l('检查惩罚倍率', '檢查懲罰倍率', 'Check Punishment Ratio'))}`,
+                  `${UI.labeled(`restoreStamina`, UI.l('战前恢复', '戰前恢復', 'Restore stamina'))};`,
+                  `${UI.labeled(`staminaRatio`, UI.l('检查惩罚倍率', '檢查懲罰倍率', 'Check Punishment Ratio'))};`,
+                  `${UI.for(`staminaCostFloorThreshold`, UI.l('精力消耗向下取整阈值', '精力消耗向下取整閾值', 'Stamina Cost Floor Threshold'))}${UI.number('staminaCostFloorThreshold', _server.isekai ? 0.06 : 0.03)}`,
                 ),
                 UI.div(
                   UI.labeled('repair', UI.b('[R!]', UI.l('修复装备', '修復裝備', 'Repair Equipment'))),
@@ -5230,7 +5242,7 @@
     runtime.document.title = updated;
   }
 
-  function getTodayEncounter(encounter) { return encounter.filter(e => time(2, e.time) === time(2)).sortBy(x => -x.time); }
+  function getTodayEncounter(encounter) { return encounter?.filter(e => time(2, e.time) === time(2)).sortBy(x => -x.time) ?? []; }
 
   function getLocalEncounter(encounter = []) {
     let gm = getValue('encounter', true) ?? [];
@@ -5794,19 +5806,18 @@
     const option = g.option;
     const stamina = getValue('stamina', true);
     const [low, lowNR, cost, ratio] = [condition.staminaLow ?? option.staminaLow, option.staminaLowWithReNat ?? 0, Math.round((condition.staminaCost ?? 0) * 100) / 100, stamina.punish ? stamina.ratio ?? 1 : 1]
-    const checked = await checkStamina(low, cost);
-    const [staminaChecked, stmNR] = [checked.checked, checked.stmNR];
+    const { checked, stmNR, floored } = await checkStamina(low, cost);
     const [neat, neatNR] = [stamina.current-low, stmNR-lowNR];
     console.log(
-      `${forIsekaiEncounter ? '[Persistent]' : ''}stamina check succeed:`, staminaChecked === 1, ...staminaChecked === -1 ? ['with nature recover', lowNR, 'stmNR:', stmNR, '(', ...neatNR >= 0 ? ['+', neatNR] : ['-', -neatNR], ')'] : [],
-      '\nlow:', low, ...cost ? ['cost:', cost, ...stamina.punish ? ['*', ratio, '=', Math.round(cost * ratio * 10000) / 10000] : [], 'current:', stamina.current, '(', neat >= 0 ? '+' : '-', neat, ')'] : [],
+      `${forIsekaiEncounter ? '[Persistent]' : ''}stamina check succeed:`, checked === 1, ...checked === -1 ? ['with nature recover', lowNR, 'stmNR:', stmNR, '(', ...neatNR >= 0 ? ['+', neatNR] : ['-', -neatNR], ')'] : [],
+      '\nlow:', low, ...cost ? ['cost:', cost, ...stamina.punish ? ['*', ratio, '=', Math.round(cost * ratio * 10000) / 10000] : [], '=> floored:', floored, 'current:', stamina.current, '(', neat >= 0 ? '+' : '-', neat, ')'] : [],
       '\nstamina:', stamina,
     );
-    if (staminaChecked === 1) { // succeed
+    if (checked === 1) { // succeed
       document.title = document.title.replace(`[S!${forIsekaiEncounter?'p':''}]`, '');
       return true;
     }
-    if (staminaChecked === 0) { // failed currently
+    if (checked === 0) { // failed currently
       const now = time(0);
       setTimeout(method, Math.floor(now / _1h + 1) * _1h - now);
       if (!document.title.includes(`[S!${forIsekaiEncounter?'p':''}]`)) {
@@ -5846,8 +5857,13 @@
     if (punish && option.staminaRatio) {
       cost *= stamina.ratio
     }
-    const stmNRChecked = !cost || stmNR - cost >= option.staminaLowWithReNat;
-    const result = { checked: stmNRChecked ? (current - cost >= (low ?? option.staminaLow)) ? 1 : 0 : -1, stmNR: stmNR };
+    let floored = cost;
+    if (option.staminaCostFloorThreshold) {
+      const mod = cost % 1;
+      floored = Math.floor(cost) + (mod <= option.staminaCostFloorThreshold ? 0 : mod);
+    }
+    const stmNRChecked = !floored || stmNR - floored >= option.staminaLowWithReNat;
+    const result = { checked: stmNRChecked ? (current - floored >= (low ?? option.staminaLow)) ? 1 : 0 : -1, stmNR: stmNR, floored };
     $async.logSwitch(arguments);
     if (result.checked === 1 || _server.isekai || !option.restoreStamina) return result;
     const items = g.items;
@@ -8381,7 +8397,7 @@ text-align: left;
   function formatMonsterNames(t) {
     const monsterNames = g.battle.monsterStatus.map(m => gE(`.btm3>div>div`, getMonster(getMonsterID(m))).innerText);
     [...monsterNames].sortBy(x => x.length).reverse().forEach(name => {
-      t = t.replaceAll(new RegExp(escapeRegExp(name), 'g'), match => `MONSTER_${((monsterNames.findIndex(x => x === match)*1+1)||11)-1}`);
+      t = t.replaceAll(new RegExp(escapeRegExp(name), 'g'), match => `MONSTER_${((monsterNames.findIndex(x => x === match)*1+1)||1)-1}`);
     });
     return t;
   }
@@ -8595,6 +8611,10 @@ text-align: left;
             recorder: () => handleDamage('Bleeding Wound', match[1])
           },
           {
+            match: () => text.match(/^MONSTER_\d is eviscerated for (\d+) Void damage, putting it out of its misery/),
+            recorder: () => handleDamage('211', match[1])
+          },
+          {
             match: () => text.match(/^(Refreshment|Replenishment|Regeneration|Regen) restores (\d+) points of (health|magic|spirit)\.$/)
             || text.match(/^You are (healed) for (\d+) (Health) Points\.$/),
             recorder: () => {
@@ -8658,7 +8678,7 @@ text-align: left;
             || text.match(/^Scanning MONSTER_\d\.\.\./)
             || text.match(/^You do not have a .+ gem\.$/)
             || text.match(/^You gain the effect .*\.$/)
-            || text.match(/^You block the attack from MONSTER_\d\.$/)
+            || text.match(/^Used: .*$/)
             || text.match(/^You use ((Health|Mana|Spirit) (Elixir|Potion|Draught|Gem)|Last Elixir|Mystic Gem|Scroll of (Life|the Avatar|the Gods|Swiftness|Protection|Absorption|Shadows)|Infusion of (Flames|Frost|Lightning|Storms|Divinity|Darkness)|Flower Vase|Bubble-Gum|Energy Drink|Caffeinated Candy|Vital Strike|Shield Bash|Merciful Blow|Skyward Sword|Frenzied Blows|Concussive Strike|Iris Strike|Backstab|Shatter Strike|Rending Blow|Great Cleave|FUS RO DAH|Orbital Friendship Cannon)\.$/)
             || text.match(/^You cast (Regen|Heartseeker|Fiery Blast|Inferno|Flames of Loki|Freeze|Blizzard|Fimbulvetr|Shockblast|Chained Lightning|Wrath of Thor|Gale|Downburst|Storms of Njord|Smite|Banishment|Paradise Lost|Corruption|Disintegrate|Ragnarok|Drain|Slow|Weaken|Silence|Sleep|Confuse|Imperil|Blind|MagNet|Immobilize|Cure|Regen|Full-Cure|Haste|Protection|Shadow Veil|Absorb|Spark of Life|Arcane Focus|Heartseeker|Spirit Shield)\.$/)
             || text.match(/^Cooldown expired for .*$/)
@@ -8940,7 +8960,7 @@ text-align: left;
     if (size) formated = formated.slice(0, size);
     return formated.map(t => pad(t)).join(`:`);
   }
-  
+
   function formatTime(t, size = 2, quick) {
     t = [t / _1h, (t / _1m) % 60, (t / _1s) % 60, (t % _1s) / 10].map(cdi => Math.floor(cdi));
     while (t.length > Math.max(size, quick ? 2 : 3)) { // remove zero front
