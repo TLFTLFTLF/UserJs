@@ -4443,14 +4443,14 @@
           time: 3,
         },
       }[e];
-      if (typeof GM_notification !== 'undefined') {
-        GM_notification({
-          text: notification.text,
-          image: `${window.location.origin}${unsafeWindow.IMG_URL}hentaiverse.png`,
-          highlight: g.option.focusNotification,
-          timeout: notification.time * _1s,
-        });
-      }
+      // if (typeof GM_notification !== 'undefined') {
+      //   GM_notification({
+      //     text: notification.text,
+      //     image: `${window.location.origin}${unsafeWindow.IMG_URL}hentaiverse.png`,
+      //     highlight: g.option.focusNotification,
+      //     timeout: notification.time * _1s,
+      //   });
+      // }
       if (!window.Notification || window.Notification.permission === 'denied') return;
       window.Notification.requestPermission(status => {
         if (status !== 'granted') return;
